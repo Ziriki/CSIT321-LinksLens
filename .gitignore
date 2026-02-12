@@ -1,0 +1,25 @@
+# 1. Security Keys
+.env
+*.pem
+*.key
+fyp-key.pem
+
+# 2. Python Junk
+__pycache__/
+*.pyc
+venv/
+.pytest_cache/
+
+# 3. Node Modules
+node_modules/
+npm-debug.log
+
+# 4. Mobile Build Files
+mobile-app/android/app/build/
+mobile-app/ios/Pods/
+*.apk
+*.ipa
+
+# 5. System Files
+.DS_Store
+Thumbs.db
