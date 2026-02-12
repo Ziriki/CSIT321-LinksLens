@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # 1. Your Backend (FastAPI + Playwright)
+  backend:
+    build: ./backend
+    container_name: fyp_backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    networks:
+      - fyp_net
+
+  # 2. Database (MySQL 8.0)
+  db:
+    image: mysql:8.0
+    container_name: fyp_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: fyp_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - fyp_net
+
+  # 3. Admin Portal (Streamlit)
+  admin:
+    build: ./admin                
+    container_name: fyp_admin
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+    volumes:
+      - ./admin:/app
+    ports:
+      - "8501:8501"
+    networks:
+      - fyp_net
+
+volumes:
+  db_data:
+
+networks:
+  fyp_net:
+    driver: bridge
