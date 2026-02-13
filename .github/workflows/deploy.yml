@@ -22,9 +22,13 @@ jobs:
             git fetch --all
             git reset --hard origin/main
             
-            # 3. Rebuild and Restart Docker
+            # 3. Update Marketing Site (Copy files from Repo to Nginx folder)
+            sudo mkdir -p /var/www/linkslens
+            sudo cp -r /home/ubuntu/linkslens-fyp/website/* /var/www/linkslens/
+            
+            # 4. Rebuild and Restart Docker
             # This only restarts containers that had code changes
             docker compose up -d --build --remove-orphans
             
-            # 4. Clean up old images to save space
+            # 5. Clean up old images to save space
             docker image prune -f
