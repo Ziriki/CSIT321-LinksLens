@@ -22,13 +22,19 @@ jobs:
             git fetch --all
             git reset --hard origin/main
             
-            # 3. Update Marketing Site (Copy files from Repo to Nginx folder)
+            # 3. Generate the .env file securely on the fly
+            echo "MYSQL_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}" > .env
+            echo "MYSQL_DATABASE=${{ secrets.DB_NAME }}" >> .env
+            echo "MYSQL_USER=${{ secrets.DB_USER }}" >> .env
+            echo "MYSQL_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+            
+            # 4. Update Marketing Site (Copy files from Repo to Nginx folder)
             sudo mkdir -p /var/www/linkslens
             sudo cp -r /home/ubuntu/linkslens-fyp/website/* /var/www/linkslens/
             
-            # 4. Rebuild and Restart Docker
+            # 5. Rebuild and Restart Docker
             # This only restarts containers that had code changes
             docker compose up -d --build --remove-orphans
             
-            # 5. Clean up old images to save space
+            # 6. Clean up old images to save space
             docker image prune -f
