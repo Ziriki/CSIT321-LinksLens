@@ -9,7 +9,8 @@ services:
     volumes:
       - ./backend:/app
     ports:
-      - "8000:8000"
+      # Secured: Only Nginx on the host can route traffic here
+      - "127.0.0.1:8000:8000"
     depends_on:
       - db
     networks:
@@ -25,6 +26,9 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      # Secured: Only accessible from inside the server (via SSH Tunnel)
+      - "127.0.0.1:3306:3306"
     volumes:
       - db_data:/var/lib/mysql
     networks:
@@ -38,7 +42,8 @@ services:
     volumes:
       - ./admin:/app
     ports:
-      - "8501:8501"
+      # Secured: Only Nginx on the host can route traffic here
+      - "127.0.0.1:8501:8501"
     networks:
       - fyp_net
 
