@@ -56,3 +56,30 @@ class UserAccountResponse(UserAccountBase):
 
     class Config:
         from_attributes = True
+
+#########################################################
+# Base properties of UserDetails (used for both Create and Update)
+#########################################################
+class UserDetailsBase(BaseModel):
+    FullName: Optional[str] = None
+    PhoneNumber: Optional[str] = None
+    Address: Optional[str] = None
+    Gender: Optional[str] = None
+    DateOfBirth: Optional[date] = None
+
+# Used for Creating
+class UserDetailsCreate(UserDetailsBase):
+    UserID: int  # We must know WHICH account these details belong to!
+
+# Used for Updating (UserID is in the URL, not the body)
+class UserDetailsUpdate(UserDetailsBase):
+    pass 
+
+# Used for Responses
+class UserDetailsResponse(UserDetailsBase):
+    UserID: int
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+    class Config:
+        from_attributes = True
