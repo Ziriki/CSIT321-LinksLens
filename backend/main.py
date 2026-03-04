@@ -3,7 +3,17 @@ from pydantic import BaseModel
 import uvicorn
 import os
 
-app = FastAPI()
+import models
+from database import engine
+from controllers.user_role_controller import router as user_role_router
+
+# This line checks MySQL and creates the UserRole table if it doesn't exist yet!
+models.Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="LinksLens API")
+
+# Connect the UserRole Controller to the main app
+app.include_router(user_role_router)
 
 # Data model for the mobile app to send us
 class ScanRequest(BaseModel):
@@ -14,7 +24,7 @@ def read_root():
     return {
         "status": "Online",
         "service": "LinkLens Backend API",
-        "documentation": "/docs"  # FastAPI automatically generates this!
+        "documentation": "/docs"  # FastAPI automatically generates this
     }
 
 @app.post("/scan")
