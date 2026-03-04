@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from Database import Base
+from database import Base
 
 class UserRole(Base):
     __tablename__ = "UserRole"
@@ -11,3 +12,17 @@ class UserRole(Base):
     IsActive = Column(Boolean, default=True)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
     UpdatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class UserAccount(Base):
+    __tablename__ = "UserAccount"
+
+    UserID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    EmailAddress = Column(String(255), unique=True, nullable=False)
+    PasswordHash = Column(String(255), nullable=False)
+    RoleID = Column(Integer, ForeignKey("UserRole.RoleID"), nullable=False)
+    IsActive = Column(Boolean, default=True)
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+    UpdatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Set up a relationship for easier access to the role details from an account
+    role = relationship("UserRole")
