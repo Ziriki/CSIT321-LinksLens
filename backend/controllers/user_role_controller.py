@@ -105,5 +105,4 @@ def list_roles(
         query = query.filter(models.UserRole.RoleName.ilike(f"%{search}%"))
 
     # Execute the query with optional pagination
-    roles = query.offset(skip).limit(limit).all()
-    return roles
+    return query.offset(skip).limit(limit).all()
