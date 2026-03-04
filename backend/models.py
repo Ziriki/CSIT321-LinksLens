@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Date
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Date, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -30,16 +30,20 @@ class UserAccount(Base):
 class UserDetails(Base):
     __tablename__ = "UserDetails"
 
-    # UserID is BOTH the Primary Key and the Foreign Key!
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), primary_key=True)
     FullName = Column(String(255))
     PhoneNumber = Column(String(20))
     Address = Column(String(255))
     Gender = Column(String(6))
     DateOfBirth = Column(Date)
-    
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
     UpdatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Set up a relationship for easier access to the user account details
     account = relationship("UserAccount")
+
+class UserPreferences(Base):
+    __tablename__ = "UserPreferences"
+
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), primary_key=True)
+    Preferences = Column(JSON, nullable=False)

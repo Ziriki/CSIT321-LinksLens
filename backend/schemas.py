@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 #########################################################
@@ -80,6 +80,28 @@ class UserDetailsResponse(UserDetailsBase):
     UserID: int
     CreatedAt: datetime
     UpdatedAt: datetime
+
+    class Config:
+        from_attributes = True
+
+#########################################################
+# Base properties of UserPreferences (used for both Create and Update)
+#########################################################
+class UserPreferencesBase(BaseModel):
+    # This accepts a JSON object (dictionary in Python)
+    Preferences: Dict[str, Any]
+
+# Used for Creating
+class UserPreferencesCreate(UserPreferencesBase):
+    UserID: int
+
+# Used for Updating
+class UserPreferencesUpdate(UserPreferencesBase):
+    pass 
+
+# Used for Responses
+class UserPreferencesResponse(UserPreferencesBase):
+    UserID: int
 
     class Config:
         from_attributes = True
