@@ -1,13 +1,16 @@
-# We use this specific image because it has the Browsers (Chrome) pre-installed for your scanner
+# Use this specific image because it has the Browsers (Chrome) pre-installed for our scanner
 FROM mcr.microsoft.com/playwright/python:v1.41.0-jammy
 
 WORKDIR /app
 
-# Install the tools your backend needs
-RUN pip install fastapi uvicorn sqlalchemy pymysql requests python-multipart beautifulsoup4
+# Copy the requirements file
+COPY requirements.txt .
 
-# Copy your code into the container
+# Pip install everything listed in the file
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application code
 COPY . .
 
-# The command to start the backend
+# Start the backend
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
