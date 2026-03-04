@@ -1,8 +1,10 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 
-# Base properties shared across all operations
+#########################################################
+# Base properties of UserRole (used for both Create and Update)
+#########################################################
 class UserRoleBase(BaseModel):
     RoleName: str
     RoleDescription: Optional[str] = None
@@ -26,3 +28,31 @@ class UserRoleResponse(UserRoleBase):
 
     class Config:
         from_attributes = True # Tells Pydantic to read SQLAlchemy models
+
+#########################################################
+# Base properties of UserAccount (used for both Create and Update)
+#########################################################
+class UserAccountBase(BaseModel):
+    EmailAddress: EmailStr
+    RoleID: int
+    IsActive: Optional[bool] = True
+
+# Used for Creating (Requires a raw password)
+class UserAccountCreate(UserAccountBase):
+    Password: str 
+
+# Used for Updating (Everything is optional, including password)
+class UserAccountUpdate(BaseModel):
+    EmailAddress: Optional[EmailStr] = None
+    RoleID: Optional[int] = None
+    Password: Optional[str] = None
+    IsActive: Optional[bool] = None
+
+# Used for Responses (Excludes password)
+class UserAccountResponse(UserAccountBase):
+    UserID: int
+    CreatedAt: datetime
+    UpdatedAt: datetime
+
+    class Config:
+        from_attributes = True

@@ -1,6 +1,11 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
+pydantic[email]
 requests
 sqlalchemy
 pymysql
+passlib[bcrypt]
+python-dotenv
+python-multipart
+beautifulsoup4
