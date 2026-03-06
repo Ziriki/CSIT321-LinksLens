@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Date, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Date, JSON, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -47,3 +47,16 @@ class UserPreferences(Base):
 
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), primary_key=True)
     Preferences = Column(JSON, nullable=False)
+
+
+class ActionHistory(Base):
+    __tablename__ = "ActionHistory"
+
+    LogID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=False)
+    ActionType = Column(String(100), nullable=False)
+    Action = Column(Text, nullable=False)
+    Timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Set up a relationship for easier access to the user account details
+    account = relationship("UserAccount")
