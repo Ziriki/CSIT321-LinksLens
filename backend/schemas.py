@@ -105,3 +105,23 @@ class UserPreferencesResponse(UserPreferencesBase):
 
     class Config:
         from_attributes = True
+
+#########################################################
+# Base properties of ActionHistory (used for both Create and Update)
+#########################################################
+class ActionHistoryBase(BaseModel):
+    UserID: int
+    ActionType: str
+    Action: str
+
+# Used for Creating
+class ActionHistoryCreate(ActionHistoryBase):
+    pass 
+
+# Used for Responses
+class ActionHistoryResponse(ActionHistoryBase):
+    LogID: int
+    Timestamp: datetime
+
+    class Config:
+        from_attributes = True
