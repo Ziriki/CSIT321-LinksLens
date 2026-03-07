@@ -4,3 +4,6 @@ def authenticate_user(email, password):
         json={"EmailAddress": email, "Password": password, "ClientType": "mobile"}
     )
     return response
+
+def check_backend_health():
+    return requests.get(f"{BACKEND_URL}/", headers=_get_headers())
