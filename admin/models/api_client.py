@@ -25,3 +25,7 @@ def deactivate_user(user_id: int):
     # Sends a PUT request to update the user's IsActive status to False
     response = requests.put(f"{BACKEND_URL}/api/users/{user_id}", json={"IsActive": False}, headers=_get_headers())
     return response.status_code == 200
+
+def fetch_app_feedback():
+    response = requests.get(f"{BACKEND_URL}/api/feedback/", headers=_get_headers())
+    return response.json() if response.status_code == 200 else []
