@@ -6,6 +6,7 @@ from typing import List, Optional
 import models
 import schemas
 from database import get_db
+from dependencies import get_current_user, require_role
 
 # Create a router for this controller
 router = APIRouter(
@@ -17,7 +18,7 @@ router = APIRouter(
 # CREATE function for ScanFeedback table
 #########################################################
 @router.post("/", response_model=schemas.ScanFeedbackResponse, status_code=status.HTTP_201_CREATED)
-def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(get_db)):
+def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     # Verify the user exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == feedback.UserID).first()
     if not account:
@@ -46,7 +47,7 @@ def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(
 # READ function for ScanFeedback table (Get by ID)
 #########################################################
 @router.get("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
-def read_feedback(feedback_id: int, db: Session = Depends(get_db)):
+def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
     feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -56,7 +57,7 @@ def read_feedback(feedback_id: int, db: Session = Depends(get_db)):
 # UPDATE function for ScanFeedback table
 #########################################################
 @router.put("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
-def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdate, db: Session = Depends(get_db)):
+def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
     db_feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
     if not db_feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -73,7 +74,7 @@ def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdat
 # DELETE function for ScanFeedback table
 #########################################################
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_feedback(feedback_id: int, db: Session = Depends(get_db)):
+def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     db_feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
     if not db_feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -87,12 +88,13 @@ def delete_feedback(feedback_id: int, db: Session = Depends(get_db)):
 #########################################################
 @router.get("/", response_model=List[schemas.ScanFeedbackResponse])
 def list_feedback(
-    is_resolved: Optional[bool] = None, # Moderators can easily pull up all unresolved feedback
-    scan_id: Optional[int] = None,      # See all feedback for one specific scan
-    user_id: Optional[int] = None,      # See all feedback submitted by a specific user
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db)
+    is_resolved: Optional[bool] = None,
+    scan_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_role(2, 3))
 ):
     query = db.query(models.ScanFeedback)
 

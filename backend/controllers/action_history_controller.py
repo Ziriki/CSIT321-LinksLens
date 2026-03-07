@@ -6,6 +6,7 @@ from typing import List, Optional
 import models
 import schemas
 from database import get_db
+from dependencies import get_current_user, require_role
 
 # Create a router for this controller
 router = APIRouter(
@@ -17,7 +18,7 @@ router = APIRouter(
 # CREATE function for ActionHistory table
 #########################################################
 @router.post("/", response_model=schemas.ActionHistoryResponse, status_code=status.HTTP_201_CREATED)
-def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db)):
+def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     # Verify the user performing the action actually exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == log.UserID).first()
     if not account:
@@ -33,7 +34,7 @@ def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db)):
 # READ function for ActionHistory table (Get by ID)
 #########################################################
 @router.get("/{log_id}", response_model=schemas.ActionHistoryResponse)
-def read_log(log_id: int, db: Session = Depends(get_db)):
+def read_log(log_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     log = db.query(models.ActionHistory).filter(models.ActionHistory.LogID == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Log entry not found")
@@ -54,11 +55,12 @@ def read_log(log_id: int, db: Session = Depends(get_db)):
 #########################################################
 @router.get("/", response_model=List[schemas.ActionHistoryResponse])
 def list_logs(
-    user_id: Optional[int] = None,         # Filter by who did the action
-    action_type: Optional[str] = None,     # Filter by the type of action
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db)
+    user_id: Optional[int] = None,
+    action_type: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_role(3))
 ):
     query = db.query(models.ActionHistory)
 
