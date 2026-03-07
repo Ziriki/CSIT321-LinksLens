@@ -125,3 +125,26 @@ class ActionHistoryResponse(ActionHistoryBase):
 
     class Config:
         from_attributes = True
+
+#########################################################
+# Base properties of AppFeedback (used for both Create and Update)
+#########################################################
+class AppFeedbackBase(BaseModel):
+    Feedback: str
+
+# Used for Creating
+class AppFeedbackCreate(AppFeedbackBase):
+    UserID: int
+
+# Used for Updating
+class AppFeedbackUpdate(AppFeedbackBase):
+    pass
+
+# Used for Responses
+class AppFeedbackResponse(AppFeedbackBase):
+    FeedbackID: int
+    UserID: int
+    CreatedAt: datetime
+
+    class Config:
+        from_attributes = True
