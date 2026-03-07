@@ -1,5 +1,6 @@
 # 1. Security Keys
 .env
+.env.example
 *.pem
 *.key
 fyp-key.pem
@@ -10,16 +11,16 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# 3. Node Modules
-node_modules/
-npm-debug.log
-
-# 4. Mobile Build Files
+# 3. Mobile Build Files
 mobile-app/android/app/build/
 mobile-app/ios/Pods/
 *.apk
 *.ipa
 
-# 5. System Files
+# 4. System Files
 .DS_Store
 Thumbs.db
+
+
+# 6. Misc
+test*
