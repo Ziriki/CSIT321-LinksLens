@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from datetime import datetime
+from models import RequestStatus
 
 #########################################################
 # Base properties of UserRole (used for both Create and Update)
@@ -145,6 +146,33 @@ class AppFeedbackResponse(AppFeedbackBase):
     FeedbackID: int
     UserID: int
     CreatedAt: datetime
+
+    class Config:
+        from_attributes = True
+
+#########################################################
+# Base properties of BlacklistRequest (used for both Create and Update)
+#########################################################
+class BlacklistRequestBase(BaseModel):
+    URLDomain: str
+
+# Used by standard users to submit a request
+class BlacklistRequestCreate(BlacklistRequestBase):
+    UserID: int
+
+# Used by Moderators to approve or reject the request
+class BlacklistRequestUpdate(BaseModel):
+    Status: RequestStatus
+    ReviewedBy: int # The ID of the moderator reviewing it
+
+# Used for Responses
+class BlacklistRequestResponse(BlacklistRequestBase):
+    RequestID: int
+    UserID: int
+    Status: RequestStatus
+    ReviewedBy: Optional[int] = None
+    CreatedAt: datetime
+    ReviewedAt: Optional[datetime] = None
 
     class Config:
         from_attributes = True
