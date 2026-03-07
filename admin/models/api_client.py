@@ -29,3 +29,23 @@ def deactivate_user(user_id: int):
 def fetch_app_feedback():
     response = requests.get(f"{BACKEND_URL}/api/feedback/", headers=_get_headers())
     return response.json() if response.status_code == 200 else []
+
+def fetch_action_history():
+    """Fetches the immutable audit log from FastAPI"""
+    response = requests.get(f"{BACKEND_URL}/api/history/", headers=_get_headers())
+    return response.json() if response.status_code == 200 else []
+
+def update_user_details(user_id: int, payload: dict):
+    """Updates any user detail, including roles"""
+    response = requests.put(f"{BACKEND_URL}/api/users/{user_id}", json=payload, headers=_get_headers())
+    return response.status_code == 200
+
+def fetch_url_rules():
+    """Fetches the global Blacklist and Whitelist"""
+    response = requests.get(f"{BACKEND_URL}/api/url-rules/", headers=_get_headers())
+    return response.json() if response.status_code == 200 else []
+
+def fetch_scan_details(scan_id: int):
+    """Fetches a specific scan's deep forensic data"""
+    response = requests.get(f"{BACKEND_URL}/api/scans/{scan_id}", headers=_get_headers())
+    return response.json() if response.status_code == 200 else None

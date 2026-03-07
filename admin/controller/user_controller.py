@@ -11,3 +11,11 @@ def handle_deactivation(user_id):
     if api_client.deactivate_user(user_id):
         st.success(f"User {user_id} deactivated.")
         st.rerun()
+
+def handle_role_update(user_id: int, new_role_id: int):
+    success = api_client.update_user_details(user_id, {"RoleID": new_role_id})
+    if success:
+        st.success(f"User {user_id} role updated successfully!")
+        st.rerun()
+    else:
+        st.error("Failed to update user role.")
