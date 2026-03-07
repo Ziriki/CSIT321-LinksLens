@@ -48,7 +48,6 @@ class UserPreferences(Base):
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), primary_key=True)
     Preferences = Column(JSON, nullable=False)
 
-
 class ActionHistory(Base):
     __tablename__ = "ActionHistory"
 
@@ -60,3 +59,11 @@ class ActionHistory(Base):
 
     # Set up a relationship for easier access to the user account details
     account = relationship("UserAccount")
+
+class AppFeedback(Base):
+    __tablename__ = "AppFeedback"
+
+    FeedbackID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
+    Feedback = Column(Text, nullable=False)
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
