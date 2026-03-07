@@ -9,3 +9,4 @@ passlib[bcrypt]
 python-dotenv
 python-multipart
 beautifulsoup4
+pyjwt
