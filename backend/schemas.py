@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from datetime import datetime
-from models import RequestStatus
+from models import RequestStatus, ListTypeEnum
 
 #########################################################
 # Base properties of UserRole (used for both Create and Update)
@@ -173,6 +173,31 @@ class BlacklistRequestResponse(BlacklistRequestBase):
     ReviewedBy: Optional[int] = None
     CreatedAt: datetime
     ReviewedAt: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+#########################################################
+# Base properties of URLRules (used for both Create and Update)
+#########################################################
+class URLRulesBase(BaseModel):
+    URLDomain: str
+    ListType: ListTypeEnum
+
+# Used when an Admin manually adds a rule
+class URLRulesCreate(URLRulesBase):
+    AddedBy: int
+
+# Used for Updating
+class URLRulesUpdate(BaseModel):
+    URLDomain: Optional[str] = None
+    ListType: Optional[ListTypeEnum] = None
+
+# Used for Responses
+class URLRulesResponse(URLRulesBase):
+    RuleID: int
+    AddedBy: int
+    CreatedAt: datetime
 
     class Config:
         from_attributes = True

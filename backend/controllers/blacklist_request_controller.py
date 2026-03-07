@@ -70,10 +70,20 @@ def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate,
     db_request.ReviewedBy = review_data.ReviewedBy
     db_request.ReviewedAt = datetime.now(timezone.utc) # Automatically log the exact time of review
 
+    if review_data.Status == models.RequestStatus.APPROVED:
+        # Check if it already exists in URLRules to prevent crashing on duplicate
+        existing_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == db_request.URLDomain).first()
+        
+        if not existing_rule:
+            new_rule = models.URLRules(
+                URLDomain=db_request.URLDomain,
+                ListType=models.ListTypeEnum.BLACKLIST,
+                AddedBy=review_data.ReviewedBy  # The moderator who approved it gets the credit
+            )
+            db.add(new_rule)
+
     db.commit()
     db.refresh(db_request)
-
-    # TODO: If status == APPROVED, automatically add the URLDomain to the URLRules table!
     
     return db_request
 

@@ -90,3 +90,23 @@ class BlacklistRequest(Base):
     # Set up relationships for easier access to the user account details (user and reviewer data)
     requester = relationship("UserAccount", foreign_keys=[UserID])
     reviewer = relationship("UserAccount", foreign_keys=[ReviewedBy])
+
+# Define the strict Enum for the URL list type
+class ListTypeEnum(str, enum.Enum):
+    BLACKLIST = "Blacklist"
+    WHITELIST = "Whitelist"
+
+class URLRules(Base):
+    __tablename__ = "URLRules"
+
+    RuleID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    URLDomain = Column(String(255), nullable=False, unique=True) # unique=True prevents duplicates
+    ListType = Column(Enum(ListTypeEnum), nullable=False)
+    
+    # Tracks which Admin or Moderator added this rule
+    AddedBy = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=False)
+    
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Set up relationship for easier access to the user account details (the admin's details)
+    admin = relationship("UserAccount")
