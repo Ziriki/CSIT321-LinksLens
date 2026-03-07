@@ -1,0 +1,125 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List, Optional
+
+# Import custom files
+import models
+import schemas
+from database import get_db
+
+# Create a router for this controller
+router = APIRouter(
+    prefix="/api/scans",
+    tags=["Scan History"]
+)
+
+#########################################################
+# CREATE function for ScanHistory table
+#########################################################
+@router.post("/", response_model=schemas.ScanHistoryResponse, status_code=status.HTTP_201_CREATED)
+def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db)):
+    # If a UserID is provided, verify they exist
+    if scan.UserID:
+        account = db.query(models.UserAccount).filter(models.UserAccount.UserID == scan.UserID).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="User Account not found")
+
+    db_scan = models.ScanHistory(**scan.model_dump())
+    db.add(db_scan)
+    db.commit()
+    db.refresh(db_scan)
+    return db_scan
+
+#########################################################
+# READ function for ScanHistory table (Get by ID)
+#########################################################
+@router.get("/{scan_id}", response_model=schemas.ScanHistoryResponse)
+def read_scan(scan_id: int, db: Session = Depends(get_db)):
+    scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return scan
+
+#########################################################
+# UPDATE function for ScanHistory table
+#########################################################
+@router.put("/{scan_id}", response_model=schemas.ScanHistoryResponse)
+def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db)):
+    db_scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
+    if not db_scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    # Update only the provided fields
+    update_data = scan_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_scan, key, value)
+
+    db.commit()
+    db.refresh(db_scan)
+    return db_scan
+
+#########################################################
+# DELETE function for ScanHistory table
+#########################################################
+@router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_scan(scan_id: int, db: Session = Depends(get_db)):
+    db_scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
+    if not db_scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    
+    db.delete(db_scan)
+    db.commit()
+    return None
+
+#########################################################
+# LIST function for ScanHistory table
+#########################################################
+@router.get("/", response_model=List[schemas.ScanHistoryResponse])
+def list_scans(
+    user_id: Optional[int] = None, 
+    status_indicator: Optional[models.ScanStatusEnum] = None, 
+    search_url: Optional[str] = None,
+    associated_person: Optional[str] = None,
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db)
+):
+    query = db.query(models.ScanHistory)
+
+    # Filter by user (Users should only see their own scans)
+    if user_id:
+        query = query.filter(models.ScanHistory.UserID == user_id)
+        
+    # "As a user, I want to filter my scan history by status indicator"
+    if status_indicator:
+        query = query.filter(models.ScanHistory.StatusIndicator == status_indicator)
+        
+    # "As a user, I want to search my scan history by keywords"
+    if search_url:
+        query = query.filter(models.ScanHistory.InitialURL.ilike(f"%{search_url}%"))
+        
+    # Search by associated person
+    if associated_person:
+        query = query.filter(models.ScanHistory.AssociatedPerson.ilike(f"%{associated_person}%"))
+
+    # Always return newest scans first
+    query = query.order_by(models.ScanHistory.ScannedAt.desc())
+
+    return query.offset(skip).limit(limit).all()
+
+#########################################################
+# DELETE ALL function for ScanHistory table
+#########################################################
+# "As a user, I want to clear my entire scan history so that I can protect my privacy"
+@router.delete("/clear/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def clear_all_user_scans(user_id: int, db: Session = Depends(get_db)):
+    # Verify user exists
+    account = db.query(models.UserAccount).filter(models.UserAccount.UserID == user_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="User Account not found")
+
+    # Delete all scans belonging to this user
+    db.query(models.ScanHistory).filter(models.ScanHistory.UserID == user_id).delete()
+    db.commit()
+    
+    return None

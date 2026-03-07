@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from datetime import datetime
-from models import RequestStatus, ListTypeEnum
+from models import RequestStatus, ListTypeEnum, ScanStatusEnum
 
 #########################################################
 # Base properties of UserRole (used for both Create and Update)
@@ -198,6 +198,42 @@ class URLRulesResponse(URLRulesBase):
     RuleID: int
     AddedBy: int
     CreatedAt: datetime
+
+    class Config:
+        from_attributes = True
+
+#########################################################
+# Base properties of ScanHistory (used for both Create and Update)
+#########################################################
+class ScanHistoryBase(BaseModel):
+    InitialURL: str
+    RedirectURL: Optional[str] = None
+    StatusIndicator: Optional[ScanStatusEnum] = ScanStatusEnum.PENDING
+    DomainAgeDays: Optional[int] = None
+    ServerLocation: Optional[str] = None
+    ScreenshotURL: Optional[str] = None
+    RawText: Optional[str] = None
+    AssociatedPerson: Optional[str] = None
+
+# Used when initiating a new scan
+class ScanHistoryCreate(ScanHistoryBase):
+    UserID: Optional[int] = None # Optional to support guest scans
+
+# Used when the scanning engine finishes and updates the record
+class ScanHistoryUpdate(BaseModel):
+    RedirectURL: Optional[str] = None
+    StatusIndicator: Optional[ScanStatusEnum] = None
+    DomainAgeDays: Optional[int] = None
+    ServerLocation: Optional[str] = None
+    ScreenshotURL: Optional[str] = None
+    RawText: Optional[str] = None
+    AssociatedPerson: Optional[str] = None
+
+# Used for Responses
+class ScanHistoryResponse(ScanHistoryBase):
+    ScanID: int
+    UserID: Optional[int] = None
+    ScannedAt: datetime
 
     class Config:
         from_attributes = True
