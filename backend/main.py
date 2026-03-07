@@ -12,6 +12,7 @@ from controllers.user_preferences_controller import router as user_preferences_r
 from controllers.action_history_controller import router as action_history_router
 from controllers.app_feedback_controller import router as app_feedback_router
 from controllers.blacklist_request_controller import router as blacklist_request_router
+from controllers.url_rules_controller import router as url_rules_router
 
 # This line checks MySQL and creates the UserRole table if it doesn't exist yet!
 models.Base.metadata.create_all(bind=engine)
@@ -26,6 +27,7 @@ app.include_router(user_preferences_router)
 app.include_router(action_history_router)
 app.include_router(app_feedback_router)
 app.include_router(blacklist_request_router)
+app.include_router(url_rules_router)
 
 # Data model for the mobile app to send us
 class ScanRequest(BaseModel):
