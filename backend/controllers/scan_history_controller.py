@@ -6,6 +6,7 @@ from typing import List, Optional
 import models
 import schemas
 from database import get_db
+from dependencies import get_current_user
 
 # Create a router for this controller
 router = APIRouter(
@@ -34,7 +35,7 @@ def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db)):
 # READ function for ScanHistory table (Get by ID)
 #########################################################
 @router.get("/{scan_id}", response_model=schemas.ScanHistoryResponse)
-def read_scan(scan_id: int, db: Session = Depends(get_db)):
+def read_scan(scan_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
@@ -44,7 +45,7 @@ def read_scan(scan_id: int, db: Session = Depends(get_db)):
 # UPDATE function for ScanHistory table
 #########################################################
 @router.put("/{scan_id}", response_model=schemas.ScanHistoryResponse)
-def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db)):
+def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     db_scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
     if not db_scan:
         raise HTTPException(status_code=404, detail="Scan not found")
@@ -62,7 +63,7 @@ def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Sessio
 # DELETE function for ScanHistory table
 #########################################################
 @router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_scan(scan_id: int, db: Session = Depends(get_db)):
+def delete_scan(scan_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     db_scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
     if not db_scan:
         raise HTTPException(status_code=404, detail="Scan not found")
@@ -76,13 +77,14 @@ def delete_scan(scan_id: int, db: Session = Depends(get_db)):
 #########################################################
 @router.get("/", response_model=List[schemas.ScanHistoryResponse])
 def list_scans(
-    user_id: Optional[int] = None, 
-    status_indicator: Optional[models.ScanStatusEnum] = None, 
+    user_id: Optional[int] = None,
+    status_indicator: Optional[models.ScanStatusEnum] = None,
     search_url: Optional[str] = None,
     associated_person: Optional[str] = None,
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db)
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user)
 ):
     query = db.query(models.ScanHistory)
 
@@ -112,7 +114,7 @@ def list_scans(
 #########################################################
 # "As a user, I want to clear my entire scan history so that I can protect my privacy"
 @router.delete("/clear/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def clear_all_user_scans(user_id: int, db: Session = Depends(get_db)):
+def clear_all_user_scans(user_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     # Verify user exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == user_id).first()
     if not account:
