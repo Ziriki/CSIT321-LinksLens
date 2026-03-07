@@ -18,7 +18,11 @@ router = APIRouter(
 # CREATE function for UserDetails table
 #########################################################
 @router.post("/", response_model=schemas.UserDetailsResponse, status_code=status.HTTP_201_CREATED)
-def create_user_details(details: schemas.UserDetailsCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
+def create_user_details(details: schemas.UserDetailsCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Regular users can only create their own details
+    if current_user["role_id"] not in (2, 3) and details.UserID != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only create your own details")
+
     # Check if the UserAccount actually exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == details.UserID).first()
     if not account:
@@ -40,7 +44,10 @@ def create_user_details(details: schemas.UserDetailsCreate, db: Session = Depend
 # READ function for UserDetails table (Get by ID)
 #########################################################
 @router.get("/{user_id}", response_model=schemas.UserDetailsResponse)
-def read_user_details(user_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
+def read_user_details(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Regular users can only view their own details
+    if current_user["role_id"] not in (2, 3) and user_id != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only view your own details")
     details = db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first()
     if not details:
         raise HTTPException(status_code=404, detail="User details not found")
@@ -50,7 +57,10 @@ def read_user_details(user_id: int, db: Session = Depends(get_db), _: dict = Dep
 # UPDATE function for UserDetails table
 #########################################################
 @router.put("/{user_id}", response_model=schemas.UserDetailsResponse)
-def update_user_details(user_id: int, details_update: schemas.UserDetailsUpdate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
+def update_user_details(user_id: int, details_update: schemas.UserDetailsUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Regular users can only update their own details
+    if current_user["role_id"] not in (2, 3) and user_id != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only update your own details")
     db_details = db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first()
     if not db_details:
         raise HTTPException(status_code=404, detail="User details not found")

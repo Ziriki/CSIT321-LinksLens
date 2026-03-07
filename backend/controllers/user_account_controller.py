@@ -51,7 +51,10 @@ def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get
 # READ function for UserAccount table (Get by ID)
 #########################################################
 @router.get("/{account_id}", response_model=schemas.UserAccountResponse)
-def read_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
+def read_account(account_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Regular users can only view their own account; admins can view any
+    if current_user["role_id"] not in (2, 3) and account_id != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only view your own account")
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -61,7 +64,17 @@ def read_account(account_id: int, db: Session = Depends(get_db), _: dict = Depen
 # UPDATE function for UserAccount table
 #########################################################
 @router.put("/{account_id}", response_model=schemas.UserAccountResponse)
-def update_account(account_id: int, account_update: schemas.UserAccountUpdate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
+def update_account(account_id: int, account_update: schemas.UserAccountUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Regular users can only update their own account
+    if current_user["role_id"] not in (2, 3) and account_id != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only update your own account")
+
+    # Only admins can change RoleID or IsActive
+    update_data = account_update.model_dump(exclude_unset=True)
+    if current_user["role_id"] != 3:
+        if "RoleID" in update_data or "IsActive" in update_data:
+            raise HTTPException(status_code=403, detail="Only administrators can change roles or account status")
+
     db_account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
     if not db_account:
         raise HTTPException(status_code=404, detail="Account not found")
