@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Date, JSON, Text, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.mysql import LONGTEXT
 from database import Base
 import enum
 
@@ -110,3 +111,34 @@ class URLRules(Base):
 
     # Set up relationship for easier access to the user account details (the admin's details)
     admin = relationship("UserAccount")
+
+# Define the strict Enum for the scan status
+class ScanStatusEnum(str, enum.Enum):
+    SAFE = "Safe"
+    SUSPICIOUS = "Suspicious"
+    MALICIOUS = "Malicious"
+    PENDING = "Pending"
+
+class ScanHistory(Base):
+    __tablename__ = "ScanHistory"
+
+    ScanID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    
+    # UserID is nullable in case you allow "Guest" scans without an account
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=True)
+    
+    InitialURL = Column(String(2048), nullable=False)
+    RedirectURL = Column(String(2048), nullable=True)
+    
+    StatusIndicator = Column(Enum(ScanStatusEnum), default=ScanStatusEnum.PENDING, nullable=False)
+    
+    DomainAgeDays = Column(Integer, nullable=True)
+    ServerLocation = Column(String(100), nullable=True)
+    ScreenshotURL = Column(String(2048), nullable=True)
+    RawText = Column(LONGTEXT, nullable=True)
+    AssociatedPerson = Column(String(255), nullable=True)
+    
+    ScannedAt = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Optional: Relationship to fetch user info easily
+    user = relationship("UserAccount")
