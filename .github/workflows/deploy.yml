@@ -27,6 +27,9 @@ jobs:
             echo "MYSQL_DATABASE=${{ secrets.DB_NAME }}" >> .env
             echo "MYSQL_USER=${{ secrets.DB_USER }}" >> .env
             echo "MYSQL_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+            echo "BCRYPT_SECRET_KEY=${{ secrets.BCRYPT_SECRET_KEY }}" >> .env
+            echo "BCRYPT_ALGORITHM=${{ secrets.BCRYPT_ALGORITHM }}" >> .env
+            echo "BCRYPT_ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.BCRYPT_ACCESS_TOKEN_EXPIRE_MINUTES }}" >> .env
             
             # 4. Update Marketing Site (Copy files from Repo to Nginx folder)
             sudo mkdir -p /var/www/linkslens
