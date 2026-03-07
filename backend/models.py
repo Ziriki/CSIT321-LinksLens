@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Date, JSON, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Date, JSON, Text, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
+import enum
 
 class UserRole(Base):
     __tablename__ = "UserRole"
@@ -67,3 +68,25 @@ class AppFeedback(Base):
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
     Feedback = Column(Text, nullable=False)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# Define the strict Enum for the BlacklistRequest status
+class RequestStatus(str, enum.Enum):
+    PENDING = "Pending"
+    APPROVED = "Approved"
+    REJECTED = "Rejected"
+
+class BlacklistRequest(Base):
+    __tablename__ = "BlacklistRequest"
+
+    RequestID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
+    URLDomain = Column(String(255), nullable=False)
+    Status = Column(Enum(RequestStatus), default=RequestStatus.PENDING) # Use the Enum defined above. Default is always PENDING.
+    ReviewedBy = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=True) # This is null until a moderator actually reviews it  
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+    ReviewedAt = Column(DateTime(timezone=True), nullable=True)
+
+    # Set up relationships for easier access to the user account details (user and reviewer data)
+    requester = relationship("UserAccount", foreign_keys=[UserID])
+    reviewer = relationship("UserAccount", foreign_keys=[ReviewedBy])
