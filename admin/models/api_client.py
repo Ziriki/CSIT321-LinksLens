@@ -16,3 +16,12 @@ def update_request_status(request_id: int, status: str, moderator_id: int):
     payload = {"Status": status, "ReviewedBy": moderator_id}
     response = requests.put(f"{BACKEND_URL}/api/blacklist-requests/{request_id}", json=payload, headers=_get_headers())
     return response.status_code == 200
+
+def fetch_all_users():
+    response = requests.get(f"{BACKEND_URL}/api/users/", headers=_get_headers())
+    return response.json() if response.status_code == 200 else []
+
+def deactivate_user(user_id: int):
+    # Sends a PUT request to update the user's IsActive status to False
+    response = requests.put(f"{BACKEND_URL}/api/users/{user_id}", json={"IsActive": False}, headers=_get_headers())
+    return response.status_code == 200
