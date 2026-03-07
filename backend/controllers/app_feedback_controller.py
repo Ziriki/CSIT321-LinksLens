@@ -6,6 +6,7 @@ from typing import List, Optional
 import models
 import schemas
 from database import get_db
+from dependencies import get_current_user, require_role
 
 # Create a router for this controller
 router = APIRouter(
@@ -17,7 +18,7 @@ router = APIRouter(
 # CREATE function for AppFeedback table
 #########################################################
 @router.post("/", response_model=schemas.AppFeedbackResponse, status_code=status.HTTP_201_CREATED)
-def create_feedback(feedback: schemas.AppFeedbackCreate, db: Session = Depends(get_db)):
+def create_feedback(feedback: schemas.AppFeedbackCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     # Verify the user exists before they can leave feedback
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == feedback.UserID).first()
     if not account:
@@ -36,7 +37,7 @@ def create_feedback(feedback: schemas.AppFeedbackCreate, db: Session = Depends(g
 # READ function for AppFeedback table (Get by ID)
 #########################################################
 @router.get("/{feedback_id}", response_model=schemas.AppFeedbackResponse)
-def read_feedback(feedback_id: int, db: Session = Depends(get_db)):
+def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     feedback = db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first()
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -46,7 +47,7 @@ def read_feedback(feedback_id: int, db: Session = Depends(get_db)):
 # UPDATE function for AppFeedback table
 #########################################################
 @router.put("/{feedback_id}", response_model=schemas.AppFeedbackResponse)
-def update_feedback(feedback_id: int, feedback_update: schemas.AppFeedbackUpdate, db: Session = Depends(get_db)):
+def update_feedback(feedback_id: int, feedback_update: schemas.AppFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     db_feedback = db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first()
     if not db_feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -60,7 +61,7 @@ def update_feedback(feedback_id: int, feedback_update: schemas.AppFeedbackUpdate
 # DELETE function for AppFeedback table
 #########################################################
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_feedback(feedback_id: int, db: Session = Depends(get_db)):
+def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     db_feedback = db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first()
     if not db_feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -74,10 +75,11 @@ def delete_feedback(feedback_id: int, db: Session = Depends(get_db)):
 #########################################################
 @router.get("/", response_model=List[schemas.AppFeedbackResponse])
 def list_feedback(
-    user_id: Optional[int] = None, # Optional search parameter
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db)
+    user_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_role(3))
 ):
     query = db.query(models.AppFeedback)
 
