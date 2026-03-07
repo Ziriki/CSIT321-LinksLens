@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from datetime import datetime
-from models import RequestStatus, ListTypeEnum, ScanStatusEnum
+from models import RequestStatus, ListTypeEnum, ScanStatusEnum, SuggestedStatusEnum
 
 #########################################################
 # Base properties of UserRole (used for both Create and Update)
@@ -237,3 +237,46 @@ class ScanHistoryResponse(ScanHistoryBase):
 
     class Config:
         from_attributes = True
+
+#########################################################
+# Base properties of ScanFeedback (used for both Create and Update)
+#########################################################
+class ScanFeedbackBase(BaseModel):
+    SuggestedStatus: SuggestedStatusEnum
+    Comments: Optional[str] = None
+
+# Used when a user submits new feedback
+class ScanFeedbackCreate(ScanFeedbackBase):
+    ScanID: int
+    UserID: int
+
+# Used by Moderators to mark feedback as resolved
+class ScanFeedbackUpdate(BaseModel):
+    IsResolved: Optional[bool] = None
+
+# Used for Responses
+class ScanFeedbackResponse(ScanFeedbackBase):
+    FeedbackID: int
+    ScanID: int
+    UserID: int
+    IsResolved: bool
+
+    class Config:
+        from_attributes = True
+
+#########################################################
+# Base properties of Login
+#########################################################
+class ClientTypeEnum(str, enum.Enum):
+    WEB = "web"
+    MOBILE = "mobile"
+
+class UserLogin(BaseModel):
+    EmailAddress: str
+    Password: str
+    ClientType: ClientTypeEnum
+
+class TokenResponse(BaseModel):
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
+    message: str
