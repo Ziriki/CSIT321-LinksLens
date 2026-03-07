@@ -18,7 +18,11 @@ router = APIRouter(
 # CREATE function for ActionHistory table
 #########################################################
 @router.post("/", response_model=schemas.ActionHistoryResponse, status_code=status.HTTP_201_CREATED)
-def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
+def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Regular users can only create logs for themselves
+    if current_user["role_id"] not in (2, 3) and log.UserID != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only create logs for your own actions")
+
     # Verify the user performing the action actually exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == log.UserID).first()
     if not account:
