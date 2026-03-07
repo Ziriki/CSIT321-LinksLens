@@ -1,10 +1,13 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 import uvicorn
 import os
 
 import models
-from database import engine
+from database import engine, get_db
+from dependencies import require_role
 from controllers.user_role_controller import router as user_role_router
 from controllers.user_account_controller import router as user_account_router
 from controllers.user_details_controller import router as user_details_router
@@ -45,6 +48,39 @@ def read_root():
         "status": "Online",
         "service": "LinkLens Backend API",
         "documentation": "/docs"  # FastAPI automatically generates this
+    }
+
+@app.get("/api/health")
+def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
+    """System health dashboard data — Admin only."""
+    # Database connectivity check
+    try:
+        db.execute(text("SELECT 1"))
+        db_status = "Connected"
+    except Exception:
+        db_status = "Disconnected"
+
+    total_users = db.query(models.UserAccount).count()
+    active_users = db.query(models.UserAccount).filter(models.UserAccount.IsActive == True).count()
+    total_scans = db.query(models.ScanHistory).count()
+    pending_blacklist = db.query(models.BlacklistRequest).filter(
+        models.BlacklistRequest.Status == models.RequestStatus.PENDING
+    ).count()
+    unresolved_scan_feedback = db.query(models.ScanFeedback).filter(
+        models.ScanFeedback.IsResolved == False
+    ).count()
+    total_url_rules = db.query(models.URLRules).count()
+    total_app_feedback = db.query(models.AppFeedback).count()
+
+    return {
+        "database": db_status,
+        "total_users": total_users,
+        "active_users": active_users,
+        "total_scans": total_scans,
+        "pending_blacklist_requests": pending_blacklist,
+        "unresolved_scan_feedback": unresolved_scan_feedback,
+        "total_url_rules": total_url_rules,
+        "total_app_feedback": total_app_feedback,
     }
 
 @app.post("/scan")
