@@ -71,19 +71,19 @@ def login(credentials: schemas.UserLogin, response: Response, db: Session = Depe
     token = create_access_token(token_data)
 
     # 5. Route the response based on the platform!
-    if credentials.ClientType == models.ClientTypeEnum.WEB:
+    if credentials.ClientType == schemas.ClientTypeEnum.WEB:
         # For Web: Set an HttpOnly cookie. The browser handles it automatically.
         response.set_cookie(
             key="access_token",
             value=f"Bearer {token}",
             httponly=True,
-            secure=False, # Set to True if using HTTPS in production
+            secure=True,
             samesite="lax",
             max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
         )
         return {"message": "Web login successful"}
         
-    elif credentials.ClientType == models.ClientTypeEnum.MOBILE:
+    elif credentials.ClientType == schemas.ClientTypeEnum.MOBILE:
         # For Mobile: Return the token directly so React Native can save it
         return {
             "access_token": token,
@@ -97,7 +97,7 @@ def login(credentials: schemas.UserLogin, response: Response, db: Session = Depe
 @router.post("/logout")
 def logout(client_type: schemas.ClientTypeEnum, response: Response):
     # If the user is on the web, we tell the browser to delete the cookie
-    if client_type == models.ClientTypeEnum.WEB:
+    if client_type == schemas.ClientTypeEnum.WEB:
         response.delete_cookie("access_token")
         return {"message": "Web logout successful. Cookie cleared."}
         

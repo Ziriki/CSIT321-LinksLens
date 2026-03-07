@@ -7,6 +7,7 @@ from typing import List
 import models
 import schemas
 from database import get_db
+from dependencies import get_current_user, require_role
 
 # Create a router for this controller
 router = APIRouter(
@@ -18,7 +19,7 @@ router = APIRouter(
 # CREATE function for UserPreferences table
 #########################################################
 @router.post("/", response_model=schemas.UserPreferencesResponse, status_code=status.HTTP_201_CREATED)
-def create_preferences(prefs: schemas.UserPreferencesCreate, db: Session = Depends(get_db)):
+def create_preferences(prefs: schemas.UserPreferencesCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     # Check if the UserAccount exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == prefs.UserID).first()
     if not account:
@@ -43,7 +44,7 @@ def create_preferences(prefs: schemas.UserPreferencesCreate, db: Session = Depen
 # READ function for UserPreferences table (Get by ID)
 #########################################################
 @router.get("/{user_id}", response_model=schemas.UserPreferencesResponse)
-def read_preferences(user_id: int, db: Session = Depends(get_db)):
+def read_preferences(user_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
     if not prefs:
         raise HTTPException(status_code=404, detail="Preferences not found")
@@ -53,7 +54,7 @@ def read_preferences(user_id: int, db: Session = Depends(get_db)):
 # UPDATE function for UserPreferences table
 #########################################################
 @router.put("/{user_id}", response_model=schemas.UserPreferencesResponse)
-def update_preferences(user_id: int, prefs_update: schemas.UserPreferencesUpdate, db: Session = Depends(get_db)):
+def update_preferences(user_id: int, prefs_update: schemas.UserPreferencesUpdate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     db_prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
     if not db_prefs:
         raise HTTPException(status_code=404, detail="Preferences not found")
@@ -75,7 +76,7 @@ def update_preferences(user_id: int, prefs_update: schemas.UserPreferencesUpdate
 # DELETE function for UserPreferences table
 #########################################################
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_preferences(user_id: int, db: Session = Depends(get_db)):
+def delete_preferences(user_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     db_prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
     if not db_prefs:
         raise HTTPException(status_code=404, detail="Preferences not found")
@@ -88,5 +89,5 @@ def delete_preferences(user_id: int, db: Session = Depends(get_db)):
 # LIST function for UserPreferences table
 #########################################################
 @router.get("/", response_model=List[schemas.UserPreferencesResponse])
-def list_preferences(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def list_preferences(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     return db.query(models.UserPreferences).offset(skip).limit(limit).all()

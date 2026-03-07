@@ -6,6 +6,7 @@ from typing import List, Optional
 import models
 import schemas
 from database import get_db
+from dependencies import require_role
 
 # Create a router for this controller
 router = APIRouter(
@@ -17,7 +18,7 @@ router = APIRouter(
 # CREATE function for UserRole table
 #########################################################
 @router.post("/", response_model=schemas.UserRoleResponse)
-def create_role(role: schemas.UserRoleCreate, db: Session = Depends(get_db)):
+def create_role(role: schemas.UserRoleCreate, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     # Check if the RoleName already exists
     existing_role = db.query(models.UserRole).filter(models.UserRole.RoleName == role.RoleName).first()
     if existing_role:
@@ -38,7 +39,7 @@ def create_role(role: schemas.UserRoleCreate, db: Session = Depends(get_db)):
 # READ function for UserRole table (Get by ID)
 #########################################################
 @router.get("/{role_id}", response_model=schemas.UserRoleResponse)
-def read_role(role_id: int, db: Session = Depends(get_db)):
+def read_role(role_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     # Look up a specific role by ID (FastAPI guarantees role_id is a valid integer)
     role = db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first()
     if not role:
@@ -49,7 +50,7 @@ def read_role(role_id: int, db: Session = Depends(get_db)):
 # UPDATE function for UserRole table
 #########################################################
 @router.put("/{role_id}", response_model=schemas.UserRoleResponse)
-def update_role(role_id: int, role_update: schemas.UserRoleUpdate, db: Session = Depends(get_db)):
+def update_role(role_id: int, role_update: schemas.UserRoleUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     # Find the existing role
     db_role = db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first()
     if not db_role:
@@ -74,7 +75,7 @@ def update_role(role_id: int, role_update: schemas.UserRoleUpdate, db: Session =
 # DELETE function for UserRole table (Soft Delete)
 #########################################################
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_role(role_id: int, db: Session = Depends(get_db)):
+def delete_role(role_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     # Find the existing role
     db_role = db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first()
     if not db_role:
@@ -91,10 +92,11 @@ def delete_role(role_id: int, db: Session = Depends(get_db)):
 #########################################################
 @router.get("/", response_model=List[schemas.UserRoleResponse])
 def list_roles(
-    search: Optional[str] = None, # Optional search parameter
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db)
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_role(3))
 ):
     # Start with a base query
     query = db.query(models.UserRole).filter(models.UserRole.IsActive == True)

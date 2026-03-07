@@ -41,6 +41,8 @@ services:
     command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
     volumes:
       - ./admin:/app
+    depends_on:
+      - db
     ports:
       # Secured: Only Nginx on the host can route traffic here
       - "127.0.0.1:8501:8501"

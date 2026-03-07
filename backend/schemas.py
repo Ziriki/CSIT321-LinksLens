@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
+import enum
 from models import RequestStatus, ListTypeEnum, ScanStatusEnum, SuggestedStatusEnum
 
 #########################################################
