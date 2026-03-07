@@ -6,6 +6,7 @@ from typing import List
 import models
 import schemas
 from database import get_db
+from dependencies import get_current_user, require_role
 
 # Create a router for this controller
 router = APIRouter(
@@ -17,7 +18,7 @@ router = APIRouter(
 # CREATE function for UserDetails table
 #########################################################
 @router.post("/", response_model=schemas.UserDetailsResponse, status_code=status.HTTP_201_CREATED)
-def create_user_details(details: schemas.UserDetailsCreate, db: Session = Depends(get_db)):
+def create_user_details(details: schemas.UserDetailsCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     # Check if the UserAccount actually exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == details.UserID).first()
     if not account:
@@ -39,7 +40,7 @@ def create_user_details(details: schemas.UserDetailsCreate, db: Session = Depend
 # READ function for UserDetails table (Get by ID)
 #########################################################
 @router.get("/{user_id}", response_model=schemas.UserDetailsResponse)
-def read_user_details(user_id: int, db: Session = Depends(get_db)):
+def read_user_details(user_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     details = db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first()
     if not details:
         raise HTTPException(status_code=404, detail="User details not found")
@@ -49,7 +50,7 @@ def read_user_details(user_id: int, db: Session = Depends(get_db)):
 # UPDATE function for UserDetails table
 #########################################################
 @router.put("/{user_id}", response_model=schemas.UserDetailsResponse)
-def update_user_details(user_id: int, details_update: schemas.UserDetailsUpdate, db: Session = Depends(get_db)):
+def update_user_details(user_id: int, details_update: schemas.UserDetailsUpdate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     db_details = db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first()
     if not db_details:
         raise HTTPException(status_code=404, detail="User details not found")
@@ -72,5 +73,5 @@ def update_user_details(user_id: int, details_update: schemas.UserDetailsUpdate,
 # LIST function for UserDetails table
 #########################################################
 @router.get("/", response_model=List[schemas.UserDetailsResponse])
-def list_all_details(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def list_all_details(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     return db.query(models.UserDetails).offset(skip).limit(limit).all()

@@ -7,6 +7,7 @@ from passlib.context import CryptContext
 import models
 import schemas
 from database import get_db
+from dependencies import get_current_user, require_role
 
 # Create a router for this controller
 router = APIRouter(
@@ -50,7 +51,7 @@ def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get
 # READ function for UserAccount table (Get by ID)
 #########################################################
 @router.get("/{account_id}", response_model=schemas.UserAccountResponse)
-def read_account(account_id: int, db: Session = Depends(get_db)):
+def read_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -60,7 +61,7 @@ def read_account(account_id: int, db: Session = Depends(get_db)):
 # UPDATE function for UserAccount table
 #########################################################
 @router.put("/{account_id}", response_model=schemas.UserAccountResponse)
-def update_account(account_id: int, account_update: schemas.UserAccountUpdate, db: Session = Depends(get_db)):
+def update_account(account_id: int, account_update: schemas.UserAccountUpdate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     db_account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
     if not db_account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -93,7 +94,7 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
 # DELETE function for UserAccount table (Soft Delete)
 #########################################################
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_account(account_id: int, db: Session = Depends(get_db)):
+def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
     db_account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
     if not db_account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -107,11 +108,12 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
 #########################################################
 @router.get("/", response_model=List[schemas.UserAccountResponse])
 def list_accounts(
-    search_email: Optional[str] = None, # Optional search parameter
+    search_email: Optional[str] = None,
     role_id: Optional[int] = None,
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db)
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_role(3))
 ):
     # Start with a base query
     query = db.query(models.UserAccount).filter(models.UserAccount.IsActive == True)

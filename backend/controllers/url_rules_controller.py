@@ -6,6 +6,7 @@ from typing import List, Optional
 import models
 import schemas
 from database import get_db
+from dependencies import get_current_user, require_role
 
 # Create a router for this controller
 router = APIRouter(
@@ -17,7 +18,7 @@ router = APIRouter(
 # CREATE function for URLRules table
 #########################################################
 @router.post("/", response_model=schemas.URLRulesResponse, status_code=status.HTTP_201_CREATED)
-def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db)):
+def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
     # Check if the admin/moderator exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == rule.AddedBy).first()
     if not account:
@@ -38,7 +39,7 @@ def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db)):
 # READ function for URLRules table (Get by ID)
 #########################################################
 @router.get("/{rule_id}", response_model=schemas.URLRulesResponse)
-def read_rule(rule_id: int, db: Session = Depends(get_db)):
+def read_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     rule = db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -48,7 +49,7 @@ def read_rule(rule_id: int, db: Session = Depends(get_db)):
 # UPDATE function for URLRules table
 #########################################################
 @router.put("/{rule_id}", response_model=schemas.URLRulesResponse)
-def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session = Depends(get_db)):
+def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
     db_rule = db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -71,7 +72,7 @@ def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session =
 # DELETE function for URLRules table
 #########################################################
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_rule(rule_id: int, db: Session = Depends(get_db)):
+def delete_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
     db_rule = db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -85,11 +86,12 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db)):
 #########################################################
 @router.get("/", response_model=List[schemas.URLRulesResponse])
 def list_rules(
-    list_type: Optional[models.ListTypeEnum] = None, # Easily fetch by the list typex (Blacklist or Whitelist)
+    list_type: Optional[models.ListTypeEnum] = None,
     search_domain: Optional[str] = None,
-    skip: int = 0, 
-    limit: int = 100, 
-    db: Session = Depends(get_db)
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_user)
 ):
     query = db.query(models.URLRules)
 
