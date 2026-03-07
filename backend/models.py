@@ -103,10 +103,7 @@ class URLRules(Base):
     RuleID = Column(Integer, primary_key=True, index=True, autoincrement=True)
     URLDomain = Column(String(255), nullable=False, unique=True) # unique=True prevents duplicates
     ListType = Column(Enum(ListTypeEnum), nullable=False)
-    
-    # Tracks which Admin or Moderator added this rule
-    AddedBy = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=False)
-    
+    AddedBy = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=False) # Tracks which Admin or Moderator added this rule
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
 
     # Set up relationship for easier access to the user account details (the admin's details)
@@ -123,22 +120,36 @@ class ScanHistory(Base):
     __tablename__ = "ScanHistory"
 
     ScanID = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    
-    # UserID is nullable in case you allow "Guest" scans without an account
-    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=True)
-    
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=True) 
     InitialURL = Column(String(2048), nullable=False)
-    RedirectURL = Column(String(2048), nullable=True)
-    
+    RedirectURL = Column(String(2048), nullable=True) 
     StatusIndicator = Column(Enum(ScanStatusEnum), default=ScanStatusEnum.PENDING, nullable=False)
-    
     DomainAgeDays = Column(Integer, nullable=True)
     ServerLocation = Column(String(100), nullable=True)
     ScreenshotURL = Column(String(2048), nullable=True)
     RawText = Column(LONGTEXT, nullable=True)
     AssociatedPerson = Column(String(255), nullable=True)
-    
     ScannedAt = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Optional: Relationship to fetch user info easily
+    # Set up relationship for easier access to the user account details
+    user = relationship("UserAccount")
+
+# Define the strict Enum for the suggested status
+class SuggestedStatusEnum(str, enum.Enum):
+    SAFE = "Safe"
+    SUSPICIOUS = "Suspicious"
+    MALICIOUS = "Malicious"
+
+class ScanFeedback(Base):
+    __tablename__ = "ScanFeedback"
+
+    FeedbackID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    ScanID = Column(Integer, ForeignKey("ScanHistory.ScanID", ondelete="CASCADE"), nullable=False)
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
+    SuggestedStatus = Column(Enum(SuggestedStatusEnum), nullable=False)
+    Comments = Column(Text, nullable=True)
+    IsResolved = Column(Boolean, default=False) # Allows moderators to check off feedback they have reviewed
+
+    # Set up relationships for easier access to ScanHistory and UserAccount details
+    scan = relationship("ScanHistory")
     user = relationship("UserAccount")
