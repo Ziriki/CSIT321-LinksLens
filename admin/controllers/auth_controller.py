@@ -45,7 +45,18 @@ def handle_login(email, password):
         response = api_client.authenticate_user(email, password)
         if response.status_code == 200:
             data = response.json()
-            st.session_state["access_token"] = data["access_token"]
+            token = data["access_token"]
+            # Block regular users (RoleID 3) from accessing the admin portal
+            try:
+                payload = jwt.decode(token, options={"verify_signature": False})
+                role_id = int(payload.get("role", 0))
+                if role_id not in (1, 2):  # Only Administrator (1) and Moderator (2)
+                    st.error("Login failed. Check credentials.")
+                    return
+            except Exception:
+                st.error("Login failed. Check credentials.")
+                return
+            st.session_state["access_token"] = token
             st.success("Login successful!")
             st.rerun()
         else:
