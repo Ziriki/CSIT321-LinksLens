@@ -53,7 +53,7 @@ def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get
 @router.get("/{account_id}", response_model=schemas.UserAccountResponse)
 def read_account(account_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only view their own account; admins can view any
-    if current_user["role_id"] not in (2, 3) and account_id != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and account_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own account")
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
     if not account:
@@ -66,12 +66,12 @@ def read_account(account_id: int, db: Session = Depends(get_db), current_user: d
 @router.put("/{account_id}", response_model=schemas.UserAccountResponse)
 def update_account(account_id: int, account_update: schemas.UserAccountUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only update their own account
-    if current_user["role_id"] not in (2, 3) and account_id != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and account_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only update your own account")
 
     # Only admins can change RoleID or IsActive
     update_data = account_update.model_dump(exclude_unset=True)
-    if current_user["role_id"] != 3:
+    if current_user["role_id"] != 1:
         if "RoleID" in update_data or "IsActive" in update_data:
             raise HTTPException(status_code=403, detail="Only administrators can change roles or account status")
 
@@ -107,7 +107,7 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
 # DELETE function for UserAccount table (Soft Delete)
 #########################################################
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
+def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     db_account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
     if not db_account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -126,7 +126,7 @@ def list_accounts(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: dict = Depends(require_role(3))
+    _: dict = Depends(require_role(1))
 ):
     # Start with a base query
     query = db.query(models.UserAccount).filter(models.UserAccount.IsActive == True)

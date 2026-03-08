@@ -21,7 +21,7 @@ router = APIRouter(
 @router.post("/", response_model=schemas.UserPreferencesResponse, status_code=status.HTTP_201_CREATED)
 def create_preferences(prefs: schemas.UserPreferencesCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only create their own preferences
-    if current_user["role_id"] not in (2, 3) and prefs.UserID != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and prefs.UserID != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only create your own preferences")
 
     # Check if the UserAccount exists
@@ -50,7 +50,7 @@ def create_preferences(prefs: schemas.UserPreferencesCreate, db: Session = Depen
 @router.get("/{user_id}", response_model=schemas.UserPreferencesResponse)
 def read_preferences(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only view their own preferences
-    if current_user["role_id"] not in (2, 3) and user_id != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own preferences")
     prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
     if not prefs:
@@ -63,7 +63,7 @@ def read_preferences(user_id: int, db: Session = Depends(get_db), current_user: 
 @router.put("/{user_id}", response_model=schemas.UserPreferencesResponse)
 def update_preferences(user_id: int, prefs_update: schemas.UserPreferencesUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only update their own preferences
-    if current_user["role_id"] not in (2, 3) and user_id != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only update your own preferences")
     db_prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
     if not db_prefs:
@@ -88,7 +88,7 @@ def update_preferences(user_id: int, prefs_update: schemas.UserPreferencesUpdate
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_preferences(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only delete their own preferences
-    if current_user["role_id"] not in (2, 3) and user_id != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only delete your own preferences")
     db_prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
     if not db_prefs:
@@ -102,5 +102,5 @@ def delete_preferences(user_id: int, db: Session = Depends(get_db), current_user
 # LIST function for UserPreferences table
 #########################################################
 @router.get("/", response_model=List[schemas.UserPreferencesResponse])
-def list_preferences(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
+def list_preferences(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     return db.query(models.UserPreferences).offset(skip).limit(limit).all()
