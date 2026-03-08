@@ -30,7 +30,7 @@ def seed_database():
             print("Database already seeded! Run 'docker-compose down -v' to reset.")
             return
 
-        print("Seeding fresh database with TRULY RANDOM dummy data...")
+        print("Seeding fresh database with TRULY RANDOM dummy data...") 
 
         # --- 1. User Roles ---
         role_admin = models.UserRole(RoleName="Administrator")
