@@ -20,7 +20,7 @@ router = APIRouter(
 @router.post("/", response_model=schemas.ActionHistoryResponse, status_code=status.HTTP_201_CREATED)
 def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only create logs for themselves
-    if current_user["role_id"] not in (2, 3) and log.UserID != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and log.UserID != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only create logs for your own actions")
 
     # Verify the user performing the action actually exists
@@ -38,7 +38,7 @@ def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), 
 # READ function for ActionHistory table (Get by ID)
 #########################################################
 @router.get("/{log_id}", response_model=schemas.ActionHistoryResponse)
-def read_log(log_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
+def read_log(log_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     log = db.query(models.ActionHistory).filter(models.ActionHistory.LogID == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Log entry not found")
@@ -64,7 +64,7 @@ def list_logs(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: dict = Depends(require_role(3))
+    _: dict = Depends(require_role(1))
 ):
     query = db.query(models.ActionHistory)
 

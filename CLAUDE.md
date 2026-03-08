@@ -134,9 +134,9 @@ mysql -u root -p LinksLens-DB < DB_Creation_Script.sql   # Initialize schema
 
 | Role          | RoleID | Access       | Key Actions                                                  |
 |---------------|--------|--------------|--------------------------------------------------------------|
-| User          | 1      | Mobile only  | Scan URLs, view own history, submit feedback, request blacklist |
+| Administrator | 1      | Web portal   | Manage users, view system health, oversee moderators         |
 | Moderator     | 2      | Web portal   | Review blacklist requests, resolve scan feedback             |
-| Administrator | 3      | Web portal   | Manage users, view system health, oversee moderators         |
+| User          | 3      | Mobile only  | Scan URLs, view own history, submit feedback, request blacklist |
 
 ## Known Limitations (FYP Scope)
 
