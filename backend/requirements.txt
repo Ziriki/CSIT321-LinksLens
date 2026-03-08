@@ -5,6 +5,7 @@ pydantic[email]
 requests
 sqlalchemy
 pymysql
+cryptography
 passlib[bcrypt]
 python-dotenv
 python-multipart
