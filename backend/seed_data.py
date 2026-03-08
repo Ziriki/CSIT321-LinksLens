@@ -3,20 +3,17 @@ import datetime
 import secrets
 import string
 from sqlalchemy.orm import Session
-from sqlalchemy import text # Import text for raw SQL commands
 from passlib.context import CryptContext
 
 import models
 from database import SessionLocal, engine
 
-# Create tables if they don't exist yet
+# Rebuild all tables with the NEW uppercase Enum rules
 models.Base.metadata.create_all(bind=engine)
 
-# Setup password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def generate_secure_password(length=16):
-    """Generates a cryptographically secure random password."""
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
     while True:
         pwd = ''.join(secrets.choice(alphabet) for i in range(length))
@@ -28,20 +25,12 @@ def seed_database():
     db: Session = SessionLocal()
     
     try:
-        print("Wiping existing data (Truncating tables)...")
-        # 1. Disable Foreign Key checks so MySQL doesn't block the wipe
-        db.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
-        
-        # 2. Dynamically grab every table and truncate it
-        for table in reversed(models.Base.metadata.sorted_tables):
-            db.execute(text(f"TRUNCATE TABLE {table.name};"))
-            
-        # 3. Turn Foreign Key checks back on!
-        db.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
-        db.commit()
-        print("All tables truncated successfully!")
+        # Prevent double-seeding
+        if db.query(models.UserRole).first():
+            print("Database already seeded! Run 'docker-compose down -v' to reset.")
+            return
 
-        print("Seeding database with TRULY RANDOM dummy data...")
+        print("Seeding fresh database with TRULY RANDOM dummy data...")
 
         # --- 1. User Roles ---
         role_admin = models.UserRole(RoleName="Administrator")
@@ -50,7 +39,7 @@ def seed_database():
         db.add_all([role_admin, role_mod, role_user])
         db.commit()
 
-        # --- Generate the random passwords ---
+        # --- Generate Passwords ---
         passwords = {
             "admin@linkslens.com": generate_secure_password(),
             "mod1@linkslens.com": generate_secure_password(),
@@ -90,32 +79,31 @@ def seed_database():
         db.commit()
 
         # --- 5. URL Rules (Master List) ---
-        # Using raw uppercase strings to satisfy MySQL's strict Enum constraints
         rules = [
-            models.URLRules(URLDomain="google.com", ListType="WHITELIST", AddedBy=admin_id),
-            models.URLRules(URLDomain="secure-bank-login-update.com", ListType="BLACKLIST", AddedBy=mod1_id),
-            models.URLRules(URLDomain="free-iphones-now.net", ListType="BLACKLIST", AddedBy=mod2_id)
+            models.URLRules(URLDomain="google.com", ListType=models.ListTypeEnum.WHITELIST, AddedBy=admin_id),
+            models.URLRules(URLDomain="secure-bank-login-update.com", ListType=models.ListTypeEnum.BLACKLIST, AddedBy=mod1_id),
+            models.URLRules(URLDomain="free-iphones-now.net", ListType=models.ListTypeEnum.BLACKLIST, AddedBy=mod2_id)
         ]
         db.add_all(rules)
         db.commit()
 
         # --- 6. Scan History ---
         scans = [
-            models.ScanHistory(UserID=user1_id, InitialURL="https://google.com", StatusIndicator="SAFE", DomainAgeDays=8500, ServerLocation="USA"),
-            models.ScanHistory(UserID=user1_id, InitialURL="https://secure-bank-login-update.com", StatusIndicator="MALICIOUS", DomainAgeDays=2, ServerLocation="Russia"),
-            models.ScanHistory(UserID=user2_id, InitialURL="https://unknown-shop-online.com", StatusIndicator="SUSPICIOUS", DomainAgeDays=14, ServerLocation="Unknown")
+            models.ScanHistory(UserID=user1_id, InitialURL="https://google.com", StatusIndicator=models.ScanStatusEnum.SAFE, DomainAgeDays=8500, ServerLocation="USA"),
+            models.ScanHistory(UserID=user1_id, InitialURL="https://secure-bank-login-update.com", StatusIndicator=models.ScanStatusEnum.MALICIOUS, DomainAgeDays=2, ServerLocation="Russia"),
+            models.ScanHistory(UserID=user2_id, InitialURL="https://unknown-shop-online.com", StatusIndicator=models.ScanStatusEnum.SUSPICIOUS, DomainAgeDays=14, ServerLocation="Unknown")
         ]
         db.add_all(scans)
         db.commit()
 
         # --- 7. Scan Feedback ---
-        scan_feedback = models.ScanFeedback(ScanID=scans[2].ScanID, UserID=user2_id, SuggestedStatus="MALICIOUS", Comments="They asked for my credit card without HTTPS!", IsResolved=False)
+        scan_feedback = models.ScanFeedback(ScanID=scans[2].ScanID, UserID=user2_id, SuggestedStatus=models.SuggestedStatusEnum.MALICIOUS, Comments="They asked for my credit card without HTTPS!", IsResolved=False)
         db.add(scan_feedback)
 
         # --- 8. Blacklist Requests ---
         requests = [
-            models.BlacklistRequest(UserID=user1_id, URLDomain="scam-crypto-wallet.io", Status="PENDING"),
-            models.BlacklistRequest(UserID=user2_id, URLDomain="fake-shopee-deals.sg", Status="APPROVED", ReviewedBy=mod1_id, ReviewedAt=datetime.datetime.now(datetime.timezone.utc))
+            models.BlacklistRequest(UserID=user1_id, URLDomain="scam-crypto-wallet.io", Status=models.RequestStatus.PENDING),
+            models.BlacklistRequest(UserID=user2_id, URLDomain="fake-shopee-deals.sg", Status=models.RequestStatus.APPROVED, ReviewedBy=mod1_id, ReviewedAt=datetime.datetime.now(datetime.timezone.utc))
         ]
         db.add_all(requests)
         db.commit()
@@ -133,7 +121,7 @@ def seed_database():
         db.commit()
 
         print("\n" + "="*60)
-        print("DB WIPED & SEEDED! SAVE THESE CREDENTIALS NOW:")
+        print("DB SEEDED SUCCESSFULLY! SAVE THESE CREDENTIALS NOW:")
         print("="*60)
         for email, pwd in passwords.items():
             print(f"Email: {email:<20} | Password: {pwd}")
