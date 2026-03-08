@@ -2,8 +2,8 @@ import streamlit as st
 from controllers import auth_controller, scan_feedback_controller
 
 st.set_page_config(page_title="Scan Feedback", layout="wide")
-# Moderator + Admin (RoleID 2, 3)
-auth_controller.require_role(2, 3)
+# Admin + Moderator (RoleID 1, 2)
+auth_controller.require_role(1, 2)
 
 st.title("Scan Feedback Review")
 st.markdown("Review user-submitted feedback on scan results and mark as resolved.")

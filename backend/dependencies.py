@@ -60,9 +60,9 @@ def get_current_user(request: Request) -> dict:
 def require_role(*role_ids: int):
     """
     Factory that returns a FastAPI dependency enforcing one of the given role IDs.
-    Usage: Depends(require_role(3))          # admin only
-           Depends(require_role(2, 3))       # moderator or admin
-    Role IDs: 1 = User, 2 = Moderator, 3 = Administrator
+    Usage: Depends(require_role(1))          # admin only
+           Depends(require_role(1, 2))       # admin or moderator
+    Role IDs: 1 = Administrator, 2 = Moderator, 3 = User
     """
     def checker(current_user: dict = Depends(get_current_user)) -> dict:
         if current_user["role_id"] not in role_ids:

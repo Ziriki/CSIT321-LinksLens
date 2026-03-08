@@ -2,8 +2,8 @@ import streamlit as st
 from controllers import auth_controller, rules_controller
 
 st.set_page_config(page_title="URL Rules", layout="wide")
-# Moderator + Admin (RoleID 2, 3)
-auth_controller.require_role(2, 3)
+# Admin + Moderator (RoleID 1, 2)
+auth_controller.require_role(1, 2)
 
 st.title("Master URL Rules")
 st.markdown("View the global Blacklist and Whitelist active in the system.")

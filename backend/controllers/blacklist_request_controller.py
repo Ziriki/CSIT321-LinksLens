@@ -46,7 +46,7 @@ def create_request(request: schemas.BlacklistRequestCreate, db: Session = Depend
 # READ function for BlacklistRequest table (Get by ID)
 #########################################################
 @router.get("/{request_id}", response_model=schemas.BlacklistRequestResponse)
-def read_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
+def read_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     req = db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -56,7 +56,7 @@ def read_request(request_id: int, db: Session = Depends(get_db), _: dict = Depen
 # UPDATE function for BlacklistRequest table
 #########################################################
 @router.put("/{request_id}", response_model=schemas.BlacklistRequestResponse)
-def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
+def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     db_request = db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first()
     if not db_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -92,7 +92,7 @@ def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate,
 # DELETE function for BlacklistRequest table
 #########################################################
 @router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
+def delete_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     db_request = db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first()
     if not db_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -111,7 +111,7 @@ def list_requests(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: dict = Depends(require_role(2, 3))
+    _: dict = Depends(require_role(1, 2))
 ):
     query = db.query(models.BlacklistRequest)
 

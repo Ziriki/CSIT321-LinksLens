@@ -65,7 +65,7 @@ def read_root():
     }
 
 @app.get("/api/health")
-def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
+def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     """System health dashboard data — Admin only."""
     # Database connectivity check
     try:

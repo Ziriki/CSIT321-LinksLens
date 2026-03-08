@@ -13,7 +13,7 @@ if st.session_state.get("access_token") is None:
 else:
     user = auth_controller.get_current_user()
     if user:
-        role_label = {1: "User", 2: "Moderator", 3: "Administrator"}.get(user["role_id"], "Unknown")
+        role_label = {1: "Administrator", 2: "Moderator", 3: "User"}.get(user["role_id"], "Unknown")
         st.sidebar.write(f"Logged in as **{role_label}**")
     st.sidebar.markdown("---")
     if st.sidebar.button("Log Out"):

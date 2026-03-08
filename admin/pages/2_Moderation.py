@@ -2,8 +2,8 @@ import streamlit as st
 from controllers import auth_controller, moderation_controller
 
 st.set_page_config(page_title="Moderation Queue", layout="wide")
-# Moderator + Admin (RoleID 2, 3)
-user = auth_controller.require_role(2, 3)
+# Admin + Moderator (RoleID 1, 2)
+user = auth_controller.require_role(1, 2)
 
 st.title("Moderation Queue")
 df = moderation_controller.get_pending_requests_dataframe()
