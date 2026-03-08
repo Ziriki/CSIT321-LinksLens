@@ -18,7 +18,7 @@ router = APIRouter(
 # CREATE function for URLRules table
 #########################################################
 @router.post("/", response_model=schemas.URLRulesResponse, status_code=status.HTTP_201_CREATED)
-def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
+def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     # Check if the admin/moderator exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == rule.AddedBy).first()
     if not account:
@@ -49,7 +49,7 @@ def read_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(get
 # UPDATE function for URLRules table
 #########################################################
 @router.put("/{rule_id}", response_model=schemas.URLRulesResponse)
-def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
+def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     db_rule = db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")
@@ -72,7 +72,7 @@ def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session =
 # DELETE function for URLRules table
 #########################################################
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
+def delete_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     db_rule = db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first()
     if not db_rule:
         raise HTTPException(status_code=404, detail="Rule not found")

@@ -3,8 +3,8 @@ from controllers import auth_controller
 from models import api_client
 
 st.set_page_config(page_title="Dashboard", layout="wide")
-# Admin only (RoleID 3)
-auth_controller.require_role(3)
+# Admin only (RoleID 1)
+auth_controller.require_role(1)
 
 st.title("System Dashboard")
 
