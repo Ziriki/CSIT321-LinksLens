@@ -2,8 +2,8 @@ import streamlit as st
 from controllers import auth_controller, user_controller
 
 st.set_page_config(page_title="User Management", layout="wide")
-# Admin only (RoleID 3)
-auth_controller.require_role(3)
+# Admin only (RoleID 1)
+auth_controller.require_role(1)
 
 st.title("User Management")
 df = user_controller.get_users_dataframe()
@@ -22,7 +22,7 @@ with col2:
     new_role = st.selectbox(
         "Assign New Role",
         options=[1, 2, 3],
-        format_func=lambda x: {1: "User", 2: "Moderator", 3: "Administrator"}[x],
+        format_func=lambda x: {1: "Administrator", 2: "Moderator", 3: "User"}[x],
     )
 with col3:
     st.write("")

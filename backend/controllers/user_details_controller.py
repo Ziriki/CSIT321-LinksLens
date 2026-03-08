@@ -20,7 +20,7 @@ router = APIRouter(
 @router.post("/", response_model=schemas.UserDetailsResponse, status_code=status.HTTP_201_CREATED)
 def create_user_details(details: schemas.UserDetailsCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only create their own details
-    if current_user["role_id"] not in (2, 3) and details.UserID != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and details.UserID != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only create your own details")
 
     # Check if the UserAccount actually exists
@@ -46,7 +46,7 @@ def create_user_details(details: schemas.UserDetailsCreate, db: Session = Depend
 @router.get("/{user_id}", response_model=schemas.UserDetailsResponse)
 def read_user_details(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only view their own details
-    if current_user["role_id"] not in (2, 3) and user_id != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own details")
     details = db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first()
     if not details:
@@ -59,7 +59,7 @@ def read_user_details(user_id: int, db: Session = Depends(get_db), current_user:
 @router.put("/{user_id}", response_model=schemas.UserDetailsResponse)
 def update_user_details(user_id: int, details_update: schemas.UserDetailsUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only update their own details
-    if current_user["role_id"] not in (2, 3) and user_id != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only update your own details")
     db_details = db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first()
     if not db_details:
@@ -83,5 +83,5 @@ def update_user_details(user_id: int, details_update: schemas.UserDetailsUpdate,
 # LIST function for UserDetails table
 #########################################################
 @router.get("/", response_model=List[schemas.UserDetailsResponse])
-def list_all_details(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
+def list_all_details(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     return db.query(models.UserDetails).offset(skip).limit(limit).all()

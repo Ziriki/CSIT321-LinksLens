@@ -40,7 +40,7 @@ def read_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = 
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
     # Regular users can only view their own scans
-    if current_user["role_id"] not in (2, 3) and scan.UserID != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and scan.UserID != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own scans")
     return scan
 
@@ -48,7 +48,7 @@ def read_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = 
 # UPDATE function for ScanHistory table
 #########################################################
 @router.put("/{scan_id}", response_model=schemas.ScanHistoryResponse)
-def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
+def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     db_scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
     if not db_scan:
         raise HTTPException(status_code=404, detail="Scan not found")
@@ -71,7 +71,7 @@ def delete_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict 
     if not db_scan:
         raise HTTPException(status_code=404, detail="Scan not found")
     # Regular users can only delete their own scans
-    if current_user["role_id"] not in (2, 3) and db_scan.UserID != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and db_scan.UserID != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only delete your own scans")
 
     db.delete(db_scan)
@@ -95,7 +95,7 @@ def list_scans(
     query = db.query(models.ScanHistory)
 
     # Regular users can only see their own scans — force the filter
-    if current_user["role_id"] not in (2, 3):
+    if current_user["role_id"] not in (1, 2):
         query = query.filter(models.ScanHistory.UserID == current_user["user_id"])
     elif user_id:
         query = query.filter(models.ScanHistory.UserID == user_id)
@@ -124,7 +124,7 @@ def list_scans(
 @router.delete("/clear/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def clear_all_user_scans(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     # Regular users can only clear their own scan history
-    if current_user["role_id"] not in (2, 3) and user_id != current_user["user_id"]:
+    if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only clear your own scan history")
 
     # Verify user exists
