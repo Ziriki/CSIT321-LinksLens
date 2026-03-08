@@ -2,8 +2,8 @@ import streamlit as st
 from controllers import auth_controller, scan_history_controller
 
 st.set_page_config(page_title="Scan Forensics", layout="wide")
-# Moderator + Admin (RoleID 2, 3)
-auth_controller.require_role(2, 3)
+# Admin + Moderator (RoleID 1, 2)
+auth_controller.require_role(1, 2)
 
 st.title("Scan Forensics Viewer")
 st.markdown("Perform a deep-dive analysis on a specific scan record.")

@@ -47,7 +47,7 @@ def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(
 # READ function for ScanFeedback table (Get by ID)
 #########################################################
 @router.get("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
-def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
+def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
     if not feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -57,7 +57,7 @@ def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Dep
 # UPDATE function for ScanFeedback table
 #########################################################
 @router.put("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
-def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(2, 3))):
+def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     db_feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
     if not db_feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -74,7 +74,7 @@ def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdat
 # DELETE function for ScanFeedback table
 #########################################################
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(3))):
+def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     db_feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
     if not db_feedback:
         raise HTTPException(status_code=404, detail="Feedback not found")
@@ -94,7 +94,7 @@ def list_feedback(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: dict = Depends(require_role(2, 3))
+    _: dict = Depends(require_role(1, 2))
 ):
     query = db.query(models.ScanFeedback)
 
