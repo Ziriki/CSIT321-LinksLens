@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uvicorn
 import os
+import time
+from sqlalchemy.exc import OperationalError
 
 import models
 from database import engine, get_db
@@ -20,8 +22,20 @@ from controllers.scan_history_controller import router as scan_history_router
 from controllers.scan_feedback_controller import router as scan_feedback_router
 from controllers.auth_controller import router as auth_router
 
-# This line checks MySQL and creates the UserRole table if it doesn't exist yet!
-models.Base.metadata.create_all(bind=engine)
+# Tells FastAPI to try connecting 5 times, waiting 5 seconds between each try.
+retries = 5
+while retries > 0:
+    try:
+        models.Base.metadata.create_all(bind=engine)
+        print("Successfully connected to the database and created tables!")
+        break
+    except OperationalError:
+        print(f"Database not ready yet. Retrying in 5 seconds... ({retries} attempts left)")
+        time.sleep(5)
+        retries -= 1
+
+if retries == 0:
+    print("FATAL ERROR: Could not connect to the database after 5 attempts.")
 
 app = FastAPI(title="LinksLens API")
 
