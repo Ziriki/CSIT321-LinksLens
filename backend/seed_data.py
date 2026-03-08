@@ -90,31 +90,32 @@ def seed_database():
         db.commit()
 
         # --- 5. URL Rules (Master List) ---
+        # Using raw uppercase strings to satisfy MySQL's strict Enum constraints
         rules = [
-            models.URLRules(URLDomain="google.com", ListType=models.ListTypeEnum.WHITELIST, AddedBy=admin_id),
-            models.URLRules(URLDomain="secure-bank-login-update.com", ListType=models.ListTypeEnum.BLACKLIST, AddedBy=mod1_id),
-            models.URLRules(URLDomain="free-iphones-now.net", ListType=models.ListTypeEnum.BLACKLIST, AddedBy=mod2_id)
+            models.URLRules(URLDomain="google.com", ListType="WHITELIST", AddedBy=admin_id),
+            models.URLRules(URLDomain="secure-bank-login-update.com", ListType="BLACKLIST", AddedBy=mod1_id),
+            models.URLRules(URLDomain="free-iphones-now.net", ListType="BLACKLIST", AddedBy=mod2_id)
         ]
         db.add_all(rules)
         db.commit()
 
         # --- 6. Scan History ---
         scans = [
-            models.ScanHistory(UserID=user1_id, InitialURL="https://google.com", StatusIndicator=models.ScanStatusEnum.SAFE, DomainAgeDays=8500, ServerLocation="USA"),
-            models.ScanHistory(UserID=user1_id, InitialURL="https://secure-bank-login-update.com", StatusIndicator=models.ScanStatusEnum.MALICIOUS, DomainAgeDays=2, ServerLocation="Russia"),
-            models.ScanHistory(UserID=user2_id, InitialURL="https://unknown-shop-online.com", StatusIndicator=models.ScanStatusEnum.SUSPICIOUS, DomainAgeDays=14, ServerLocation="Unknown")
+            models.ScanHistory(UserID=user1_id, InitialURL="https://google.com", StatusIndicator="SAFE", DomainAgeDays=8500, ServerLocation="USA"),
+            models.ScanHistory(UserID=user1_id, InitialURL="https://secure-bank-login-update.com", StatusIndicator="MALICIOUS", DomainAgeDays=2, ServerLocation="Russia"),
+            models.ScanHistory(UserID=user2_id, InitialURL="https://unknown-shop-online.com", StatusIndicator="SUSPICIOUS", DomainAgeDays=14, ServerLocation="Unknown")
         ]
         db.add_all(scans)
         db.commit()
 
         # --- 7. Scan Feedback ---
-        scan_feedback = models.ScanFeedback(ScanID=scans[2].ScanID, UserID=user2_id, SuggestedStatus=models.SuggestedStatusEnum.MALICIOUS, Comments="They asked for my credit card without HTTPS!", IsResolved=False)
+        scan_feedback = models.ScanFeedback(ScanID=scans[2].ScanID, UserID=user2_id, SuggestedStatus="MALICIOUS", Comments="They asked for my credit card without HTTPS!", IsResolved=False)
         db.add(scan_feedback)
 
         # --- 8. Blacklist Requests ---
         requests = [
-            models.BlacklistRequest(UserID=user1_id, URLDomain="scam-crypto-wallet.io", Status=models.RequestStatus.PENDING),
-            models.BlacklistRequest(UserID=user2_id, URLDomain="fake-shopee-deals.sg", Status=models.RequestStatus.APPROVED, ReviewedBy=mod1_id, ReviewedAt=datetime.datetime.now(datetime.timezone.utc))
+            models.BlacklistRequest(UserID=user1_id, URLDomain="scam-crypto-wallet.io", Status="PENDING"),
+            models.BlacklistRequest(UserID=user2_id, URLDomain="fake-shopee-deals.sg", Status="APPROVED", ReviewedBy=mod1_id, ReviewedAt=datetime.datetime.now(datetime.timezone.utc))
         ]
         db.add_all(requests)
         db.commit()
