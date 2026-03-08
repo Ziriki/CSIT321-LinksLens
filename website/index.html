@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en" class="scroll-smooth dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,28 +8,35 @@
     <link rel="stylesheet" href="styles.css">
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
 </head>
-<body class="bg-slate-950 text-slate-200 font-sans antialiased overflow-x-hidden relative">
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-200 font-sans antialiased overflow-x-hidden relative transition-colors duration-300">
 
     <div class="fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none flex justify-center items-center">
-        <div class="absolute top-0 -left-4 w-96 h-96 bg-purple-500 rounded-full mix-blend-screen filter blur-[128px] opacity-20 animate-blob"></div>
-        <div class="absolute top-0 -right-4 w-96 h-96 bg-blue-500 rounded-full mix-blend-screen filter blur-[128px] opacity-20 animate-blob animation-delay-2000"></div>
-        <div class="absolute -bottom-8 left-20 w-96 h-96 bg-indigo-500 rounded-full mix-blend-screen filter blur-[128px] opacity-20 animate-blob animation-delay-4000"></div>
+        <div class="absolute top-0 -left-4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[128px] opacity-10 dark:opacity-20 animate-blob"></div>
+        <div class="absolute top-0 -right-4 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[128px] opacity-10 dark:opacity-20 animate-blob animation-delay-2000"></div>
+        <div class="absolute -bottom-8 left-20 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[128px] opacity-10 dark:opacity-20 animate-blob animation-delay-4000"></div>
     </div>
 
-    <nav class="fixed w-full z-50 top-0 bg-slate-950/50 backdrop-blur-md border-b border-white/5 transition-all duration-300">
+    <nav class="fixed w-full z-50 top-0 bg-white/70 dark:bg-slate-950/50 backdrop-blur-md border-b border-slate-200 dark:border-white/5 transition-all duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-20 items-center">
                 <div class="flex-shrink-0 flex items-center gap-2 cursor-pointer">
                     <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
                         <span class="text-white text-sm">👁️</span>
                     </div>
-                    <span class="font-bold text-2xl tracking-tight text-white">LinksLens</span>
+                    <span class="font-bold text-2xl tracking-tight text-slate-900 dark:text-white">LinksLens</span>
                 </div>
-                <div class="hidden md:flex space-x-10">
-                    <a href="#features" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Forensics</a>
-                    <a href="#intelligence" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Intelligence</a>
-                    <a href="#how-it-works" class="text-sm font-medium text-slate-400 hover:text-white transition-colors">Mechanism</a>
+                <div class="hidden md:flex space-x-10 items-center">
+                    <a href="#features" class="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Forensics</a>
+                    <a href="#intelligence" class="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Intelligence</a>
+                    <a href="#how-it-works" class="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Mechanism</a>
+                    <button id="theme-toggle" class="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/10 border border-slate-300 dark:border-white/20 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-white/20 transition-colors" title="Toggle theme">
+                        <span id="theme-icon-dark" class="hidden dark:inline text-sm">☀️</span>
+                        <span id="theme-icon-light" class="inline dark:hidden text-sm">🌙</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -37,24 +44,24 @@
 
     <section class="relative z-10 pt-40 pb-32 flex flex-col items-center justify-center min-h-screen text-center px-4">
         
-        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8">
-            <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-            <span class="text-xs font-medium text-slate-300 uppercase tracking-wider">Next-Gen Link Analysis Engine</span>
+        <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-200/80 dark:bg-white/5 border border-slate-300 dark:border-white/10 backdrop-blur-md mb-8">
+            <span class="w-2 h-2 rounded-full bg-green-500 dark:bg-green-400 animate-pulse"></span>
+            <span class="text-xs font-medium text-slate-600 dark:text-slate-300 uppercase tracking-wider">Next-Gen Link Analysis Engine</span>
         </div>
 
         <h1 class="text-6xl md:text-8xl font-extrabold tracking-tight mb-8 leading-tight">
-            See the threat. <br>
-            <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500">
+            <span class="text-slate-900 dark:text-white">See the threat.</span> <br>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 dark:from-blue-400 dark:via-indigo-400 dark:to-purple-500">
                 Before the click.
             </span>
         </h1>
-        
-        <p class="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">
+
+        <p class="text-xl md:text-2xl text-slate-500 dark:text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">
             LinksLens strips away the disguise of malicious URLs. We deploy deep-threat forensics and sandboxed rendering to give you x-ray vision into the internet's darkest corners.
         </p>
 
         <div class="mt-10 animate-float relative">
-            <div class="w-32 h-32 rounded-3xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center shadow-[0_0_60px_-15px_rgba(79,70,229,0.5)] rotate-12 border border-white/20 backdrop-blur-xl">
+            <div class="w-32 h-32 rounded-3xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center shadow-[0_0_60px_-15px_rgba(79,70,229,0.5)] rotate-12 border border-slate-300 dark:border-white/20 backdrop-blur-xl">
                 <span class="text-6xl -rotate-12 drop-shadow-2xl">🛡️</span>
             </div>
         </div>
@@ -63,84 +70,99 @@
     <section id="features" class="relative z-10 py-32">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-24">
-                <h2 class="text-4xl md:text-5xl font-bold text-white mb-6">Military-Grade Link Forensics</h2>
-                <p class="text-xl text-slate-400">Don't rely on guesswork. Rely on hard data.</p>
+                <h2 class="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white mb-6">Military-Grade Link Forensics</h2>
+                <p class="text-xl text-slate-500 dark:text-slate-400">Don't rely on guesswork. Rely on hard data.</p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 hover:bg-white/10 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div class="group bg-white/80 dark:bg-white/5 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-3xl p-10 hover:bg-white dark:hover:bg-white/10 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden shadow-sm dark:shadow-none">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full filter blur-[40px] group-hover:bg-blue-500/20 transition-all"></div>
                     <div class="w-14 h-14 rounded-2xl bg-blue-500/20 flex items-center justify-center mb-8 border border-blue-500/30">
                         <span class="text-2xl">🖼️</span>
                     </div>
-                    <h3 class="text-2xl font-bold text-white mb-4">Sandboxed Previews</h3>
-                    <p class="text-slate-400 leading-relaxed">We safely render the destination in an isolated environment and return a harmless static screenshot. Malicious scripts never touch your device.</p>
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white mb-4">Sandboxed Previews</h3>
+                    <p class="text-slate-500 dark:text-slate-400 leading-relaxed">We safely render the destination in an isolated environment and return a harmless static screenshot. Malicious scripts never touch your device.</p>
                 </div>
-                <div class="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 hover:bg-white/10 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div class="group bg-white/80 dark:bg-white/5 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-3xl p-10 hover:bg-white dark:hover:bg-white/10 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden shadow-sm dark:shadow-none">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full filter blur-[40px] group-hover:bg-purple-500/20 transition-all"></div>
                     <div class="w-14 h-14 rounded-2xl bg-purple-500/20 flex items-center justify-center mb-8 border border-purple-500/30">
                         <span class="text-2xl">🕵️‍♂️</span>
                     </div>
-                    <h3 class="text-2xl font-bold text-white mb-4">Deep Target Intel</h3>
-                    <p class="text-slate-400 leading-relaxed">We bypass URL shorteners and redirects to expose the true destination, revealing domain age, server origin, and historical reputation.</p>
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white mb-4">Deep Target Intel</h3>
+                    <p class="text-slate-500 dark:text-slate-400 leading-relaxed">We bypass URL shorteners and redirects to expose the true destination, revealing domain age, server origin, and historical reputation.</p>
                 </div>
-                <div id="intelligence" class="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-10 hover:bg-white/10 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div id="intelligence" class="group bg-white/80 dark:bg-white/5 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-3xl p-10 hover:bg-white dark:hover:bg-white/10 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden shadow-sm dark:shadow-none">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full filter blur-[40px] group-hover:bg-emerald-500/20 transition-all"></div>
                     <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 flex items-center justify-center mb-8 border border-emerald-500/30">
                         <span class="text-2xl">🧠</span>
                     </div>
-                    <h3 class="text-2xl font-bold text-white mb-4">Swarm Intelligence</h3>
-                    <p class="text-slate-400 leading-relaxed">Benefit from a globally connected database. When the community flags a new phishing campaign, the entire network is instantly protected.</p>
+                    <h3 class="text-2xl font-bold text-slate-900 dark:text-white mb-4">Swarm Intelligence</h3>
+                    <p class="text-slate-500 dark:text-slate-400 leading-relaxed">Benefit from a globally connected database. When the community flags a new phishing campaign, the entire network is instantly protected.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <section id="how-it-works" class="relative z-10 py-32 bg-black/40 border-y border-white/5 backdrop-blur-sm">
+    <section id="how-it-works" class="relative z-10 py-32 bg-slate-200/50 dark:bg-black/40 border-y border-slate-200 dark:border-white/5 backdrop-blur-sm transition-colors duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 class="text-4xl font-bold text-center text-white mb-20">The Mechanism</h2>
+            <h2 class="text-4xl font-bold text-center text-slate-900 dark:text-white mb-20">The Mechanism</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
                 <div class="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent"></div>
 
                 <div class="relative text-center">
-                    <div class="w-24 h-24 mx-auto bg-slate-900 border border-blue-500/50 rounded-full flex items-center justify-center text-2xl font-bold text-blue-400 mb-8 shadow-[0_0_30px_-5px_rgba(59,130,246,0.3)] z-10 relative">
+                    <div class="w-24 h-24 mx-auto bg-white dark:bg-slate-900 border border-blue-500/50 rounded-full flex items-center justify-center text-2xl font-bold text-blue-500 dark:text-blue-400 mb-8 shadow-[0_0_30px_-5px_rgba(59,130,246,0.3)] z-10 relative">
                         01
                     </div>
-                    <h4 class="text-xl font-bold text-white mb-3">Intercept</h4>
-                    <p class="text-slate-400">Identify a suspicious URL from an email, SMS, or social media message.</p>
+                    <h4 class="text-xl font-bold text-slate-900 dark:text-white mb-3">Intercept</h4>
+                    <p class="text-slate-500 dark:text-slate-400">Identify a suspicious URL from an email, SMS, or social media message.</p>
                 </div>
-                
+
                 <div class="relative text-center">
-                    <div class="w-24 h-24 mx-auto bg-slate-900 border border-indigo-500/50 rounded-full flex items-center justify-center text-2xl font-bold text-indigo-400 mb-8 shadow-[0_0_30px_-5px_rgba(99,102,241,0.3)] z-10 relative">
+                    <div class="w-24 h-24 mx-auto bg-white dark:bg-slate-900 border border-indigo-500/50 rounded-full flex items-center justify-center text-2xl font-bold text-indigo-500 dark:text-indigo-400 mb-8 shadow-[0_0_30px_-5px_rgba(99,102,241,0.3)] z-10 relative">
                         02
                     </div>
-                    <h4 class="text-xl font-bold text-white mb-3">Analyze</h4>
-                    <p class="text-slate-400">Our engine safely unpacks the link, executing background checks in milliseconds.</p>
+                    <h4 class="text-xl font-bold text-slate-900 dark:text-white mb-3">Analyze</h4>
+                    <p class="text-slate-500 dark:text-slate-400">Our engine safely unpacks the link, executing background checks in milliseconds.</p>
                 </div>
-                
+
                 <div class="relative text-center">
-                    <div class="w-24 h-24 mx-auto bg-slate-900 border border-purple-500/50 rounded-full flex items-center justify-center text-2xl font-bold text-purple-400 mb-8 shadow-[0_0_30px_-5px_rgba(168,85,247,0.3)] z-10 relative">
+                    <div class="w-24 h-24 mx-auto bg-white dark:bg-slate-900 border border-purple-500/50 rounded-full flex items-center justify-center text-2xl font-bold text-purple-500 dark:text-purple-400 mb-8 shadow-[0_0_30px_-5px_rgba(168,85,247,0.3)] z-10 relative">
                         03
                     </div>
-                    <h4 class="text-xl font-bold text-white mb-3">Resolve</h4>
-                    <p class="text-slate-400">Receive a definitive verdict—Safe, Suspicious, or Malicious—with visual proof.</p>
+                    <h4 class="text-xl font-bold text-slate-900 dark:text-white mb-3">Resolve</h4>
+                    <p class="text-slate-500 dark:text-slate-400">Receive a definitive verdict—Safe, Suspicious, or Malicious—with visual proof.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <footer class="relative z-10 border-t border-white/10 bg-slate-950 py-12 mt-20">
+    <footer class="relative z-10 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-950 py-12 mt-20 transition-colors duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center">
-            <div class="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mb-6">
+            <div class="w-10 h-10 rounded-lg bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 flex items-center justify-center mb-6">
                 <span class="text-xl">🛡️</span>
             </div>
-            <span class="font-bold text-2xl text-white tracking-widest mb-2 uppercase">LinksLens</span>
+            <span class="font-bold text-2xl text-slate-900 dark:text-white tracking-widest mb-2 uppercase">LinksLens</span>
             <p class="text-slate-500 text-sm tracking-wide">
                 &copy; 2026 Advanced Security Engine. All rights reserved.
             </p>
         </div>
     </footer>
+
+    <script>
+        const toggle = document.getElementById('theme-toggle');
+        const html = document.documentElement;
+
+        // Load saved preference (default to dark)
+        if (localStorage.getItem('theme') === 'light') {
+            html.classList.remove('dark');
+        }
+
+        toggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+            localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+        });
+    </script>
 
 </body>
 </html>
