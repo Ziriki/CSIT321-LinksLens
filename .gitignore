@@ -26,3 +26,6 @@ Thumbs.db
 
 # 6. Misc
 test*
+backend/local_test.db
+backend/reset_admin_password.py
+backend/run_local.py
