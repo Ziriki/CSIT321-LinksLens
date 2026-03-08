@@ -73,9 +73,9 @@ class AppFeedback(Base):
 
 # Define the strict Enum for the BlacklistRequest status
 class RequestStatus(str, enum.Enum):
-    PENDING = "Pending"
-    APPROVED = "Approved"
-    REJECTED = "Rejected"
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 class BlacklistRequest(Base):
     __tablename__ = "BlacklistRequest"
@@ -94,8 +94,8 @@ class BlacklistRequest(Base):
 
 # Define the strict Enum for the URL list type
 class ListTypeEnum(str, enum.Enum):
-    BLACKLIST = "Blacklist"
-    WHITELIST = "Whitelist"
+    BLACKLIST = "BLACKLIST"
+    WHITELIST = "WHITELIST"
 
 class URLRules(Base):
     __tablename__ = "URLRules"
@@ -111,10 +111,10 @@ class URLRules(Base):
 
 # Define the strict Enum for the scan status
 class ScanStatusEnum(str, enum.Enum):
-    SAFE = "Safe"
-    SUSPICIOUS = "Suspicious"
-    MALICIOUS = "Malicious"
-    PENDING = "Pending"
+    SAFE = "SAFE"
+    SUSPICIOUS = "SUSPICIOUS"
+    MALICIOUS = "MALICIOUS"
+    PENDING = "PENDING"
 
 class ScanHistory(Base):
     __tablename__ = "ScanHistory"
@@ -136,9 +136,9 @@ class ScanHistory(Base):
 
 # Define the strict Enum for the suggested status
 class SuggestedStatusEnum(str, enum.Enum):
-    SAFE = "Safe"
-    SUSPICIOUS = "Suspicious"
-    MALICIOUS = "Malicious"
+    SAFE = "SAFE"
+    SUSPICIOUS = "SUSPICIOUS"
+    MALICIOUS = "MALICIOUS"
 
 class ScanFeedback(Base):
     __tablename__ = "ScanFeedback"
