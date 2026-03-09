@@ -48,7 +48,7 @@ has_next = len(records) > PAGE_SIZE
 display_records = records[:PAGE_SIZE]
 
 # ---------------------------------------------------------------------------
-# Table
+# Table with row selection
 # ---------------------------------------------------------------------------
 if not display_records:
     st.info("No scan records found.")
@@ -57,7 +57,43 @@ else:
     columns = ["ScanID", "UserID", "InitialURL", "StatusIndicator",
                 "DomainAgeDays", "ServerLocation", "ScannedAt"]
     available = [c for c in columns if c in df.columns]
-    st.dataframe(df[available], use_container_width=True, hide_index=True)
+
+    event = st.dataframe(
+        df[available],
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+    )
+
+    # Detail panel when a row is selected
+    selected_rows = event.selection.rows if event.selection else []
+    if selected_rows:
+        row_idx = selected_rows[0]
+        scan_id = int(df.iloc[row_idx]["ScanID"])
+        data = api_client.fetch_scan_details(scan_id)
+
+        if data:
+            st.markdown("---")
+            st.subheader(f"Scan #{data['ScanID']} Details")
+            st.write(f"**Target URL:** {data['InitialURL']}")
+            if data.get("RedirectURL"):
+                st.write(f"**Redirect URL:** {data['RedirectURL']}")
+            st.write(f"**Final Verdict:** `{data['StatusIndicator']}`")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.info(f"**Server Location:** {data.get('ServerLocation', 'N/A')}")
+            with col2:
+                st.warning(f"**Domain Age (Days):** {data.get('DomainAgeDays', 'N/A')}")
+
+            if data.get("ScreenshotURL"):
+                with st.expander("View Sandboxed Screenshot"):
+                    st.image(data["ScreenshotURL"], caption="Sandboxed render of the website")
+
+            if data.get("RawText"):
+                with st.expander("View Extracted Raw Text"):
+                    st.text(data["RawText"])
 
 # ---------------------------------------------------------------------------
 # Pagination controls
@@ -75,34 +111,3 @@ with col_next:
     if st.button("Next", disabled=(not has_next)):
         st.session_state["scan_page"] = page + 1
         st.rerun()
-
-# ---------------------------------------------------------------------------
-# Drill-down: scan detail
-# ---------------------------------------------------------------------------
-st.markdown("---")
-st.subheader("Scan Detail Viewer")
-scan_id = st.number_input("Enter Scan ID to investigate:", min_value=1, step=1)
-
-if st.button("Fetch Forensic Data"):
-    data = api_client.fetch_scan_details(scan_id)
-    if not data:
-        st.error(f"Scan ID {scan_id} not found.")
-    else:
-        st.subheader(f"Results for Scan #{data['ScanID']}")
-        st.write(f"**Target URL:** {data['InitialURL']}")
-        st.write(f"**Final Verdict:** {data['StatusIndicator']}")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info(f"**Server Location:** {data.get('ServerLocation', 'N/A')}")
-        with col2:
-            st.warning(f"**Domain Age (Days):** {data.get('DomainAgeDays', 'N/A')}")
-
-        st.markdown("### Safe Static Screenshot")
-        if data.get("ScreenshotURL"):
-            st.image(data["ScreenshotURL"], caption="Sandboxed render of the website")
-        else:
-            st.info("No screenshot captured for this scan.")
-
-        with st.expander("View Extracted Raw Text"):
-            st.text(data.get("RawText", "No text extracted."))
