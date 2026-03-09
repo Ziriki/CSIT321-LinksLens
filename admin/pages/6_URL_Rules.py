@@ -4,6 +4,7 @@ from controllers import auth_controller, rules_controller
 st.set_page_config(page_title="URL Rules", layout="wide")
 # Admin + Moderator (RoleID 1, 2)
 auth_controller.require_role(1, 2)
+auth_controller.render_sidebar()
 
 st.title("Master URL Rules")
 st.markdown("View the global Blacklist and Whitelist active in the system.")
