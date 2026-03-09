@@ -5,7 +5,7 @@ from models import api_client
 
 st.set_page_config(page_title="Scan Feedback", layout="wide")
 # Admin + Moderator (RoleID 1, 2)
-auth_controller.require_role(1, 2)
+current_user = auth_controller.require_role(1, 2)
 auth_controller.render_sidebar()
 
 st.title("Scan Feedback Review")
@@ -14,7 +14,7 @@ st.markdown("Verify scan results reported by users to ensure no false positives 
 # ---------------------------------------------------------------------------
 # Filter
 # ---------------------------------------------------------------------------
-filter_option = st.radio("Filter", ["Unresolved", "Resolved", "All"], horizontal=True)
+filter_option = st.radio("Filter", ["All", "Resolved", "Unresolved"], horizontal=True)
 is_resolved = {"Unresolved": False, "Resolved": True, "All": None}[filter_option]
 
 # ---------------------------------------------------------------------------
@@ -94,8 +94,11 @@ if selected_rows:
             if st.button(f"Mark as {new_status.title()}", key=f"mark_{new_status}"):
                 success = api_client.update_scan_status(scan_id, new_status)
                 if success:
-                    # Also mark the feedback as resolved
                     api_client.resolve_scan_feedback(feedback_id)
+                    api_client.log_action(
+                        current_user["user_id"], "UPDATED_SCAN_VERDICT",
+                        f"Changed Scan #{scan_id} verdict from {current} to {new_status} (Feedback #{feedback_id}).",
+                    )
                     st.success(f"Scan #{scan_id} updated to **{new_status}** and feedback resolved.")
                     st.rerun()
                 else:
@@ -105,5 +108,9 @@ if selected_rows:
     with cols[len(other_statuses)]:
         if st.button(f"Remain {current.title()}", key="remain"):
             api_client.resolve_scan_feedback(feedback_id)
+            api_client.log_action(
+                current_user["user_id"], "CONFIRMED_SCAN_VERDICT",
+                f"Confirmed Scan #{scan_id} verdict as {current} (Feedback #{feedback_id}).",
+            )
             st.success(f"Verdict kept as **{current}**. Feedback resolved.")
             st.rerun()
