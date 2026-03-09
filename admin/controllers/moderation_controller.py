@@ -13,6 +13,11 @@ def get_pending_requests_dataframe():
 def handle_review_action(request_id, action, moderator_id):
     success = api_client.update_request_status(request_id, action, moderator_id)
     if success:
+        api_client.log_action(
+            moderator_id,
+            f"{action.upper()}_BLACKLIST",
+            f"{action} blacklist request #{request_id}.",
+        )
         st.success(f"Request {request_id} {action}!")
         st.rerun()
     else:

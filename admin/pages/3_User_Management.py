@@ -4,7 +4,7 @@ from models import api_client
 
 st.set_page_config(page_title="User Management", layout="wide")
 # Admin only (RoleID 1)
-auth_controller.require_role(1)
+current_user = auth_controller.require_role(1)
 auth_controller.render_sidebar()
 
 st.title("User Management")
@@ -110,6 +110,11 @@ with btn_col1:
             if detail_payload:
                 api_client.update_user_profile(uid, detail_payload)
 
+            changes = ", ".join(f"{k}={v}" for k, v in snapshot.items())
+            api_client.log_action(
+                current_user["user_id"], "UPDATED_USER",
+                f"Updated User #{uid}: {changes}.",
+            )
             st.success(f"User {uid} updated successfully!")
             st.rerun()
 
@@ -125,6 +130,10 @@ if st.session_state.get("confirm_deactivate") == uid:
     with confirm_col1:
         if st.button("Yes, deactivate", key="confirm_yes"):
             api_client.deactivate_user(uid)
+            api_client.log_action(
+                current_user["user_id"], "DEACTIVATED_USER",
+                f"Deactivated User #{uid}.",
+            )
             st.session_state.pop("confirm_deactivate", None)
             st.success(f"User {uid} deactivated.")
             st.rerun()
