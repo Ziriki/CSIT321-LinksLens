@@ -45,8 +45,10 @@ def render_sidebar():
         st.sidebar.write(f"Logged in as **{role_label}**")
     st.sidebar.markdown("---")
     if st.sidebar.button("Log Out"):
+        if user:
+            api_client.log_action(user["user_id"], "LOGOUT", "Logged out of admin portal.")
         st.session_state["access_token"] = None
-        st.rerun()
+        st.switch_page("app.py")
 
 
 def handle_login(email, password):
@@ -69,6 +71,9 @@ def handle_login(email, password):
                 st.error("Login failed. Check credentials.")
                 return
             st.session_state["access_token"] = token
+            user_info = _decode_token()
+            if user_info:
+                api_client.log_action(user_info["user_id"], "LOGIN", "Logged in to admin portal.")
             st.success("Login successful!")
             st.rerun()
         else:

@@ -112,6 +112,15 @@ def fetch_action_history():
     return response.json() if response.status_code == 200 else []
 
 
+def log_action(user_id: int, action_type: str, action: str):
+    """Insert an audit log entry."""
+    requests.post(
+        f"{BACKEND_URL}/api/history/",
+        json={"UserID": user_id, "ActionType": action_type, "Action": action},
+        headers=_get_headers(),
+    )
+
+
 # -- URL Rules --
 
 def fetch_url_rules():
