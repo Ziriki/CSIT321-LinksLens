@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 # Import custom files
@@ -112,3 +112,52 @@ def list_feedback(
 
     # Execute the query with optional pagination
     return query.offset(skip).limit(limit).all()
+
+#########################################################
+# LIST ENRICHED — returns feedback with joined scan + user info
+#########################################################
+@router.get("/enriched/", response_model=None)
+def list_feedback_enriched(
+    is_resolved: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_role(1, 2))
+):
+    query = db.query(models.ScanFeedback).options(
+        joinedload(models.ScanFeedback.scan),
+        joinedload(models.ScanFeedback.user)
+    )
+
+    if is_resolved is not None:
+        query = query.filter(models.ScanFeedback.IsResolved == is_resolved)
+
+    results = query.order_by(models.ScanFeedback.FeedbackID.desc()).offset(skip).limit(limit).all()
+
+    enriched = []
+    for fb in results:
+        # Look up user details (FullName)
+        user_detail = db.query(models.UserDetails).filter(
+            models.UserDetails.UserID == fb.UserID
+        ).first()
+
+        enriched.append({
+            "FeedbackID": fb.FeedbackID,
+            "ScanID": fb.ScanID,
+            "UserID": fb.UserID,
+            "UserEmail": fb.user.EmailAddress if fb.user else "Unknown",
+            "UserName": user_detail.FullName if user_detail else "N/A",
+            "InitialURL": fb.scan.InitialURL if fb.scan else "N/A",
+            "CurrentStatus": fb.scan.StatusIndicator.value if fb.scan and fb.scan.StatusIndicator else "N/A",
+            "SuggestedStatus": fb.SuggestedStatus.value if fb.SuggestedStatus else "N/A",
+            "Comments": fb.Comments or "",
+            "IsResolved": fb.IsResolved,
+            # Extra scan details for the drill-down panel
+            "RedirectURL": fb.scan.RedirectURL if fb.scan else None,
+            "DomainAgeDays": fb.scan.DomainAgeDays if fb.scan else None,
+            "ServerLocation": fb.scan.ServerLocation if fb.scan else None,
+            "ScreenshotURL": fb.scan.ScreenshotURL if fb.scan else None,
+            "ScannedAt": str(fb.scan.ScannedAt) if fb.scan and fb.scan.ScannedAt else None,
+        })
+
+    return enriched
