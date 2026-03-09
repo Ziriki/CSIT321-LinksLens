@@ -37,6 +37,18 @@ def get_current_user():
     return _decode_token()
 
 
+def render_sidebar():
+    """Show role label and logout button in the sidebar."""
+    user = _decode_token()
+    if user:
+        role_label = {1: "Administrator", 2: "Moderator", 3: "User"}.get(user["role_id"], "Unknown")
+        st.sidebar.write(f"Logged in as **{role_label}**")
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Log Out"):
+        st.session_state["access_token"] = None
+        st.rerun()
+
+
 def handle_login(email, password):
     if not email or not password:
         st.error("Please fill in both fields.")
