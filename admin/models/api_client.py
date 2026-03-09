@@ -39,7 +39,7 @@ def fetch_system_health():
 
 def fetch_pending_requests():
     response = requests.get(
-        f"{BACKEND_URL}/api/blacklist-requests/?status=Pending", headers=_get_headers()
+        f"{BACKEND_URL}/api/blacklist-requests/?status=PENDING", headers=_get_headers()
     )
     return response.json() if response.status_code == 200 else []
 
@@ -79,6 +79,25 @@ def update_user_details(user_id: int, payload: dict):
     return response.status_code == 200
 
 
+# -- User Details --
+
+def fetch_user_detail(user_id: int):
+    response = requests.get(
+        f"{BACKEND_URL}/api/details/{user_id}", headers=_get_headers()
+    )
+    return response.json() if response.status_code == 200 else None
+
+
+def update_user_profile(user_id: int, payload: dict):
+    """Update user details (FullName, PhoneNumber, Address, Gender, DateOfBirth)."""
+    response = requests.put(
+        f"{BACKEND_URL}/api/details/{user_id}",
+        json=payload,
+        headers=_get_headers(),
+    )
+    return response.status_code == 200
+
+
 # -- App Feedback --
 
 def fetch_app_feedback():
@@ -102,6 +121,22 @@ def fetch_url_rules():
 
 # -- Scan History --
 
+def fetch_scan_list(skip: int = 0, limit: int = 25, search_url: str = None,
+                    status_indicator: str = None, user_id: int = None):
+    """Fetch paginated scan history with optional filters."""
+    params = {"skip": skip, "limit": limit}
+    if search_url:
+        params["search_url"] = search_url
+    if status_indicator:
+        params["status_indicator"] = status_indicator
+    if user_id:
+        params["user_id"] = user_id
+    response = requests.get(
+        f"{BACKEND_URL}/api/scans/", params=params, headers=_get_headers()
+    )
+    return response.json() if response.status_code == 200 else []
+
+
 def fetch_scan_details(scan_id: int):
     response = requests.get(
         f"{BACKEND_URL}/api/scans/{scan_id}", headers=_get_headers()
@@ -121,10 +156,31 @@ def fetch_scan_feedback(is_resolved: bool = None):
     return response.json() if response.status_code == 200 else []
 
 
+def fetch_scan_feedback_enriched(is_resolved: bool = None):
+    """Fetch scan feedback with joined scan + user details."""
+    params = {}
+    if is_resolved is not None:
+        params["is_resolved"] = str(is_resolved).lower()
+    response = requests.get(
+        f"{BACKEND_URL}/api/scan-feedback/enriched/", params=params, headers=_get_headers()
+    )
+    return response.json() if response.status_code == 200 else []
+
+
 def resolve_scan_feedback(feedback_id: int):
     response = requests.put(
         f"{BACKEND_URL}/api/scan-feedback/{feedback_id}",
         json={"IsResolved": True},
+        headers=_get_headers(),
+    )
+    return response.status_code == 200
+
+
+def update_scan_status(scan_id: int, new_status: str):
+    """Update the StatusIndicator of a scan record."""
+    response = requests.put(
+        f"{BACKEND_URL}/api/scans/{scan_id}",
+        json={"StatusIndicator": new_status},
         headers=_get_headers(),
     )
     return response.status_code == 200

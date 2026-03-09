@@ -4,6 +4,7 @@ from controllers import auth_controller, feedback_controller
 st.set_page_config(page_title="App Feedback", layout="wide")
 # Admin only (RoleID 1)
 auth_controller.require_role(1)
+auth_controller.render_sidebar()
 
 st.title("App Feedback")
 df = feedback_controller.get_feedback_dataframe()

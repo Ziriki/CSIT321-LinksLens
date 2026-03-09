@@ -4,6 +4,16 @@ from controllers import auth_controller
 st.set_page_config(page_title="LinksLens Admin", layout="wide")
 
 if st.session_state.get("access_token") is None:
+    # Hide sidebar page navigation before login
+    st.markdown(
+        """
+        <style>
+            [data-testid="stSidebarNav"] { display: none; }
+            section[data-testid="stSidebar"] { display: none; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.title("LinksLens Admin Portal")
     with st.form("login"):
         email = st.text_input("Email")
@@ -11,14 +21,7 @@ if st.session_state.get("access_token") is None:
         if st.form_submit_button("Log In"):
             auth_controller.handle_login(email, password)
 else:
-    user = auth_controller.get_current_user()
-    if user:
-        role_label = {1: "Administrator", 2: "Moderator", 3: "User"}.get(user["role_id"], "Unknown")
-        st.sidebar.write(f"Logged in as **{role_label}**")
-    st.sidebar.markdown("---")
-    if st.sidebar.button("Log Out"):
-        st.session_state["access_token"] = None
-        st.rerun()
+    auth_controller.render_sidebar()
 
     st.title("LinksLens Admin Portal")
     st.success("You are logged in. Use the sidebar to navigate.")
