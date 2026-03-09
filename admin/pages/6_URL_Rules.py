@@ -13,7 +13,8 @@ df = rules_controller.get_rules_dataframe()
 if df.empty:
     st.info("The master list is currently empty.")
 else:
-    list_type = st.radio("Filter List Type", ["All", "BLACKLIST", "WHITELIST"], horizontal=True)
+    list_type = st.radio("Filter List Type", ["All", "Blacklist", "Whitelist"], horizontal=True)
+    filter_map = {"Blacklist": "BLACKLIST", "Whitelist": "WHITELIST"}
     if list_type != "All":
-        df = df[df["ListType"] == list_type]
+        df = df[df["ListType"] == filter_map[list_type]]
     st.dataframe(df, use_container_width=True, hide_index=True)
