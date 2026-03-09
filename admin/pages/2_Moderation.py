@@ -19,7 +19,7 @@ else:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Approve"):
-            moderation_controller.handle_review_action(target_id, "Approved", user["user_id"])
+            moderation_controller.handle_review_action(target_id, "APPROVED", user["user_id"])
     with col2:
         if st.button("Reject"):
-            moderation_controller.handle_review_action(target_id, "Rejected", user["user_id"])
+            moderation_controller.handle_review_action(target_id, "REJECTED", user["user_id"])
