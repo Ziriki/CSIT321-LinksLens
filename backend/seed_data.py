@@ -1,16 +1,21 @@
-# backend/seed_data.py
-import datetime
-import secrets
-import string
+# backend/seed_massive.py
+import random
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from passlib.context import CryptContext
+from faker import Faker
+import string
+import secrets
 
 import models
 from database import SessionLocal, engine
 
-# Rebuild all tables with the NEW uppercase Enum rules
-models.Base.metadata.create_all(bind=engine)
+# Initialize Faker
+fake = Faker()
 
+# Rebuild all tables
+models.Base.metadata.create_all(bind=engine)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def generate_secure_password(length=16):
@@ -21,117 +26,192 @@ def generate_secure_password(length=16):
             and any(c.isdigit() for c in pwd) and any(c in "!@#$%^&*" for c in pwd)):
             return pwd
 
-def seed_database():
+def seed_massive_database():
     db: Session = SessionLocal()
     
     try:
-        # Prevent double-seeding
-        if db.query(models.UserRole).first():
-            print("Database already seeded! Run 'docker-compose down -v' to reset.")
-            return
-
-        print("Seeding fresh database with TRULY RANDOM dummy data...") 
+        print("Wiping existing data (Truncating tables)...")
+        db.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+        for table in reversed(models.Base.metadata.sorted_tables):
+            db.execute(text(f"TRUNCATE TABLE {table.name};"))
+        db.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+        db.commit()
+        print("Tables wiped. Generating massive dataset. This may take 10-20 seconds...\n")
 
         # --- 1. User Roles ---
-        role_admin = models.UserRole(RoleName="Administrator")
-        role_mod = models.UserRole(RoleName="Moderator")
-        role_user = models.UserRole(RoleName="User")
-        db.add_all([role_admin, role_mod, role_user])
-        db.commit()
-
-        # --- Generate Passwords ---
-        passwords = {
-            "admin@linkslens.com": generate_secure_password(),
-            "mod1@linkslens.com": generate_secure_password(),
-            "mod2@linkslens.com": generate_secure_password(),
-            "user1@gmail.com": generate_secure_password(),
-            "user2@gmail.com": generate_secure_password()
-        }
-
-        # --- 2. User Accounts ---
-        users = [
-            models.UserAccount(EmailAddress="admin@linkslens.com", PasswordHash=pwd_context.hash(passwords["admin@linkslens.com"]), RoleID=role_admin.RoleID, IsActive=True),
-            models.UserAccount(EmailAddress="mod1@linkslens.com", PasswordHash=pwd_context.hash(passwords["mod1@linkslens.com"]), RoleID=role_mod.RoleID, IsActive=True),
-            models.UserAccount(EmailAddress="mod2@linkslens.com", PasswordHash=pwd_context.hash(passwords["mod2@linkslens.com"]), RoleID=role_mod.RoleID, IsActive=True),
-            models.UserAccount(EmailAddress="user1@gmail.com", PasswordHash=pwd_context.hash(passwords["user1@gmail.com"]), RoleID=role_user.RoleID, IsActive=True),
-            models.UserAccount(EmailAddress="user2@gmail.com", PasswordHash=pwd_context.hash(passwords["user2@gmail.com"]), RoleID=role_user.RoleID, IsActive=True)
+        roles = [
+            models.UserRole(RoleName="Administrator"),
+            models.UserRole(RoleName="Moderator"),
+            models.UserRole(RoleName="User")
         ]
+        db.add_all(roles)
+        db.commit()
+        
+        admin_role_id, mod_role_id, user_role_id = [r.RoleID for r in roles]
+
+        # --- 2. User Accounts (100 total) ---
+        print("Generating and hashing 100 unique passwords. This will take ~20 seconds...")
+        users = []
+        dummy_credentials_list = [] # Store the plaintext passwords for the text file
+        
+        # 5 Master Accounts (Using your exact passwords!)
+        master_accounts = [
+            models.UserAccount(EmailAddress="admin@linkslens.com", PasswordHash=pwd_context.hash("o4LU6t$pGKGhEXZP"), RoleID=admin_role_id),
+            models.UserAccount(EmailAddress="mod1@linkslens.com", PasswordHash=pwd_context.hash("X4tFpfErsT*ETWdI"), RoleID=mod_role_id),
+            models.UserAccount(EmailAddress="mod2@linkslens.com", PasswordHash=pwd_context.hash("msqb2&RsN5%18pn1"), RoleID=mod_role_id),
+            models.UserAccount(EmailAddress="user1@gmail.com", PasswordHash=pwd_context.hash("##3NQwuNGFL3EepW"), RoleID=user_role_id),
+            models.UserAccount(EmailAddress="user2@gmail.com", PasswordHash=pwd_context.hash("bL86S70^5WW&yJNj"), RoleID=user_role_id),
+        ]
+        users.extend(master_accounts)
+
+        # 95 Random Dummy Users with UNIQUE strong passwords
+        for _ in range(95):
+            fake_email = fake.unique.email()
+            fake_password = generate_secure_password()
+            
+            # Store the plaintext version for our text file
+            dummy_credentials_list.append({"email": fake_email, "password": fake_password})
+            
+            # Hash it and add to the database insert list
+            users.append(models.UserAccount(
+                EmailAddress=fake_email,
+                PasswordHash=pwd_context.hash(fake_password),
+                RoleID=user_role_id,
+                CreatedAt=fake.date_time_between(start_date='-1y', end_date='now', tzinfo=timezone.utc)
+            ))
+            
         db.add_all(users)
         db.commit()
 
-        admin_id, mod1_id, mod2_id, user1_id, user2_id = [u.UserID for u in users]
-
-        # --- 3. User Details ---
-        details = [
-            models.UserDetails(UserID=admin_id, FullName="System Admin", Gender="Other"),
-            models.UserDetails(UserID=mod1_id, FullName="Alice Mod", Gender="Female"),
-            models.UserDetails(UserID=user1_id, FullName="Bob User", Gender="Male")
-        ]
+        # --- 3. User Details & Preferences (100 total) ---
+        details, prefs = [], []
+        for user in users:
+            details.append(models.UserDetails(
+                UserID=user.UserID,
+                FullName=fake.name(),
+                PhoneNumber=fake.numerify(text='###-###-####'),
+                Address=fake.city(),
+                Gender=random.choice(["Male", "Female", "Other"]),
+                DateOfBirth=fake.date_of_birth(minimum_age=18, maximum_age=80)
+            ))
+            prefs.append(models.UserPreferences(
+                UserID=user.UserID,
+                Preferences={"Theme": random.choice(["Dark", "Light"]), "Notifications": random.choice([True, False])}
+            ))
         db.add_all(details)
-
-        # --- 4. User Preferences ---
-        default_prefs = {"Theme": "Dark", "VibrationEnabled": True, "ReportLanguage": "en"}
-        prefs = [
-            models.UserPreferences(UserID=admin_id, Preferences=default_prefs),
-            models.UserPreferences(UserID=user1_id, Preferences={"Theme": "Light", "VibrationEnabled": False, "ReportLanguage": "en"})
-        ]
         db.add_all(prefs)
         db.commit()
 
-        # --- 5. URL Rules (Master List) ---
-        rules = [
-            models.URLRules(URLDomain="google.com", ListType=models.ListTypeEnum.WHITELIST, AddedBy=admin_id),
-            models.URLRules(URLDomain="secure-bank-login-update.com", ListType=models.ListTypeEnum.BLACKLIST, AddedBy=mod1_id),
-            models.URLRules(URLDomain="free-iphones-now.net", ListType=models.ListTypeEnum.BLACKLIST, AddedBy=mod2_id)
-        ]
+        # --- 4. URL Rules (Master List - 100 rows) ---
+        rules = []
+        for _ in range(100):
+            rules.append(models.URLRules(
+                URLDomain=fake.unique.domain_name(),
+                ListType=random.choice(["WHITELIST", "BLACKLIST"]),
+                AddedBy=random.choice(admin_ids + mod_ids),
+                CreatedAt=fake.date_time_between(start_date='-6m', end_date='now', tzinfo=timezone.utc)
+            ))
         db.add_all(rules)
         db.commit()
 
-        # --- 6. Scan History ---
-        scans = [
-            models.ScanHistory(UserID=user1_id, InitialURL="https://google.com", StatusIndicator=models.ScanStatusEnum.SAFE, DomainAgeDays=8500, ServerLocation="USA"),
-            models.ScanHistory(UserID=user1_id, InitialURL="https://secure-bank-login-update.com", StatusIndicator=models.ScanStatusEnum.MALICIOUS, DomainAgeDays=2, ServerLocation="Russia"),
-            models.ScanHistory(UserID=user2_id, InitialURL="https://unknown-shop-online.com", StatusIndicator=models.ScanStatusEnum.SUSPICIOUS, DomainAgeDays=14, ServerLocation="Unknown")
-        ]
+        # --- 5. Scan History (300 rows) ---
+        scans = []
+        for _ in range(300):
+            status = random.choice(["SAFE", "SUSPICIOUS", "MALICIOUS", "PENDING"])
+            scans.append(models.ScanHistory(
+                UserID=random.choice(standard_user_ids),
+                InitialURL=fake.url(),
+                StatusIndicator=status,
+                DomainAgeDays=random.randint(1, 3000) if status != "PENDING" else None,
+                ServerLocation=fake.country() if status != "PENDING" else None,
+                ScannedAt=fake.date_time_between(start_date='-3m', end_date='now', tzinfo=timezone.utc)
+            ))
         db.add_all(scans)
         db.commit()
+        
+        scan_ids = [s.ScanID for s in scans]
 
-        # --- 7. Scan Feedback ---
-        scan_feedback = models.ScanFeedback(ScanID=scans[2].ScanID, UserID=user2_id, SuggestedStatus=models.SuggestedStatusEnum.MALICIOUS, Comments="They asked for my credit card without HTTPS!", IsResolved=False)
-        db.add(scan_feedback)
+        # --- 6. Scan Feedback (100 rows) ---
+        scan_feedbacks = []
+        for _ in range(100):
+            scan_feedbacks.append(models.ScanFeedback(
+                ScanID=random.choice(scan_ids),
+                UserID=random.choice(standard_user_ids),
+                SuggestedStatus=random.choice(["SAFE", "SUSPICIOUS", "MALICIOUS"]),
+                Comments=fake.sentence(),
+                IsResolved=random.choice([True, False])
+            ))
+        db.add_all(scan_feedbacks)
 
-        # --- 8. Blacklist Requests ---
-        requests = [
-            models.BlacklistRequest(UserID=user1_id, URLDomain="scam-crypto-wallet.io", Status=models.RequestStatus.PENDING),
-            models.BlacklistRequest(UserID=user2_id, URLDomain="fake-shopee-deals.sg", Status=models.RequestStatus.APPROVED, ReviewedBy=mod1_id, ReviewedAt=datetime.datetime.now(datetime.timezone.utc))
-        ]
+        # --- 7. Blacklist Requests (100 rows) ---
+        requests = []
+        for _ in range(100):
+            status = random.choice(["PENDING", "APPROVED", "REJECTED"])
+            req = models.BlacklistRequest(
+                UserID=random.choice(standard_user_ids),
+                URLDomain=fake.domain_name(),
+                Status=status,
+                CreatedAt=fake.date_time_between(start_date='-2m', end_date='now', tzinfo=timezone.utc)
+            )
+            if status != "PENDING":
+                req.ReviewedBy = random.choice(mod_ids)
+                req.ReviewedAt = req.CreatedAt + timedelta(days=random.randint(1, 5))
+            requests.append(req)
         db.add_all(requests)
-        db.commit()
 
-        # --- 9. App Feedback ---
-        app_feedback = models.AppFeedback(UserID=user1_id, Feedback="Love the UI, but I wish the scans were 1 second faster!")
-        db.add(app_feedback)
+        # --- 8. App Feedback (100 rows) ---
+        app_feedbacks = []
+        for _ in range(100):
+            app_feedbacks.append(models.AppFeedback(
+                UserID=random.choice(standard_user_ids),
+                Feedback=fake.paragraph(),
+                CreatedAt=fake.date_time_between(start_date='-6m', end_date='now', tzinfo=timezone.utc)
+            ))
+        db.add_all(app_feedbacks)
 
-        # --- 10. Action History (Audit Log) ---
-        actions = [
-            models.ActionHistory(UserID=admin_id, ActionType="ADDED_WHITELIST", Action="Added google.com to master whitelist."),
-            models.ActionHistory(UserID=mod1_id, ActionType="APPROVED_BLACKLIST", Action="Approved User2 request to blacklist fake-shopee-deals.sg.")
-        ]
+        # --- 9. Action History / Audit Log (500 rows) ---
+        actions = []
+        for _ in range(500):
+            action_types = ["LOGIN", "SCAN_EXECUTED", "BLACKLIST_UPDATED", "WHITELIST_UPDATED", "FEEDBACK_RESOLVED"]
+            actions.append(models.ActionHistory(
+                UserID=random.choice(all_user_ids),
+                ActionType=random.choice(action_types),
+                Action=fake.sentence(),
+                Timestamp=fake.date_time_between(start_date='-1y', end_date='now', tzinfo=timezone.utc)
+            ))
         db.add_all(actions)
         db.commit()
 
-        print("\n" + "="*60)
-        print("DB SEEDED SUCCESSFULLY! SAVE THESE CREDENTIALS NOW:")
-        print("="*60)
-        for email, pwd in passwords.items():
-            print(f"Email: {email:<20} | Password: {pwd}")
-        print("="*60 + "\n")
+        # ==========================================
+        # Export all 100 credentials to a text file
+        # ==========================================
+        file_path = "dummy_credentials.txt"
+        with open(file_path, "w") as f:
+            f.write("============================================================\n")
+            f.write("LINKS LENS - MASS SEED CREDENTIALS\n")
+            f.write("============================================================\n\n")
+            
+            f.write("MASTER ACCOUNTS:\n")
+            f.write(f"Email: {'admin@linkslens.com':<25} | Password: o4LU6t$pGKGhEXZP\n")
+            f.write(f"Email: {'mod1@linkslens.com':<25} | Password: X4tFpfErsT*ETWdI\n")
+            f.write(f"Email: {'mod2@linkslens.com':<25} | Password: msqb2&RsN5%18pn1\n")
+            f.write(f"Email: {'user1@gmail.com':<25} | Password: ##3NQwuNGFL3EepW\n")
+            f.write(f"Email: {'user2@gmail.com':<25} | Password: bL86S70^5WW&yJNj\n\n")
+            
+            f.write("RANDOMLY GENERATED DUMMY ACCOUNTS:\n")
+            f.write("------------------------------------------------------------\n")
+            # Loop through the stored plaintext list
+            for cred in dummy_credentials_list: 
+                f.write(f"Email: {cred['email']:<25} | Password: {cred['password']}\n")
+
+        print(f"MASSIVE DB SEEDED! 1,400+ rows created.")
+        print(f"📄 All 100 unique credentials have been saved to: backend/{file_path}")
 
     except Exception as e:
-        print(f"Error during seeding: {e}")
+        print(f"Error during mass seeding: {e}")
         db.rollback()
     finally:
         db.close()
 
 if __name__ == "__main__":
-    seed_database()
+    seed_massive_database()

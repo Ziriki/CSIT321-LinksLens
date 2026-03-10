@@ -9,8 +9,34 @@ auth_controller.render_sidebar()
 st.title("Action History Log")
 st.markdown("Immutable record of all moderator and admin actions.")
 
+PAGE_SIZE = 20
+
 df = action_history_controller.get_audit_dataframe()
 if df.empty:
     st.info("No action history logs found.")
-else:
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.stop()
+
+# Already sorted descending in controller, reset index
+df = df.reset_index(drop=True)
+
+if "history_page" not in st.session_state:
+    st.session_state["history_page"] = 0
+
+total = len(df)
+page = st.session_state["history_page"]
+start = page * PAGE_SIZE
+end = min(start + PAGE_SIZE, total)
+
+st.dataframe(df.iloc[start:end], use_container_width=True, hide_index=True)
+
+col_prev, col_info, col_next = st.columns([1, 4, 1])
+with col_prev:
+    if st.button("Previous", disabled=(page == 0)):
+        st.session_state["history_page"] = max(0, page - 1)
+        st.rerun()
+with col_info:
+    st.markdown(f"Showing **{start + 1}–{end}** of {total} (Page {page + 1})")
+with col_next:
+    if st.button("Next", disabled=(end >= total)):
+        st.session_state["history_page"] = page + 1
+        st.rerun()

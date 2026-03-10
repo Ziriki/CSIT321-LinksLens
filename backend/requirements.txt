@@ -12,3 +12,4 @@ python-multipart
 beautifulsoup4
 pyjwt
 bcrypt==3.2.2
+faker
