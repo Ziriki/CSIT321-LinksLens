@@ -15,8 +15,14 @@ if df.empty:
     st.info("No feedback submitted yet.")
     st.stop()
 
-# Sort descending by CreatedAt
-df = df.sort_values(by="CreatedAt", ascending=False).reset_index(drop=True)
+# Sort descending by FeedbackID
+df = df.sort_values(by="FeedbackID", ascending=False).reset_index(drop=True)
+
+# Search
+search_query = st.text_input("Search", placeholder="Search by user, feedback content...")
+if search_query:
+    mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
+    df = df[mask].reset_index(drop=True)
 
 if "feedback_page" not in st.session_state:
     st.session_state["feedback_page"] = 0
