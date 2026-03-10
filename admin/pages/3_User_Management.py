@@ -10,19 +10,29 @@ auth_controller.render_sidebar()
 st.title("User Management")
 
 ROLE_MAP = {1: "Administrator", 2: "Moderator", 3: "User"}
+PAGE_SIZE = 20
 
 # ---------------------------------------------------------------------------
-# User table
+# User table with pagination
 # ---------------------------------------------------------------------------
-df = user_controller.get_users_dataframe()
-if df.empty:
+all_df = user_controller.get_users_dataframe()
+if all_df.empty:
     st.info("No users found.")
     st.stop()
 
 # Map RoleID to label for display
-display_df = df.copy()
-display_df["Role"] = display_df["RoleID"].map(ROLE_MAP)
-display_df = display_df[["UserID", "EmailAddress", "Role", "IsActive"]]
+all_df["Role"] = all_df["RoleID"].map(ROLE_MAP)
+
+if "user_page" not in st.session_state:
+    st.session_state["user_page"] = 0
+
+total = len(all_df)
+page = st.session_state["user_page"]
+start = page * PAGE_SIZE
+end = min(start + PAGE_SIZE, total)
+page_df = all_df.iloc[start:end]
+
+display_df = page_df[["UserID", "EmailAddress", "Role"]]
 
 event = st.dataframe(
     display_df,
@@ -31,6 +41,19 @@ event = st.dataframe(
     on_select="rerun",
     selection_mode="single-row",
 )
+
+# Pagination controls
+col_prev, col_info, col_next = st.columns([1, 4, 1])
+with col_prev:
+    if st.button("Previous", disabled=(page == 0), key="user_prev"):
+        st.session_state["user_page"] = max(0, page - 1)
+        st.rerun()
+with col_info:
+    st.markdown(f"Showing **{start + 1}–{end}** of {total} (Page {page + 1})")
+with col_next:
+    if st.button("Next", disabled=(end >= total), key="user_next"):
+        st.session_state["user_page"] = page + 1
+        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Detect row selection
@@ -41,8 +64,8 @@ if not selected_rows:
     st.stop()
 
 row_idx = selected_rows[0]
-uid = int(df.iloc[row_idx]["UserID"])
-user_row = df.iloc[row_idx]
+uid = int(page_df.iloc[row_idx]["UserID"])
+user_row = all_df[all_df["UserID"] == uid].iloc[0]
 
 # Fetch extended details from /api/details/{uid}
 details = api_client.fetch_user_detail(uid) or {}
