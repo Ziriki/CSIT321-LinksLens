@@ -14,5 +14,5 @@ def get_audit_dataframe():
     df["User"] = df["UserID"].map(user_map).fillna("Unknown")
 
     return df[["LogID", "Timestamp", "User", "ActionType", "Action"]].sort_values(
-        by="Timestamp", ascending=False
+        by="LogID", ascending=False
     )
