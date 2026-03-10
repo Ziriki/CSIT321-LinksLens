@@ -23,6 +23,13 @@ if all_df.empty:
 # Map RoleID to label for display
 all_df["Role"] = all_df["RoleID"].map(ROLE_MAP)
 
+# Search
+search_query = st.text_input("Search", placeholder="Search by email, role...")
+if search_query:
+    search_cols = ["UserID", "EmailAddress", "Role"]
+    mask = all_df[search_cols].apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
+    all_df = all_df[mask].reset_index(drop=True)
+
 if "user_page" not in st.session_state:
     st.session_state["user_page"] = 0
 

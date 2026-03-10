@@ -112,8 +112,8 @@ def list_scans(
     if associated_person:
         query = query.filter(models.ScanHistory.AssociatedPerson.ilike(f"%{associated_person}%"))
 
-    # Always return newest scans first
-    query = query.order_by(models.ScanHistory.ScannedAt.desc())
+    # Always return newest scans first (by ScanID)
+    query = query.order_by(models.ScanHistory.ScanID.desc())
 
     return query.offset(skip).limit(limit).all()
 
