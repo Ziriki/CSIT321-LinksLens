@@ -16,8 +16,14 @@ if df.empty:
     st.info("No action history logs found.")
     st.stop()
 
-# Already sorted descending in controller, reset index
+# Already sorted descending by LogID in controller, reset index
 df = df.reset_index(drop=True)
+
+# Search
+search_query = st.text_input("Search", placeholder="Search by user, action type, action...")
+if search_query:
+    mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
+    df = df[mask].reset_index(drop=True)
 
 if "history_page" not in st.session_state:
     st.session_state["history_page"] = 0
