@@ -1,12 +1,12 @@
 # backend/seed_massive.py
 import random
+import string
+import secrets
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from passlib.context import CryptContext
 from faker import Faker
-import string
-import secrets
 
 import models
 from database import SessionLocal, engine
@@ -50,11 +50,11 @@ def seed_massive_database():
         admin_role_id, mod_role_id, user_role_id = [r.RoleID for r in roles]
 
         # --- 2. User Accounts (100 total) ---
-        print("Generating and hashing 100 unique passwords. This will take ~20 seconds...")
+        print("⏳ Generating and hashing 100 unique passwords. This will take ~20 seconds...")
         users = []
-        dummy_credentials_list = [] # Store the plaintext passwords for the text file
+        dummy_credentials_list = []
         
-        # 5 Master Accounts (Using your exact passwords!)
+        # 5 Master Accounts
         master_accounts = [
             models.UserAccount(EmailAddress="admin@linkslens.com", PasswordHash=pwd_context.hash("o4LU6t$pGKGhEXZP"), RoleID=admin_role_id),
             models.UserAccount(EmailAddress="mod1@linkslens.com", PasswordHash=pwd_context.hash("X4tFpfErsT*ETWdI"), RoleID=mod_role_id),
@@ -64,15 +64,13 @@ def seed_massive_database():
         ]
         users.extend(master_accounts)
 
-        # 95 Random Dummy Users with UNIQUE strong passwords
+        # 95 Random Dummy Users
         for _ in range(95):
             fake_email = fake.unique.email()
             fake_password = generate_secure_password()
             
-            # Store the plaintext version for our text file
             dummy_credentials_list.append({"email": fake_email, "password": fake_password})
             
-            # Hash it and add to the database insert list
             users.append(models.UserAccount(
                 EmailAddress=fake_email,
                 PasswordHash=pwd_context.hash(fake_password),
@@ -82,8 +80,14 @@ def seed_massive_database():
             
         db.add_all(users)
         db.commit()
+        
+        # --- THE MISSING LINES ARE BACK! ---
+        all_user_ids = [u.UserID for u in users]
+        admin_ids = [u.UserID for u in users if u.RoleID == admin_role_id]
+        mod_ids = [u.UserID for u in users if u.RoleID == mod_role_id]
+        standard_user_ids = [u.UserID for u in users if u.RoleID == user_role_id]
 
-        # --- 3. User Details & Preferences (100 total) ---
+        # --- 3. User Details & Preferences ---
         details, prefs = [], []
         for user in users:
             details.append(models.UserDetails(
@@ -102,7 +106,7 @@ def seed_massive_database():
         db.add_all(prefs)
         db.commit()
 
-        # --- 4. URL Rules (Master List - 100 rows) ---
+        # --- 4. URL Rules (Master List) ---
         rules = []
         for _ in range(100):
             rules.append(models.URLRules(
@@ -114,7 +118,7 @@ def seed_massive_database():
         db.add_all(rules)
         db.commit()
 
-        # --- 5. Scan History (300 rows) ---
+        # --- 5. Scan History ---
         scans = []
         for _ in range(300):
             status = random.choice(["SAFE", "SUSPICIOUS", "MALICIOUS", "PENDING"])
@@ -131,7 +135,7 @@ def seed_massive_database():
         
         scan_ids = [s.ScanID for s in scans]
 
-        # --- 6. Scan Feedback (100 rows) ---
+        # --- 6. Scan Feedback ---
         scan_feedbacks = []
         for _ in range(100):
             scan_feedbacks.append(models.ScanFeedback(
@@ -143,7 +147,7 @@ def seed_massive_database():
             ))
         db.add_all(scan_feedbacks)
 
-        # --- 7. Blacklist Requests (100 rows) ---
+        # --- 7. Blacklist Requests ---
         requests = []
         for _ in range(100):
             status = random.choice(["PENDING", "APPROVED", "REJECTED"])
@@ -159,7 +163,7 @@ def seed_massive_database():
             requests.append(req)
         db.add_all(requests)
 
-        # --- 8. App Feedback (100 rows) ---
+        # --- 8. App Feedback ---
         app_feedbacks = []
         for _ in range(100):
             app_feedbacks.append(models.AppFeedback(
@@ -169,7 +173,7 @@ def seed_massive_database():
             ))
         db.add_all(app_feedbacks)
 
-        # --- 9. Action History / Audit Log (500 rows) ---
+        # --- 9. Action History ---
         actions = []
         for _ in range(500):
             action_types = ["LOGIN", "SCAN_EXECUTED", "BLACKLIST_UPDATED", "WHITELIST_UPDATED", "FEEDBACK_RESOLVED"]
@@ -182,9 +186,7 @@ def seed_massive_database():
         db.add_all(actions)
         db.commit()
 
-        # ==========================================
-        # Export all 100 credentials to a text file
-        # ==========================================
+        # --- Export Credentials to File ---
         file_path = "dummy_credentials.txt"
         with open(file_path, "w") as f:
             f.write("============================================================\n")
@@ -200,12 +202,13 @@ def seed_massive_database():
             
             f.write("RANDOMLY GENERATED DUMMY ACCOUNTS:\n")
             f.write("------------------------------------------------------------\n")
-            # Loop through the stored plaintext list
             for cred in dummy_credentials_list: 
                 f.write(f"Email: {cred['email']:<25} | Password: {cred['password']}\n")
 
-        print(f"MASSIVE DB SEEDED! 1,400+ rows created.")
-        print(f"📄 All 100 unique credentials have been saved to: backend/{file_path}")
+        print("="*60)
+        print("MASSIVE DB SEEDED SUCCESSFULLY! OVER 1,400 ROWS CREATED.")
+        print(f"Credentials saved to: backend/{file_path}")
+        print("="*60)
 
     except Exception as e:
         print(f"Error during mass seeding: {e}")

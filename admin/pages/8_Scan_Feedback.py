@@ -18,6 +18,11 @@ filter_option = st.radio("Filter", ["All", "Resolved", "Unresolved"], horizontal
 is_resolved = {"Unresolved": False, "Resolved": True, "All": None}[filter_option]
 
 # ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+search_query = st.text_input("Search", placeholder="Search by user, URL, status, comments...")
+
+# ---------------------------------------------------------------------------
 # Fetch enriched data
 # ---------------------------------------------------------------------------
 raw_data = api_client.fetch_scan_feedback_enriched(is_resolved)
@@ -27,6 +32,19 @@ if not raw_data:
     st.stop()
 
 df = pd.DataFrame(raw_data)
+
+# Apply search filter
+if search_query:
+    display_cols_for_search = ["FeedbackID", "UserName", "UserEmail", "InitialURL",
+                               "CurrentStatus", "SuggestedStatus", "Comments"]
+    search_available = [c for c in display_cols_for_search if c in df.columns]
+    mask = df[search_available].apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
+    df = df[mask].reset_index(drop=True)
+    raw_data = df.to_dict("records")
+
+if df.empty:
+    st.info("No scan feedback matching your search.")
+    st.stop()
 
 # Display columns (no IsResolved, no raw IDs that are uninformative)
 display_cols = ["FeedbackID", "UserName", "UserEmail", "InitialURL",

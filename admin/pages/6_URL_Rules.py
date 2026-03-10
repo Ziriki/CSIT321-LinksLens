@@ -21,6 +21,12 @@ filter_map = {"Blacklist": "BLACKLIST", "Whitelist": "WHITELIST"}
 if list_type != "All":
     df = df[df["ListType"] == filter_map[list_type]].reset_index(drop=True)
 
+# Search
+search_query = st.text_input("Search", placeholder="Search by URL domain, added by...")
+if search_query:
+    mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
+    df = df[mask].reset_index(drop=True)
+
 if "rules_page" not in st.session_state:
     st.session_state["rules_page"] = 0
 
