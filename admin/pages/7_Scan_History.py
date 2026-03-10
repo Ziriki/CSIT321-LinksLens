@@ -10,7 +10,13 @@ auth_controller.render_sidebar()
 
 st.title("Scan History")
 
-PAGE_SIZE = 25
+PAGE_SIZE = 10
+
+# ---------------------------------------------------------------------------
+# Build user email lookup
+# ---------------------------------------------------------------------------
+users = api_client.fetch_all_users()
+user_map = {u["UserID"]: u["EmailAddress"] for u in users}
 
 # ---------------------------------------------------------------------------
 # Filters
@@ -56,7 +62,9 @@ if not display_records:
     st.info("No scan records found.")
 else:
     df = pd.DataFrame(display_records)
-    columns = ["ScanID", "UserID", "InitialURL", "StatusIndicator",
+    # Replace UserID with email
+    df["User"] = df["UserID"].map(user_map).fillna("Unknown")
+    columns = ["ScanID", "User", "InitialURL", "StatusIndicator",
                 "DomainAgeDays", "ServerLocation", "ScannedAt"]
     available = [c for c in columns if c in df.columns]
 
@@ -81,9 +89,9 @@ with col_prev:
         st.session_state["scan_page"] = max(0, page - 1)
         st.rerun()
 with col_info:
-    start = skip + 1 if display_records else 0
-    end = skip + len(display_records)
-    st.markdown(f"Showing **{start}–{end}** (Page {page + 1})")
+    start_label = skip + 1 if display_records else 0
+    end_label = skip + len(display_records)
+    st.markdown(f"Showing **{start_label}–{end_label}** (Page {page + 1})")
 with col_next:
     if st.button("Next", disabled=(not has_next)):
         st.session_state["scan_page"] = page + 1
