@@ -29,3 +29,27 @@ test*
 backend/local_test.db
 backend/reset_admin_password.py
 backend/run_local.py
+
+# Frontend (Expo / React Native)
+node_modules/
+linkslens-frontend/.expo/
+linkslens-frontend/dist/
+linkslens-frontend/web-build/
+linkslens-frontend/npm-debug.*
+
+# Expo native builds
+linkslens-frontend/android/
+linkslens-frontend/ios/
+
+# Signing / keys
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Temporary / system
+.DS_Store
+Thumbs.db
+linkslens-frontend/metro-health-check*
+*.orig.*
