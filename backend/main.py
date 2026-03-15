@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel
+
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import uvicorn
@@ -21,6 +21,7 @@ from controllers.url_rules_controller import router as url_rules_router
 from controllers.scan_history_controller import router as scan_history_router
 from controllers.scan_feedback_controller import router as scan_feedback_router
 from controllers.auth_controller import router as auth_router
+from controllers.urlscan_controller import router as urlscan_router
 
 # Tells FastAPI to try connecting 5 times, waiting 5 seconds between each try.
 retries = 5
@@ -51,10 +52,7 @@ app.include_router(url_rules_router)
 app.include_router(scan_history_router)
 app.include_router(scan_feedback_router)
 app.include_router(auth_router)
-
-# Data model for the mobile app to send us
-class ScanRequest(BaseModel):
-    url: str
+app.include_router(urlscan_router)
 
 @app.get("/")
 def read_root():
@@ -96,30 +94,6 @@ def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(
         "total_url_rules": total_url_rules,
         "total_app_feedback": total_app_feedback,
     }
-
-@app.post("/scan")
-def scan_website(request: ScanRequest):
-    """
-    This is the endpoint your React Native App will hit.
-    For now, it returns a fake result. Later, we add Playwright here.
-    """
-    print(f"Received scan request for: {request.url}")
-    
-    # Mock logic (Replace with real scanner later)
-    if "phishing" in request.url:
-        return {
-            "url": request.url,
-            "safety_score": 10,
-            "verdict": "DANGEROUS",
-            "threats": ["Suspicious Domain", "Hidden Iframes"]
-        }
-    else:
-        return {
-            "url": request.url,
-            "safety_score": 95,
-            "verdict": "SAFE",
-            "threats": []
-        }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
