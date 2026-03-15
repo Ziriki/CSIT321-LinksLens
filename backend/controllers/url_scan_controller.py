@@ -1,10 +1,15 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 import requests
 import time
 import os
 from dotenv import load_dotenv
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
+
+import models
+from database import get_db
+from dependencies import get_current_user
 
 load_dotenv()
 
@@ -136,7 +141,7 @@ def process_result(uuid: str, raw_result: dict) -> dict:
 #########################################################
 #I will include a option to select quick or detailed later
 @router.post("")
-def scan_url(request: ScanRequest):
+def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Submit a URL to urlscan.io, wait for the scan to complete, and return the results."""
     # 1. Submit the URL to urlscan.io
     submission = submit_scan(request.url)
@@ -148,5 +153,47 @@ def scan_url(request: ScanRequest):
     # 2. Poll until the result is ready
     raw_result = poll_result(uuid)
 
-    # 3. Process and return the structured result
-    return process_result(uuid, raw_result)
+    # 3. Process the structured result
+    result = process_result(uuid, raw_result)
+
+    # 4. Save to ScanHistory
+    scan_record = models.ScanHistory(
+        UserID=current_user["user_id"],
+        InitialURL=result["initial_url"],
+        RedirectURL=result["redirect_url"],
+        StatusIndicator=models.ScanStatusEnum(result["status"]),
+        ServerLocation=result["server_location"],
+        ScreenshotURL=result["screenshot_url"],
+    )
+    db.add(scan_record)
+    db.commit()
+    db.refresh(scan_record)
+
+    # 5. If MALICIOUS, also raise a BlacklistRequest
+    # if result["status"] == "MALICIOUS":
+    #     domain = urlparse(result["initial_url"]).netloc
+    #     blacklist_record = models.BlacklistRequest(
+    #         UserID=current_user["user_id"],
+    #         URLDomain=domain,
+    #         Status=models.RequestStatus.PENDING,
+    #     )
+    #     db.add(blacklist_record)
+    #     db.commit()
+
+    # Returns the full urlscan result, omit the uncessary fields when needed
+    return {
+        "scan_id": scan_record.ScanID,
+        "user_id": scan_record.UserID,
+        "uuid": result["uuid"],
+        "initial_url": scan_record.InitialURL,
+        "redirect_url": scan_record.RedirectURL,
+        "status_indicator": scan_record.StatusIndicator,
+        "score": result["score"],
+        "server_location": scan_record.ServerLocation,
+        "ip_address": result["ip_address"],
+        "screenshot_url": scan_record.ScreenshotURL,
+        "brands": result["brands"],
+        "tags": result["tags"],
+        "result_url": result["result_url"],
+        "scanned_at": scan_record.ScannedAt,
+    }
