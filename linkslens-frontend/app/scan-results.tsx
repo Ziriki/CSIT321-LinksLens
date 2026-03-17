@@ -1,23 +1,55 @@
 import { View, Text, ScrollView } from "react-native"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import {
   CheckCircle,
   ExternalLink,
   Info,
   ChevronRight,
   Flag,
-  Camera
+  Camera,
+  XCircle,
 } from "lucide-react-native"
 
 import {
   Card,
-  RiskBadge, 
+  RiskBadge,
   AppButton,
   ConfidenceIndicator,
   ScreenHeader,
-} from "../components/ui-components"  
+} from "../components/ui-components"
+import type { ScanResponse } from "../lib/api"
+import type { RiskLevel } from "../lib/types"
+
+function verdictToRiskLevel(verdict: ScanResponse["verdict"]): RiskLevel {
+  return verdict === "SAFE" ? "safe" : "malicious";
+}
 
 export default function scanResults() {
+  const { result, error } = useLocalSearchParams<{ result?: string; error?: string }>();
+
+  const scanData: ScanResponse | null = result ? JSON.parse(result) : null;
+  const riskLevel: RiskLevel = scanData ? verdictToRiskLevel(scanData.verdict) : "safe";
+  const isSafe = riskLevel === "safe";
+
+  if (error || !scanData) {
+    return (
+      <View className="flex-1 bg-background">
+        <ScreenHeader title="Scan Results" />
+        <View className="flex-1 items-center justify-center px-6">
+          <XCircle size={64} color="#dc2626" />
+          <Text className="mt-4 text-center text-lg font-semibold text-foreground">
+            {error ?? "No result data available."}
+          </Text>
+          <View className="mt-8 w-full">
+            <AppButton fullWidth onPress={() => router.push("/")}>
+              Go Home
+            </AppButton>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-background">
 
@@ -27,14 +59,20 @@ export default function scanResults() {
 
         {/* Result */}
         <View className="items-center py-6">
-          <CheckCircle size={64} color="#16a34a" />
+          {isSafe ? (
+            <CheckCircle size={64} color="#16a34a" />
+          ) : (
+            <XCircle size={64} color="#dc2626" />
+          )}
 
           <View className="mt-4">
-            <RiskBadge riskLevel="safe" size="lg" />
+            <RiskBadge riskLevel={riskLevel} size="lg" />
           </View>
 
           <Text className="mt-4 px-4 text-center text-muted-foreground">
-            This URL appears to be safe. No security threats detected.
+            {isSafe
+              ? "This URL appears to be safe. No security threats detected."
+              : `Threats detected: ${scanData.threats.join(", ") || "Suspicious activity"}`}
           </Text>
         </View>
 
@@ -45,7 +83,7 @@ export default function scanResults() {
           </Text>
 
           <Text className="text-sm text-foreground">
-            https://...
+            {scanData.url}
           </Text>
 
           <View className="mt-3 flex-row items-center gap-2 border-t border-border pt-3">
@@ -64,7 +102,7 @@ export default function scanResults() {
             Analysis Confidence
           </Text>
 
-          <ConfidenceIndicator value={95} />
+          <ConfidenceIndicator value={scanData.safety_score} />
         </Card>
 
         {/* Advanced */}
@@ -140,7 +178,7 @@ export default function scanResults() {
 
         <AppButton
           fullWidth
-          onPress={() => router.push("/")}
+          onPress={() => router.push("/home")}
         >
           Done
         </AppButton>

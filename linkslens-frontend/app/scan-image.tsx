@@ -1,8 +1,9 @@
 import { recognizeText } from "@infinitered/react-native-mlkit-text-recognition";
 import * as ImagePicker from "expo-image-picker";
+import { router } from "expo-router";
 import { Upload } from "lucide-react-native";
 import React, { useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
 import {
   AppButton,
   ScreenHeader,
@@ -86,9 +87,17 @@ export default function scanImage() {
             <Text className="text-xs uppercase text-muted-foreground font-bold">
               Detected Content:
             </Text>
-            <Text className={`mt-2 text-lg ${isUrl ? 'text-blue-500 underline' : 'text-foreground'}`}>
-              {text}
-            </Text>
+            <TextInput
+              className={`mt-2 text-lg ${isUrl ? 'text-blue-500' : 'text-foreground'}`}
+              value={text}
+              onChangeText={(val) => {
+                setText(val);
+                setIsUrl(isValidUrl(val));
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
             
             {/* Feedback for the user */}
             <Text className="mt-1 text-sm">
@@ -102,10 +111,7 @@ export default function scanImage() {
             fullWidth
             size="lg"
             disabled={!isUrl || loading} // Disable button if not a URL
-            onPress={() => {
-               // Handle navigation or opening the browser here
-               console.log("Opening:", text);
-            }}
+            onPress={() => router.push({ pathname: "/scan-processing", params: { url: text } })}
           >
             {loading ? "Processing..." : "Scan URL"}
           </AppButton>
