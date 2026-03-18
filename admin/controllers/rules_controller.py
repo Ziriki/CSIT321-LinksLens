@@ -9,6 +9,7 @@ def get_rules_dataframe():
     df = pd.DataFrame(raw_data)
 
     # Backend now returns AddedByFullName directly via JOIN
+    df.drop(columns=["AddedBy"], inplace=True, errors="ignore")
     df.rename(columns={"AddedByFullName": "AddedBy"}, inplace=True)
 
     return df[["RuleID", "ListType", "URLDomain", "AddedBy", "CreatedAt"]]
