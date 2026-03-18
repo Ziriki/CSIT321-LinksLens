@@ -1,12 +1,12 @@
 import streamlit as st
 from controllers import auth_controller, rules_controller
 
-st.set_page_config(page_title="URL Rules", layout="wide")
+st.set_page_config(page_title="URL Registry", layout="wide")
 # Admin + Moderator (RoleID 1, 2)
 auth_controller.require_role(1, 2)
 auth_controller.render_sidebar()
 
-st.title("Master URL Rules")
+st.title("URL Registry")
 st.markdown("View the global Blacklist and Whitelist active in the system.")
 
 PAGE_SIZE = 20
@@ -22,7 +22,7 @@ if list_type != "All":
     df = df[df["ListType"] == filter_map[list_type]].reset_index(drop=True)
 
 # Search
-search_query = st.text_input("Search", placeholder="Search by URL domain, added by...")
+search_query = st.text_input("Search", placeholder="Search by URL domain, added by name...")
 if search_query:
     mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
     df = df[mask].reset_index(drop=True)

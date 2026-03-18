@@ -24,9 +24,9 @@ if all_df.empty:
 all_df["Role"] = all_df["RoleID"].map(ROLE_MAP)
 
 # Search
-search_query = st.text_input("Search", placeholder="Search by email, role...")
+search_query = st.text_input("Search", placeholder="Search by name, email, role...")
 if search_query:
-    search_cols = ["UserID", "EmailAddress", "Role"]
+    search_cols = ["FullName", "EmailAddress", "Role"]
     mask = all_df[search_cols].apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
     all_df = all_df[mask].reset_index(drop=True)
 
@@ -39,7 +39,7 @@ start = page * PAGE_SIZE
 end = min(start + PAGE_SIZE, total)
 page_df = all_df.iloc[start:end]
 
-display_df = page_df[["UserID", "EmailAddress", "Role"]]
+display_df = page_df[["UserID", "FullName", "EmailAddress", "Role"]]
 
 event = st.dataframe(
     display_df,
@@ -145,7 +145,8 @@ with btn_col1:
                 current_user["user_id"], "UPDATED_USER",
                 f"Updated User #{uid}: {changes}.",
             )
-            st.success(f"User {uid} updated successfully!")
+            st.session_state.pop("confirm_deactivate", None)
+            st.cache_data.clear()
             st.rerun()
 
 with btn_col2:
@@ -165,7 +166,7 @@ if st.session_state.get("confirm_deactivate") == uid:
                 f"Deactivated User #{uid}.",
             )
             st.session_state.pop("confirm_deactivate", None)
-            st.success(f"User {uid} deactivated.")
+            st.cache_data.clear()
             st.rerun()
     with confirm_col2:
         if st.button("Cancel", key="confirm_no"):
