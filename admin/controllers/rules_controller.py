@@ -8,9 +8,7 @@ def get_rules_dataframe():
         return pd.DataFrame()
     df = pd.DataFrame(raw_data)
 
-    # Replace AddedBy (UserID) with email
-    users = api_client.fetch_all_users()
-    user_map = {u["UserID"]: u["EmailAddress"] for u in users}
-    df["AddedBy"] = df["AddedBy"].map(user_map).fillna("Unknown")
+    # Backend now returns AddedByFullName directly via JOIN
+    df.rename(columns={"AddedByFullName": "AddedBy"}, inplace=True)
 
     return df[["RuleID", "ListType", "URLDomain", "AddedBy", "CreatedAt"]]

@@ -12,23 +12,18 @@ st.title("Scan History")
 
 PAGE_SIZE = 10
 
-# ---------------------------------------------------------------------------
-# Build user email lookup
-# ---------------------------------------------------------------------------
-users = api_client.fetch_all_users()
-user_map = {u["UserID"]: u["EmailAddress"] for u in users}
+# Backend now returns FullName directly via JOIN — no need for separate user lookup
 
 # ---------------------------------------------------------------------------
 # Filters
 # ---------------------------------------------------------------------------
-col_search, col_status, col_user = st.columns([3, 1, 1])
+col_search, col_user, col_status = st.columns([2, 2, 1])
 with col_search:
     search_url = st.text_input("Search by URL", placeholder="e.g. google.com")
+with col_user:
+    search_user = st.text_input("Search by User", placeholder="e.g. John Doe")
 with col_status:
     status_filter = st.selectbox("Status", ["All", "SAFE", "SUSPICIOUS", "MALICIOUS"])
-with col_user:
-    user_id_filter = st.number_input("User ID", min_value=0, step=1, value=0,
-                                     help="0 = all users")
 
 # ---------------------------------------------------------------------------
 # Pagination state
@@ -47,7 +42,7 @@ records = api_client.fetch_scan_list(
     limit=PAGE_SIZE + 1,
     search_url=search_url if search_url else None,
     status_indicator=status_filter if status_filter != "All" else None,
-    user_id=user_id_filter if user_id_filter > 0 else None,
+    search_user=search_user if search_user else None,
 )
 
 has_next = len(records) > PAGE_SIZE
@@ -62,8 +57,8 @@ if not display_records:
     st.info("No scan records found.")
 else:
     df = pd.DataFrame(display_records)
-    # Replace UserID with email
-    df["User"] = df["UserID"].map(user_map).fillna("Unknown")
+    # Backend returns FullName directly via JOIN
+    df.rename(columns={"FullName": "User"}, inplace=True)
     columns = ["ScanID", "User", "InitialURL", "StatusIndicator",
                 "DomainAgeDays", "ServerLocation", "ScannedAt"]
     available = [c for c in columns if c in df.columns]
