@@ -20,7 +20,7 @@ if df.empty:
 df = df.reset_index(drop=True)
 
 # Search
-search_query = st.text_input("Search", placeholder="Search by user, action type, action...")
+search_query = st.text_input("Search", placeholder="Search by name, action type, action...")
 if search_query:
     mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
     df = df[mask].reset_index(drop=True)

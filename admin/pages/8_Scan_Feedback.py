@@ -20,7 +20,7 @@ is_resolved = {"Unresolved": False, "Resolved": True, "All": None}[filter_option
 # ---------------------------------------------------------------------------
 # Search
 # ---------------------------------------------------------------------------
-search_query = st.text_input("Search", placeholder="Search by user, URL, status, comments...")
+search_query = st.text_input("Search", placeholder="Search by name, URL, status, comments...")
 
 # ---------------------------------------------------------------------------
 # Fetch enriched data
