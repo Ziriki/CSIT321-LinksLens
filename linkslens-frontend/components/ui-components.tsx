@@ -79,6 +79,7 @@ export function AppButton({
   fullWidth,
   className,
   onPress,
+  disabled, // 1. Destructure the disabled prop
 }: {
   children: React.ReactNode
   variant?: "primary" | "secondary" | "outline" | "ghost"
@@ -86,6 +87,7 @@ export function AppButton({
   fullWidth?: boolean
   className?: string
   onPress?: () => void
+  disabled?: boolean // 2. Add it to the TypeScript interface
 }) {
   const variants = {
     primary: {
@@ -121,11 +123,13 @@ export function AppButton({
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled} // 3. Pass it to the native Pressable component
       className={cx(
         "items-center justify-center rounded-xl",
         variants[variant].container,
         sizes[size],
         fullWidth && "w-full",
+        disabled && "opacity-50", // 4. Add visual feedback for disabled state
         className
       )}
     >
@@ -135,7 +139,6 @@ export function AppButton({
     </Pressable>
   )
 }
-
 export function InputField({
   label,
   placeholder,
