@@ -15,8 +15,8 @@ LinksLens is a mobile-first weblink security scanner. Users submit URLs (via cam
 
 ## Architecture
 
-- **Mobile App:** React Native + Expo (`mobile-app/`) — currently scaffolded, not yet implemented
-- **Admin Portal:** Streamlit (`admin/`) — currently a stub with mock data
+- **Mobile App:** React Native + Expo (`linkslens-frontend/`) — UI fully implemented with NativeWind (Tailwind CSS), Expo Router, and on-device ML Kit OCR; backend integration pending
+- **Admin Portal:** Streamlit (`admin/`) — fully wired to backend via `admin/models/api_client.py`; all pages use real API calls
 - **Backend API:** FastAPI + Playwright Engine (`backend/`)
 - **Database:** MySQL 8.0 (port 3306)
 - **Server:** AWS EC2 t2.medium, Ubuntu 24.04 LTS
@@ -29,17 +29,26 @@ LinksLens is a mobile-first weblink security scanner. Users submit URLs (via cam
 
 ```
 linkslens/
-├── mobile-app/           # React Native + Expo (stub only)
+├── linkslens-frontend/   # React Native + Expo (NativeWind, Expo Router, ML Kit OCR)
+│   ├── app/              # File-based routes (18 screens)
+│   ├── components/       # ui-components.tsx — shared UI primitives
+│   └── package.json
 ├── backend/
 │   ├── main.py           # FastAPI entry point — registers all routers
 │   ├── models.py         # All SQLAlchemy ORM models in one file
 │   ├── schemas.py        # All Pydantic request/response schemas in one file
 │   ├── database.py       # SQLAlchemy engine, SessionLocal, Base, get_db()
+│   ├── dependencies.py   # get_current_user() and require_role() auth helpers
+│   ├── seed_data.py      # Faker-based test data generator (run manually)
 │   ├── controllers/      # One file per resource (CRUDL route handlers)
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── admin/
-│   ├── app.py            # Streamlit entry point (stub with mock data)
+│   ├── app.py            # Streamlit entry point + login
+│   ├── models/
+│   │   └── api_client.py # HTTP wrapper calling backend API (uses Bearer token)
+│   ├── controllers/      # One file per page (auth, user, moderation, etc.)
+│   ├── pages/            # Streamlit multi-page app (8 pages)
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── website/              # Static HTML marketing site
@@ -70,11 +79,23 @@ The backend is **flat** — all models are in `backend/models.py` and all Pydant
 
 **Auth flow:** Login via `POST /api/auth/login` with `ClientType: "web"` or `"mobile"`. Web clients receive an HttpOnly cookie (`access_token`); mobile clients receive the JWT in the response body. Logout for web clears the cookie; logout for mobile is client-side only.
 
+**Auth middleware (`dependencies.py`):**
+- `get_current_user()` — extracts JWT from HttpOnly cookie (web) or `Authorization: Bearer` header (mobile); returns `{"user_id": int, "role_id": int}`
+- `require_role(*role_ids)` — factory for route-level RBAC; usage: `Depends(require_role(1))` for admin-only, `Depends(require_role(1, 2))` for admin/moderator
+
 **Database session:** Use `Depends(get_db)` from `database.py` to inject a session. `models.Base.metadata.create_all(bind=engine)` in `main.py` auto-creates tables on startup.
 
 ## Database (MySQL 8.0)
 
-Database name: `LinksLens-DB`. Credentials come from environment variables (see `.env.example`).
+Database name: `LinksLens-DB`. Credentials come from environment variables (no `.env.example` checked in — see CI/CD secrets):
+
+```
+MYSQL_ROOT_PASSWORD, MYSQL_DATABASE, MYSQL_USER, MYSQL_PASSWORD
+MYSQL_HOST=db          # "db" in Docker, "localhost" for local dev
+SECRET_KEY             # JWT signing key — must not have a default
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=120
+```
 
 **Tables (10):** `UserRole`, `UserAccount`, `UserDetails`, `UserPreferences`, `AppFeedback`, `ActionHistory`, `URLRules`, `BlacklistRequest`, `ScanHistory`, `ScanFeedback`
 
@@ -102,10 +123,11 @@ cd admin
 pip install -r requirements.txt
 streamlit run app.py --server.port 8501
 
-# Mobile app (local development) — not yet implemented
-cd mobile-app
+# Mobile app (local development)
+cd linkslens-frontend
 npm install
 npx expo start
+# Linting: npm run lint | Formatting: npm run format
 
 # Database
 mysql -u root -p LinksLens-DB < DB_Creation_Script.sql   # Initialize schema
@@ -142,7 +164,7 @@ mysql -u root -p LinksLens-DB < DB_Creation_Script.sql   # Initialize schema
 
 - Single EC2 instance — no horizontal scaling.
 - Playwright not yet integrated — `/scan` endpoint in `main.py` returns mock data.
-- Admin dashboard is a stub with hardcoded mock data; not yet connected to the real database.
+- Mobile app UI is complete but has no backend integration — scan buttons log to console.
 - `ScanHistory.RedirectURL` stores only one redirect, not the full chain.
 - `UserPreferences.Preferences` is a JSON blob — not queryable field-by-field via SQL.
 - `ScanFeedback` has no `CreatedAt` timestamp.
