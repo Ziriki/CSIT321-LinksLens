@@ -7,9 +7,14 @@ def get_scan_feedback_dataframe(is_resolved: bool = None):
     raw_data = api_client.fetch_scan_feedback(is_resolved)
     if not raw_data:
         return pd.DataFrame()
-    return pd.DataFrame(raw_data)[
-        ["FeedbackID", "ScanID", "UserID", "SuggestedStatus", "Comments", "IsResolved"]
-    ]
+    df = pd.DataFrame(raw_data)
+
+    # Backend now returns FullName directly via JOIN
+    df.rename(columns={"FullName": "User"}, inplace=True)
+
+    cols = ["FeedbackID", "ScanID", "User", "SuggestedStatus", "Comments", "IsResolved"]
+    available = [c for c in cols if c in df.columns]
+    return df[available]
 
 
 def handle_resolve(feedback_id: int):

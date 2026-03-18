@@ -19,7 +19,7 @@ if df.empty:
 df = df.sort_values(by="FeedbackID", ascending=False).reset_index(drop=True)
 
 # Search
-search_query = st.text_input("Search", placeholder="Search by user, feedback content...")
+search_query = st.text_input("Search", placeholder="Search by name, feedback content...")
 if search_query:
     mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
     df = df[mask].reset_index(drop=True)

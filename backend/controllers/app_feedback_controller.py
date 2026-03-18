@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 # Import custom files
@@ -73,7 +73,7 @@ def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = D
 #########################################################
 # LIST function for AppFeedback table
 #########################################################
-@router.get("/", response_model=List[schemas.AppFeedbackResponse])
+@router.get("/", response_model=None)
 def list_feedback(
     user_id: Optional[int] = None,
     skip: int = 0,
@@ -81,7 +81,9 @@ def list_feedback(
     db: Session = Depends(get_db),
     _: dict = Depends(require_role(1))
 ):
-    query = db.query(models.AppFeedback)
+    query = db.query(models.AppFeedback).options(
+        joinedload(models.AppFeedback.account).joinedload(models.UserAccount.details)
+    )
 
     # Filter logic if a user_id is provided
     if user_id:
@@ -91,4 +93,15 @@ def list_feedback(
     query = query.order_by(models.AppFeedback.CreatedAt.desc())
 
     # Execute the query with optional pagination
-    return query.offset(skip).limit(limit).all()
+    results = query.offset(skip).limit(limit).all()
+
+    return [
+        {
+            "FeedbackID": fb.FeedbackID,
+            "UserID": fb.UserID,
+            "FullName": fb.account.details.FullName if fb.account and fb.account.details else "N/A",
+            "Feedback": fb.Feedback,
+            "CreatedAt": fb.CreatedAt,
+        }
+        for fb in results
+    ]
