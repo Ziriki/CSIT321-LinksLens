@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 # Import custom files
@@ -81,33 +81,42 @@ def delete_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict 
 #########################################################
 # LIST function for ScanHistory table
 #########################################################
-@router.get("/", response_model=List[schemas.ScanHistoryResponse])
+@router.get("/", response_model=None)
 def list_scans(
     user_id: Optional[int] = None,
     status_indicator: Optional[models.ScanStatusEnum] = None,
     search_url: Optional[str] = None,
+    search_user: Optional[str] = None,
     associated_person: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    query = db.query(models.ScanHistory)
+    query = db.query(models.ScanHistory).options(
+        joinedload(models.ScanHistory.user).joinedload(models.UserAccount.details)
+    )
 
     # Regular users can only see their own scans — force the filter
     if current_user["role_id"] not in (1, 2):
         query = query.filter(models.ScanHistory.UserID == current_user["user_id"])
     elif user_id:
         query = query.filter(models.ScanHistory.UserID == user_id)
-        
+
     # "As a user, I want to filter my scan history by status indicator"
     if status_indicator:
         query = query.filter(models.ScanHistory.StatusIndicator == status_indicator)
-        
+
     # "As a user, I want to search my scan history by keywords"
     if search_url:
         query = query.filter(models.ScanHistory.InitialURL.ilike(f"%{search_url}%"))
-        
+
+    # Search by user full name
+    if search_user:
+        query = query.join(models.UserAccount, models.ScanHistory.UserID == models.UserAccount.UserID)\
+                     .join(models.UserDetails, models.UserAccount.UserID == models.UserDetails.UserID)\
+                     .filter(models.UserDetails.FullName.ilike(f"%{search_user}%"))
+
     # Search by associated person
     if associated_person:
         query = query.filter(models.ScanHistory.AssociatedPerson.ilike(f"%{associated_person}%"))
@@ -115,7 +124,25 @@ def list_scans(
     # Always return newest scans first (by ScanID)
     query = query.order_by(models.ScanHistory.ScanID.desc())
 
-    return query.offset(skip).limit(limit).all()
+    results = query.offset(skip).limit(limit).all()
+
+    return [
+        {
+            "ScanID": scan.ScanID,
+            "UserID": scan.UserID,
+            "FullName": scan.user.details.FullName if scan.user and scan.user.details else "N/A",
+            "InitialURL": scan.InitialURL,
+            "RedirectURL": scan.RedirectURL,
+            "StatusIndicator": scan.StatusIndicator.value if scan.StatusIndicator else None,
+            "DomainAgeDays": scan.DomainAgeDays,
+            "ServerLocation": scan.ServerLocation,
+            "ScreenshotURL": scan.ScreenshotURL,
+            "RawText": scan.RawText,
+            "AssociatedPerson": scan.AssociatedPerson,
+            "ScannedAt": scan.ScannedAt,
+        }
+        for scan in results
+    ]
 
 #########################################################
 # DELETE ALL function for ScanHistory table
