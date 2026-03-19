@@ -17,13 +17,13 @@ PAGE_SIZE = 10
 # ---------------------------------------------------------------------------
 # Filters
 # ---------------------------------------------------------------------------
-col_search, col_user, col_status = st.columns([2, 2, 1])
+col_search, col_user = st.columns(2)
 with col_search:
     search_url = st.text_input("Search by URL", placeholder="e.g. google.com")
 with col_user:
     search_user = st.text_input("Search by User", placeholder="e.g. John Doe")
-with col_status:
-    status_filter = st.selectbox("Status", ["All", "SAFE", "SUSPICIOUS", "MALICIOUS"])
+
+status_filter = st.radio("Status", ["All", "SAFE", "SUSPICIOUS", "MALICIOUS"], horizontal=True)
 
 # ---------------------------------------------------------------------------
 # Pagination state

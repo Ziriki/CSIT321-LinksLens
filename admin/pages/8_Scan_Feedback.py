@@ -93,38 +93,25 @@ if selected_rows:
             st.image(fb["ScreenshotURL"], caption="Sandboxed render of the website")
 
     # -----------------------------------------------------------------
-    # Action buttons — change scan verdict or keep current
+    # Verdict dropdown + apply button
     # -----------------------------------------------------------------
     current = fb["CurrentStatus"]
     scan_id = fb["ScanID"]
     feedback_id = fb["FeedbackID"]
 
-    # The other statuses the admin can change to (exclude current + PENDING)
     all_statuses = ["SAFE", "SUSPICIOUS", "MALICIOUS"]
-    other_statuses = [s for s in all_statuses if s != current]
+    options = [f"Remain {current.title()}"] + [f"Mark as {s.title()}" for s in all_statuses if s != current]
 
     st.markdown("### Verdict")
-    cols = st.columns(len(other_statuses) + 1)
+    col_dd, col_btn = st.columns([3, 1])
+    with col_dd:
+        verdict_choice = st.selectbox("Select verdict", options, key=f"verdict_{feedback_id}")
+    with col_btn:
+        st.markdown("<br>", unsafe_allow_html=True)
+        apply = st.button("Apply", key=f"apply_{feedback_id}")
 
-    # "Mark as X" buttons for each alternative status
-    for i, new_status in enumerate(other_statuses):
-        with cols[i]:
-            if st.button(f"Mark as {new_status.title()}", key=f"mark_{new_status}"):
-                success = api_client.update_scan_status(scan_id, new_status)
-                if success:
-                    api_client.resolve_scan_feedback(feedback_id)
-                    api_client.log_action(
-                        current_user["user_id"], "UPDATED_SCAN_VERDICT",
-                        f"Changed Scan #{scan_id} verdict from {current} to {new_status} (Feedback #{feedback_id}).",
-                    )
-                    st.success(f"Scan #{scan_id} updated to **{new_status}** and feedback resolved.")
-                    st.rerun()
-                else:
-                    st.error("Failed to update scan status.")
-
-    # "Remain X" button to keep current status
-    with cols[len(other_statuses)]:
-        if st.button(f"Remain {current.title()}", key="remain"):
+    if apply:
+        if verdict_choice.startswith("Remain"):
             api_client.resolve_scan_feedback(feedback_id)
             api_client.log_action(
                 current_user["user_id"], "CONFIRMED_SCAN_VERDICT",
@@ -132,3 +119,16 @@ if selected_rows:
             )
             st.success(f"Verdict kept as **{current}**. Feedback resolved.")
             st.rerun()
+        else:
+            new_status = verdict_choice.replace("Mark as ", "").upper()
+            success = api_client.update_scan_status(scan_id, new_status)
+            if success:
+                api_client.resolve_scan_feedback(feedback_id)
+                api_client.log_action(
+                    current_user["user_id"], "UPDATED_SCAN_VERDICT",
+                    f"Changed Scan #{scan_id} verdict from {current} to {new_status} (Feedback #{feedback_id}).",
+                )
+                st.success(f"Scan #{scan_id} updated to **{new_status}** and feedback resolved.")
+                st.rerun()
+            else:
+                st.error("Failed to update scan status.")
