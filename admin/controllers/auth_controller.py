@@ -43,6 +43,24 @@ def render_sidebar():
     if user:
         role_label = {1: "Administrator", 2: "Moderator", 3: "User"}.get(user["role_id"], "Unknown")
         st.sidebar.write(f"Logged in as **{role_label}**")
+
+        # Hide admin-only pages from moderator sidebar
+        if user["role_id"] == 2:
+            # Pages restricted to admin (RoleID 1) only:
+            # 1_Dashboard, 3_User_Management, 4_App_Feedback, 5_Action_History_Log
+            st.markdown(
+                """
+                <style>
+                    [data-testid="stSidebarNav"] li:nth-child(1),
+                    [data-testid="stSidebarNav"] li:nth-child(3),
+                    [data-testid="stSidebarNav"] li:nth-child(4),
+                    [data-testid="stSidebarNav"] li:nth-child(5) {
+                        display: none;
+                    }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
     st.sidebar.markdown("---")
     if st.sidebar.button("Log Out"):
         if user:
