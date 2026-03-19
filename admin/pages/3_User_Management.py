@@ -82,27 +82,27 @@ st.subheader(f"Editing User #{uid}")
 
 col1, col2 = st.columns(2)
 with col1:
-    email = st.text_input("Email Address", value=user_row["EmailAddress"], key="edit_email")
+    email = st.text_input("Email Address", value=user_row["EmailAddress"], key=f"edit_email_{uid}")
     role = st.selectbox(
         "Role",
         options=[1, 2, 3],
         index=[1, 2, 3].index(int(user_row["RoleID"])),
         format_func=lambda x: ROLE_MAP[x],
-        key="edit_role",
+        key=f"edit_role_{uid}",
     )
-    full_name = st.text_input("Full Name", value=details.get("FullName") or "", key="edit_name")
+    full_name = st.text_input("Full Name", value=details.get("FullName") or "", key=f"edit_name_{uid}")
     gender = st.selectbox(
         "Gender",
         options=["Male", "Female", "Other"],
         index=["Male", "Female", "Other"].index(details.get("Gender", "Other") or "Other"),
-        key="edit_gender",
+        key=f"edit_gender_{uid}",
     )
 with col2:
-    phone = st.text_input("Phone Number", value=details.get("PhoneNumber") or "", key="edit_phone")
-    address = st.text_input("Address", value=details.get("Address") or "", key="edit_address")
-    dob = st.text_input("Date of Birth (YYYY-MM-DD)", value=details.get("DateOfBirth") or "", key="edit_dob")
+    phone = st.text_input("Phone Number", value=details.get("PhoneNumber") or "", key=f"edit_phone_{uid}")
+    address = st.text_input("Address", value=details.get("Address") or "", key=f"edit_address_{uid}")
+    dob = st.text_input("Date of Birth (YYYY-MM-DD)", value=details.get("DateOfBirth") or "", key=f"edit_dob_{uid}")
     status_label = "Active" if user_row["IsActive"] else "Inactive"
-    st.text_input("Status", value=status_label, disabled=True)
+    st.text_input("Status", value=status_label, disabled=True, key=f"edit_status_{uid}")
 
 # Build change payload only from actual diffs
 snapshot = {}
