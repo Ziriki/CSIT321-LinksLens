@@ -3,7 +3,7 @@ import pandas as pd
 from controllers import auth_controller
 from models import api_client
 
-st.set_page_config(page_title="Scan History", layout="wide")
+st.set_page_config(page_title="Scan History", page_icon="assets/logo.svg", layout="wide")
 # Admin + Moderator (RoleID 1, 2)
 auth_controller.require_role(1, 2)
 auth_controller.render_sidebar()
