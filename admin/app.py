@@ -1,7 +1,8 @@
 import streamlit as st
 from controllers import auth_controller
 
-st.set_page_config(page_title="LinksLens Admin", layout="wide")
+LOGO_PATH = "assets/logo.svg"
+st.set_page_config(page_title="LinksLens Admin", page_icon=LOGO_PATH, layout="wide")
 
 if st.session_state.get("access_token") is None:
     # Hide sidebar page navigation before login
@@ -14,6 +15,7 @@ if st.session_state.get("access_token") is None:
         """,
         unsafe_allow_html=True,
     )
+    st.image(LOGO_PATH, width=80)
     st.title("LinksLens Admin Portal")
     with st.form("login"):
         email = st.text_input("Email")

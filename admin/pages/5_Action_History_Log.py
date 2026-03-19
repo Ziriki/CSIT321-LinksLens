@@ -1,7 +1,7 @@
 import streamlit as st
 from controllers import auth_controller, action_history_controller
 
-st.set_page_config(page_title="Action History Log", layout="wide")
+st.set_page_config(page_title="Action History Log", page_icon="assets/logo.svg", layout="wide")
 # Admin only (RoleID 1)
 auth_controller.require_role(1)
 auth_controller.render_sidebar()

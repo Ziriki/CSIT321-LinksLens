@@ -2,7 +2,7 @@ import streamlit as st
 from controllers import auth_controller, user_controller
 from models import api_client
 
-st.set_page_config(page_title="User Management", layout="wide")
+st.set_page_config(page_title="User Management", page_icon="assets/logo.svg", layout="wide")
 # Admin only (RoleID 1)
 current_user = auth_controller.require_role(1)
 auth_controller.render_sidebar()
