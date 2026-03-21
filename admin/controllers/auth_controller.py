@@ -4,13 +4,17 @@ from models import api_client
 
 
 def _decode_token():
-    """Decode the stored JWT to extract user_id and role_id."""
+    """Decode the stored JWT to extract user_id and role_id (cached per rerun)."""
+    if "_decoded_user" in st.session_state:
+        return st.session_state["_decoded_user"]
     token = st.session_state.get("access_token")
     if not token:
         return None
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        return {"user_id": int(payload["sub"]), "role_id": int(payload["role"])}
+        user = {"user_id": int(payload["sub"]), "role_id": int(payload["role"])}
+        st.session_state["_decoded_user"] = user
+        return user
     except Exception:
         return None
 
@@ -72,6 +76,7 @@ def render_sidebar():
         if user:
             api_client.log_action(user["user_id"], "LOGOUT", "Logged out of admin portal.")
         st.session_state["access_token"] = None
+        st.session_state.pop("_decoded_user", None)
         st.switch_page("app.py")
 
 
