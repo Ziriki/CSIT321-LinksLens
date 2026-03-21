@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
+from utils import get_fullname
 # Import custom files
 import models
 import schemas
@@ -88,7 +89,7 @@ def list_logs(
         {
             "LogID": log.LogID,
             "UserID": log.UserID,
-            "FullName": log.account.details.FullName if log.account and log.account.details else "N/A",
+            "FullName": get_fullname(log.account),
             "ActionType": log.ActionType,
             "Action": log.Action,
             "Timestamp": log.Timestamp,

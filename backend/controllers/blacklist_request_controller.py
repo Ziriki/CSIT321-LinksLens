@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, timezone
 
+from utils import get_fullname
+
 # Import custom files
 import models
 import schemas
@@ -139,11 +141,11 @@ def list_requests(
         {
             "RequestID": req.RequestID,
             "UserID": req.UserID,
-            "FullName": req.requester.details.FullName if req.requester and req.requester.details else "N/A",
+            "FullName": get_fullname(req.requester),
             "URLDomain": req.URLDomain,
             "Status": req.Status.value if req.Status else None,
             "ReviewedBy": req.ReviewedBy,
-            "ReviewedByFullName": req.reviewer.details.FullName if req.reviewer and req.reviewer.details else None,
+            "ReviewedByFullName": get_fullname(req.reviewer, default=None),
             "CreatedAt": req.CreatedAt,
             "ReviewedAt": req.ReviewedAt,
         }
