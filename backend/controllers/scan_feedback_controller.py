@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
+from utils import get_fullname
 # Import custom files
 import models
 import schemas
@@ -120,7 +121,7 @@ def list_feedback(
             "FeedbackID": fb.FeedbackID,
             "ScanID": fb.ScanID,
             "UserID": fb.UserID,
-            "FullName": fb.user.details.FullName if fb.user and fb.user.details else "N/A",
+            "FullName": get_fullname(fb.user),
             "SuggestedStatus": fb.SuggestedStatus.value if fb.SuggestedStatus else None,
             "Comments": fb.Comments,
             "IsResolved": fb.IsResolved,

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
+from utils import get_fullname
 # Import custom files
 import models
 import schemas
@@ -114,7 +115,7 @@ def list_rules(
             "URLDomain": rule.URLDomain,
             "ListType": rule.ListType.value if rule.ListType else None,
             "AddedBy": rule.AddedBy,
-            "AddedByFullName": rule.admin.details.FullName if rule.admin and rule.admin.details else "N/A",
+            "AddedByFullName": get_fullname(rule.admin),
             "CreatedAt": rule.CreatedAt,
         }
         for rule in results

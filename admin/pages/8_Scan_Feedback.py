@@ -2,8 +2,10 @@ import streamlit as st
 import pandas as pd
 from controllers import auth_controller
 from models import api_client
+from config import LOGO_PATH, PAGE_LAYOUT
+from utils import search_dataframe
 
-st.set_page_config(page_title="Scan Feedback", page_icon="assets/logo.svg", layout="wide")
+st.set_page_config(page_title="Scan Feedback", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 # Admin + Moderator (RoleID 1, 2)
 current_user = auth_controller.require_role(1, 2)
 auth_controller.render_sidebar()
@@ -35,11 +37,10 @@ df = pd.DataFrame(raw_data)
 
 # Apply search filter
 if search_query:
-    display_cols_for_search = ["FeedbackID", "UserName", "UserEmail", "InitialURL",
-                               "CurrentStatus", "SuggestedStatus", "Comments"]
-    search_available = [c for c in display_cols_for_search if c in df.columns]
-    mask = df[search_available].apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
-    df = df[mask].reset_index(drop=True)
+    search_cols = ["FeedbackID", "UserName", "UserEmail", "InitialURL",
+                   "CurrentStatus", "SuggestedStatus", "Comments"]
+    available = [c for c in search_cols if c in df.columns]
+    df = search_dataframe(df, search_query, columns=available)
     raw_data = df.to_dict("records")
 
 if df.empty:

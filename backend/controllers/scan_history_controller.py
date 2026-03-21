@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
+from utils import get_fullname
 # Import custom files
 import models
 import schemas
@@ -111,11 +112,15 @@ def list_scans(
     if search_url:
         query = query.filter(models.ScanHistory.InitialURL.ilike(f"%{search_url}%"))
 
-    # Search by user full name
+    # Search by user full name (use outerjoin to avoid conflicts with joinedload)
     if search_user:
-        query = query.join(models.UserAccount, models.ScanHistory.UserID == models.UserAccount.UserID)\
-                     .join(models.UserDetails, models.UserAccount.UserID == models.UserDetails.UserID)\
-                     .filter(models.UserDetails.FullName.ilike(f"%{search_user}%"))
+        query = query.filter(
+            models.ScanHistory.UserID.in_(
+                db.query(models.UserDetails.UserID).filter(
+                    models.UserDetails.FullName.ilike(f"%{search_user}%")
+                )
+            )
+        )
 
     # Search by associated person
     if associated_person:
@@ -130,7 +135,7 @@ def list_scans(
         {
             "ScanID": scan.ScanID,
             "UserID": scan.UserID,
-            "FullName": scan.user.details.FullName if scan.user and scan.user.details else "N/A",
+            "FullName": get_fullname(scan.user),
             "InitialURL": scan.InitialURL,
             "RedirectURL": scan.RedirectURL,
             "StatusIndicator": scan.StatusIndicator.value if scan.StatusIndicator else None,
