@@ -1,8 +1,10 @@
 import streamlit as st
 from controllers import auth_controller, user_controller
 from models import api_client
+from config import LOGO_PATH, PAGE_LAYOUT
+from utils import search_dataframe
 
-st.set_page_config(page_title="User Management", page_icon="assets/logo.svg", layout="wide")
+st.set_page_config(page_title="User Management", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 # Admin only (RoleID 1)
 current_user = auth_controller.require_role(1)
 auth_controller.render_sidebar()
@@ -25,10 +27,7 @@ all_df["Role"] = all_df["RoleID"].map(ROLE_MAP)
 
 # Search
 search_query = st.text_input("Search", placeholder="Search by name, email, role...")
-if search_query:
-    search_cols = ["FullName", "EmailAddress", "Role"]
-    mask = all_df[search_cols].apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
-    all_df = all_df[mask].reset_index(drop=True)
+all_df = search_dataframe(all_df, search_query, columns=["FullName", "EmailAddress", "Role"])
 
 if "user_page" not in st.session_state:
     st.session_state["user_page"] = 0

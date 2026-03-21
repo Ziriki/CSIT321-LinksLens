@@ -1,7 +1,9 @@
 import streamlit as st
 from controllers import auth_controller, feedback_controller
+from config import LOGO_PATH, PAGE_LAYOUT
+from utils import search_dataframe
 
-st.set_page_config(page_title="App Feedback", page_icon="assets/logo.svg", layout="wide")
+st.set_page_config(page_title="App Feedback", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 # Admin only (RoleID 1)
 auth_controller.require_role(1)
 auth_controller.render_sidebar()
@@ -20,9 +22,7 @@ df = df.sort_values(by="FeedbackID", ascending=False).reset_index(drop=True)
 
 # Search
 search_query = st.text_input("Search", placeholder="Search by name, feedback content...")
-if search_query:
-    mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
-    df = df[mask].reset_index(drop=True)
+df = search_dataframe(df, search_query)
 
 if "feedback_page" not in st.session_state:
     st.session_state["feedback_page"] = 0

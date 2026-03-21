@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+
+from utils import get_fullname
 from passlib.context import CryptContext
 
 # Import custom files
@@ -151,7 +153,7 @@ def list_accounts(
             "EmailAddress": acc.EmailAddress,
             "RoleID": acc.RoleID,
             "IsActive": acc.IsActive,
-            "FullName": acc.details.FullName if acc.details else "N/A",
+            "FullName": get_fullname(acc),
         }
         for acc in results
     ]
