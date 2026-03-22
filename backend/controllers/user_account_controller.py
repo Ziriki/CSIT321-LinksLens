@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+
+from utils import get_fullname
 from passlib.context import CryptContext
 
 # Import custom files
@@ -119,7 +121,7 @@ def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Dep
 #########################################################
 # LIST function for UserAccount table
 #########################################################
-@router.get("/", response_model=List[schemas.UserAccountResponse])
+@router.get("/", response_model=None)
 def list_accounts(
     search_email: Optional[str] = None,
     role_id: Optional[int] = None,
@@ -129,7 +131,9 @@ def list_accounts(
     _: dict = Depends(require_role(1))
 ):
     # Start with a base query
-    query = db.query(models.UserAccount).filter(models.UserAccount.IsActive == True)
+    query = db.query(models.UserAccount).options(
+        joinedload(models.UserAccount.details)
+    ).filter(models.UserAccount.IsActive == True)
 
     # Filter logic if a search term is provided
     if search_email:
@@ -141,4 +145,15 @@ def list_accounts(
         query = query.filter(models.UserAccount.RoleID == role_id)
 
     # Execute the query with optional pagination
-    return query.offset(skip).limit(limit).all()
+    results = query.offset(skip).limit(limit).all()
+
+    return [
+        {
+            "UserID": acc.UserID,
+            "EmailAddress": acc.EmailAddress,
+            "RoleID": acc.RoleID,
+            "IsActive": acc.IsActive,
+            "FullName": get_fullname(acc),
+        }
+        for acc in results
+    ]

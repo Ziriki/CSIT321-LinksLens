@@ -1,7 +1,9 @@
 import streamlit as st
 from controllers import auth_controller, action_history_controller
+from config import LOGO_PATH, PAGE_LAYOUT
+from utils import search_dataframe
 
-st.set_page_config(page_title="Action History Log", layout="wide")
+st.set_page_config(page_title="Action History Log", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 # Admin only (RoleID 1)
 auth_controller.require_role(1)
 auth_controller.render_sidebar()
@@ -20,10 +22,8 @@ if df.empty:
 df = df.reset_index(drop=True)
 
 # Search
-search_query = st.text_input("Search", placeholder="Search by user, action type, action...")
-if search_query:
-    mask = df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
-    df = df[mask].reset_index(drop=True)
+search_query = st.text_input("Search", placeholder="Search by name, action type, action...")
+df = search_dataframe(df, search_query)
 
 if "history_page" not in st.session_state:
     st.session_state["history_page"] = 0
