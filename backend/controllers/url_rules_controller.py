@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
+from utils import get_fullname
 # Import custom files
 import models
 import schemas
@@ -84,7 +85,7 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(r
 #########################################################
 # LIST function for URLRules table
 #########################################################
-@router.get("/", response_model=List[schemas.URLRulesResponse])
+@router.get("/", response_model=None)
 def list_rules(
     list_type: Optional[models.ListTypeEnum] = None,
     search_domain: Optional[str] = None,
@@ -93,7 +94,9 @@ def list_rules(
     db: Session = Depends(get_db),
     _: dict = Depends(get_current_user)
 ):
-    query = db.query(models.URLRules)
+    query = db.query(models.URLRules).options(
+        joinedload(models.URLRules.admin).joinedload(models.UserAccount.details)
+    )
 
     # Filter logic if a list_type is provided
     if list_type:
@@ -104,4 +107,16 @@ def list_rules(
         query = query.filter(models.URLRules.URLDomain.ilike(f"%{search_domain}%"))
 
     # Execute the query with optional pagination
-    return query.offset(skip).limit(limit).all()
+    results = query.offset(skip).limit(limit).all()
+
+    return [
+        {
+            "RuleID": rule.RuleID,
+            "URLDomain": rule.URLDomain,
+            "ListType": rule.ListType.value if rule.ListType else None,
+            "AddedBy": rule.AddedBy,
+            "AddedByFullName": get_fullname(rule.admin),
+            "CreatedAt": rule.CreatedAt,
+        }
+        for rule in results
+    ]
