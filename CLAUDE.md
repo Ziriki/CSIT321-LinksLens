@@ -23,7 +23,7 @@ LinksLens is a mobile-first weblink security scanner. Users submit URLs (via cam
 - **Reverse Proxy:** Nginx with Certbot SSL
 - **Containerization:** Docker Compose (FastAPI + Streamlit + MySQL containers on `fyp_net` bridge network)
 - **CI/CD:** GitHub Actions → SSH into EC2 → sync code, rebuild Docker, copy static HTML
-- **External Services:** URL Scan API for reputation checks
+- **External Services:** urlscan.io API for URL reputation scanning (`URLSCAN_API_KEY` in `.env`)
 
 ## Actual Directory Structure
 
@@ -74,8 +74,16 @@ The backend is **flat** — all models are in `backend/models.py` and all Pydant
 - `url_rules_controller.py` → `/api/url-rules`
 - `scan_history_controller.py` → `/api/scans`
 - `scan_feedback_controller.py` → `/api/scan-feedback`
+- `urlscan_controller.py` → `/scan` (external scanning pipeline — not a CRUDL controller)
 
-**Note:** API routes use `/api/` prefix, NOT `/api/v1/`.
+**Note:** API routes use `/api/` prefix, NOT `/api/v1/`. The `/scan` endpoint is an exception — it is a top-level route that drives the urlscan.io integration.
+
+**urlscan.io scan flow (`urlscan_controller.py`):**
+1. `POST /scan` receives `{ url }` from the mobile app
+2. Submits to `https://urlscan.io/api/v1/scan/` using `URLSCAN_API_KEY` with `visibility: private`
+3. Polls `https://urlscan.io/api/v1/result/{uuid}/` — waits 10s, then retries every 5s up to 12 attempts
+4. Maps the result to: `uuid`, `status` (SAFE / SUSPICIOUS / MALICIOUS), `score`, `redirect_url`, `server_location`, `ip_address`, `screenshot_url`, `brands`, `tags`
+5. Status thresholds: `malicious: true` → MALICIOUS; `score ≥ 50` → SUSPICIOUS; otherwise SAFE
 
 **Auth flow:** Login via `POST /api/auth/login` with `ClientType: "web"` or `"mobile"`. Web clients receive an HttpOnly cookie (`access_token`); mobile clients receive the JWT in the response body. Logout for web clears the cookie; logout for mobile is client-side only.
 
