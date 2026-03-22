@@ -1,5 +1,5 @@
-import { View, Text, Pressable } from "react-native"
-import { Shield, Eye } from "lucide-react-native"
+import { View, Text, Pressable, Image } from "react-native"
+import { Eye } from "lucide-react-native"
 import { router } from "expo-router"
 import {
   AppButton,
@@ -14,11 +14,11 @@ export default function login() {
       <View className="flex-1 justify-center px-6">
         {/* Logo */}
         <View className="mb-10 items-center">
-          <View className="mb-4 h-20 w-20 items-center justify-center rounded-2xl bg-primary">
-            <Shield size={40} color="white" />
-          </View>
-          <Text className="text-2xl font-bold text-foreground">LinksLens</Text>
-          <Text className="mt-1 text-muted-foreground">OCR URL Scanner</Text>
+          <Image
+            source={require("../assets/logo.png")}
+            className="mb-4 h-40 w-40 rounded-2xl"
+            resizeMode="contain"
+          />
         </View>
 
         {/* Form */}

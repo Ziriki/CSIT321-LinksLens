@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
+from utils import get_fullname
 # Import custom files
 import models
 import schemas
@@ -57,7 +58,7 @@ def read_log(log_id: int, db: Session = Depends(get_db), _: dict = Depends(requi
 #########################################################
 # LIST function for ActionHistory table
 #########################################################
-@router.get("/", response_model=List[schemas.ActionHistoryResponse])
+@router.get("/", response_model=None)
 def list_logs(
     user_id: Optional[int] = None,
     action_type: Optional[str] = None,
@@ -66,7 +67,9 @@ def list_logs(
     db: Session = Depends(get_db),
     _: dict = Depends(require_role(1))
 ):
-    query = db.query(models.ActionHistory)
+    query = db.query(models.ActionHistory).options(
+        joinedload(models.ActionHistory.account).joinedload(models.UserAccount.details)
+    )
 
     # Filter logic if a user_id is provided
     if user_id:
@@ -80,4 +83,16 @@ def list_logs(
     query = query.order_by(models.ActionHistory.Timestamp.desc())
 
     # Execute the query with optional pagination
-    return query.offset(skip).limit(limit).all()
+    results = query.offset(skip).limit(limit).all()
+
+    return [
+        {
+            "LogID": log.LogID,
+            "UserID": log.UserID,
+            "FullName": get_fullname(log.account),
+            "ActionType": log.ActionType,
+            "Action": log.Action,
+            "Timestamp": log.Timestamp,
+        }
+        for log in results
+    ]
