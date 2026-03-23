@@ -30,6 +30,7 @@ jobs:
             echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
             echo "ALGORITHM=${{ secrets.ALGORITHM }}" >> .env
             echo "ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}" >> .env
+            echo "RESEND_KEY=${{ secrets.RESEND_API_KEY }}" >> .env
             
             # 4. Update Marketing Site (Copy files from Repo to Nginx folder)
             sudo mkdir -p /var/www/linkslens

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 import jwt
 from datetime import datetime, timedelta, timezone
-import os # Import os to read environment variables
-from dotenv import load_dotenv # Import this to load the .env file
+import os
+from dotenv import load_dotenv
+
+from utils import verify_password
 
 # Import custom files
 import models
@@ -37,8 +38,6 @@ except ValueError:
     print("Warning: ACCESS_TOKEN_EXPIRE_MINUTES is not a valid integer. Defaulting to 120.")
     ACCESS_TOKEN_EXPIRE_MINUTES = 120
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # Helper function to generate the token
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -56,7 +55,7 @@ def login(credentials: schemas.UserLogin, response: Response, db: Session = Depe
     user = db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == credentials.EmailAddress).first()
     
     # 2. Verify user exists and password matches
-    if not user or not pwd_context.verify(credentials.Password, user.PasswordHash):
+    if not user or not verify_password(credentials.Password, user.PasswordHash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
