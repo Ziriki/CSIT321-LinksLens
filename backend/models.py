@@ -29,6 +29,7 @@ class UserAccount(Base):
     # Set up a relationship for easier access to the role details from an account
     role = relationship("UserRole")
     details = relationship("UserDetails", uselist=False, back_populates="account")
+    reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
 
 class UserDetails(Base):
     __tablename__ = "UserDetails"
@@ -157,3 +158,14 @@ class ScanFeedback(Base):
     scan = relationship("ScanHistory")
     user = relationship("UserAccount")
     
+class PasswordResetToken(Base):
+    __tablename__ = "PasswordResetToken"
+
+    TokenID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    Token = Column(String(255), unique=True, nullable=False, index=True)
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
+    ExpiresAt = Column(DateTime(timezone=True), nullable=False)
+    IsUsed = Column(Boolean, default=False)
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("UserAccount", back_populates="reset_tokens")
