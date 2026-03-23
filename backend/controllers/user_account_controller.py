@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+from datetime import datetime, timedelta, timezone
+import secrets
+import os
+import resend
+from dotenv import load_dotenv
 
-from utils import get_fullname
-from passlib.context import CryptContext
+from utils import get_fullname, get_password_hash
+
+load_dotenv()
 
 # Import custom files
 import models
@@ -16,12 +22,6 @@ router = APIRouter(
     prefix="/api/accounts",
     tags=["User Accounts"]
 )
-
-# Setup password hashing configuration
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
 
 #########################################################
 # CREATE function for UserAccount table
@@ -157,3 +157,88 @@ def list_accounts(
         }
         for acc in results
     ]
+
+#########################################################
+# FORGOT PASSWORD - Create Token Record & Send Email
+#########################################################
+@router.post("/forgot-password")
+def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+    generic_message = {"message": "If that email exists in our system, a password reset link has been sent."}
+    user = db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == request.EmailAddress).first()
+
+    if not user:
+        return generic_message
+
+    # Invalidate any existing unused tokens for this user
+    db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.UserID == user.UserID,
+        models.PasswordResetToken.IsUsed == False
+    ).update({"IsUsed": True})
+
+    token = secrets.token_urlsafe(32)
+    expiry_time = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+    db_token = models.PasswordResetToken(
+        Token=token,
+        UserID=user.UserID,
+        ExpiresAt=expiry_time,
+        IsUsed=False
+    )
+    db.add(db_token)
+    db.flush()
+
+    reset_link = f"https://linkslens.com/reset-password?token={token}"
+    email_html = f"""
+    <h2>LinksLens Password Reset</h2>
+    <p>You requested a password reset. Click the link below to choose a new password. This link expires in 15 minutes.</p>
+    <a href="{reset_link}" style="display:inline-block; padding:10px 20px; background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">Reset Password</a>
+    """
+
+    resend.api_key = os.getenv("RESEND_KEY")
+    try:
+        resend.Emails.send({
+            "from": "LinksLens Security <noreply@linkslens.com>",
+            "to": [user.EmailAddress],
+            "subject": "Reset your LinksLens Password",
+            "html": email_html
+        })
+    except Exception:
+        db.rollback()
+        return generic_message
+
+    db.commit()
+    return generic_message
+
+#########################################################
+# RESET PASSWORD - Verify Token Record & Update Password
+#########################################################
+@router.post("/reset-password")
+def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
+    token_record = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.Token == request.Token
+    ).first()
+
+    if not token_record:
+        raise HTTPException(status_code=400, detail="Invalid reset token.")
+
+    if token_record.IsUsed:
+        raise HTTPException(status_code=400, detail="This token has already been used.")
+
+    current_time = datetime.now(timezone.utc)
+    expiry_time = token_record.ExpiresAt
+    if expiry_time.tzinfo is None:
+        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+
+    if current_time > expiry_time:
+        raise HTTPException(status_code=400, detail="Reset token has expired. Please request a new one.")
+
+    user = token_record.user
+    if not user:
+        raise HTTPException(status_code=404, detail="User account no longer exists.")
+
+    user.PasswordHash = get_password_hash(request.NewPassword)
+    token_record.IsUsed = True
+
+    db.commit()
+
+    return {"message": "Password successfully updated. You may now log in."}
