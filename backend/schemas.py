@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Dict, Any
 from datetime import datetime, date
 import enum
@@ -281,3 +281,13 @@ class TokenResponse(BaseModel):
     access_token: Optional[str] = None
     token_type: Optional[str] = None
     message: str
+
+#########################################################
+# Base properties of Password Reset Token
+#########################################################
+class ForgotPasswordRequest(BaseModel):
+    EmailAddress: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    Token: str
+    NewPassword: str = Field(..., min_length=8)
