@@ -21,7 +21,7 @@ from controllers.url_rules_controller import router as url_rules_router
 from controllers.scan_history_controller import router as scan_history_router
 from controllers.scan_feedback_controller import router as scan_feedback_router
 from controllers.auth_controller import router as auth_router
-from controllers.urlscan_controller import router as urlscan_router
+from controllers.url_scan_controller import router as urlscan_router
 
 # Tells FastAPI to try connecting 5 times, waiting 5 seconds between each try.
 retries = 5
