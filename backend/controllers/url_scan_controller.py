@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-from typing import Union
 import requests
 import time
 import os
@@ -9,6 +7,7 @@ from dotenv import load_dotenv
 from urllib.parse import quote, urlparse
 
 import models
+from models import ScanRequest
 from database import get_db
 from dependencies import get_current_user
 
@@ -32,8 +31,8 @@ URLSCAN_SUBMIT_URL = "https://urlscan.io/api/v1/scan/"
 URLSCAN_RESULT_URL = "https://urlscan.io/api/v1/result/{uuid}/"
 URLSCAN_SCREENSHOT_URL = "https://urlscan.io/screenshots/{uuid}.png"
 
-# Google Safe Browsing v5alpha1 endpoint
-GSB_LOOKUP_URL = "https://safebrowsing.googleapis.com/v5alpha1/urls:search"
+# Google Safe Browsing v4 Lookup API endpoint
+GSB_LOOKUP_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 
 # Polling configuration: wait 10s before first poll, then every 5s, up to 12 attempts (70s total)
 INITIAL_WAIT_SECONDS = 10
@@ -48,27 +47,17 @@ _SUSPICIOUS_THREATS = {"UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"}
 _STATUS_SEVERITY = {"SAFE": 0, "SUSPICIOUS": 1, "MALICIOUS": 2}
 
 
-class ScanRequest(BaseModel):
-    urls: Union[str, list[str]]
-
-    @field_validator("urls")
-    @classmethod
-    def normalize_urls(cls, v):
-        """Accept a single URL string or a list; always normalise to a list internally."""
-        if isinstance(v, str):
-            return [v]
-        return v
-
 
 #########################################################
-# Helper: Check URLs against Google Safe Browsing v5
+# Helper: Check URLs against Google Safe Browsing v4
 #########################################################
 def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
     """
-    Batch-check a list of URLs via the GSB v5alpha1 urls:search endpoint.
+    Batch-check a list of URLs via the GSB v4 threatMatches:find endpoint.
 
-    Uses a GET request with the 'urls' parameter repeated for each URL, as required by the API.
-    Returns a dict keyed by URL: { flagged, threat_types, gsb_status }.
+    Uses a POST request with a JSON body containing client info and all threat types.
+    Supports up to 500 URLs per request. Returns a dict keyed by URL:
+    { flagged, threat_types, gsb_status }.
 
     On API failure the function does NOT raise — it returns SAFE defaults so the
     urlscan.io pipeline still runs.
@@ -78,14 +67,36 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
         for url in urls
     }
 
-    # v5 uses GET with repeated 'urls' params; list-of-tuples preserves duplicates
-    params = [("key", GSB_API_KEY)] + [("urls", url) for url in urls]
-    headers = {"Accept": "application/json", "User-Agent": "LinksLens/1.0"}
+    # v4 uses POST with a structured JSON body; API key passed as query param
+    payload = {
+        "client": {
+            "clientId": "linkslens",
+            "clientVersion": "1.0"
+        },
+        "threatInfo": {
+            "threatTypes": [
+                "MALWARE",
+                "SOCIAL_ENGINEERING",
+                "UNWANTED_SOFTWARE",
+                "POTENTIALLY_HARMFUL_APPLICATION"
+            ],
+            "platformTypes": ["ANY_PLATFORM"],
+            "threatEntryTypes": ["URL"],
+            "threatEntries": [{"url": url} for url in urls]
+        }
+    }
+    headers = {"Content-Type": "application/json", "User-Agent": "LinksLens/1.0"}
 
     delay = 1
     for _ in range(4):
         try:
-            response = requests.get(GSB_LOOKUP_URL, params=params, headers=headers, timeout=10)
+            response = requests.post(
+                GSB_LOOKUP_URL,
+                params={"key": GSB_API_KEY},
+                json=payload,
+                headers=headers,
+                timeout=10
+            )
         except requests.RequestException:
             # Network failure — fall through to urlscan.io only
             return results
@@ -100,21 +111,30 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
             # Non-blocking: other errors should not abort the overall scan
             return results
 
-        # 200 OK — empty body or absent 'threats' key means all URLs are clean
-        for threat in response.json().get("threats", []):
-            url = threat.get("url", "")
-            threat_types = threat.get("threatTypes", [])
+        # 200 OK — empty body or absent 'matches' key means all URLs are clean
+        try:
+            data = response.json()
+        except Exception:
+            # Non-JSON body (e.g. HTML error page from invalid/unenabled API key) — non-blocking
+            return results
+
+        # v4 response: { "matches": [{ "threat": { "url": "..." }, "threatType": "..." }] }
+        for match in data.get("matches", []):
+            url = match.get("threat", {}).get("url", "")
+            threat_type = match.get("threatType", "")
             if url not in results:
                 continue
 
             results[url]["flagged"] = True
-            results[url]["threat_types"] = threat_types
+            if threat_type not in results[url]["threat_types"]:
+                results[url]["threat_types"].append(threat_type)
 
-            # Determine the worst status from the returned threat types
-            if any(t in _MALICIOUS_THREATS for t in threat_types):
+            # Determine the worst status from the returned threat type
+            if threat_type in _MALICIOUS_THREATS:
                 results[url]["gsb_status"] = "MALICIOUS"
-            elif any(t in _SUSPICIOUS_THREATS for t in threat_types):
-                results[url]["gsb_status"] = "SUSPICIOUS"
+            elif threat_type in _SUSPICIOUS_THREATS:
+                if results[url]["gsb_status"] != "MALICIOUS":
+                    results[url]["gsb_status"] = "SUSPICIOUS"
 
         return results
 
@@ -240,7 +260,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
     """
     urls = request.urls
 
-    # Step 1: Batch-check all URLs with Google Safe Browsing v5 (single round-trip)
+    # Step 1: Batch-check all URLs with Google Safe Browsing v4 (single round-trip)
     gsb_results = check_google_safe_browsing(urls)
 
     scan_results = []
@@ -276,16 +296,16 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         db.commit()
         db.refresh(scan_record)
 
-        # Step 7: If MALICIOUS, also raise a BlacklistRequest
-        # if final_status == "MALICIOUS":
-        #     domain = urlparse(urlscan_result["initial_url"]).netloc
-        #     blacklist_record = models.BlacklistRequest(
-        #         UserID=current_user["user_id"],
-        #         URLDomain=domain,
-        #         Status=models.RequestStatus.PENDING,
-        #     )
-        #     db.add(blacklist_record)
-        #     db.commit()
+        # Step 7: If MALICIOUS or SUSPICIOUS, raise a BlacklistRequest for moderator review
+        if final_status in ("MALICIOUS", "SUSPICIOUS"):
+            domain = urlparse(urlscan_result["initial_url"]).netloc
+            blacklist_record = models.BlacklistRequest(
+                UserID=current_user["user_id"],
+                URLDomain=domain,
+                Status=models.RequestStatus.PENDING,
+            )
+            db.add(blacklist_record)
+            db.commit()
 
         scan_results.append({
             "scan_id": scan_record.ScanID,
