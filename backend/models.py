@@ -3,6 +3,8 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.mysql import LONGTEXT
 from database import Base
+from pydantic import BaseModel, field_validator
+from typing import Union
 import enum
 
 class UserRole(Base):
@@ -153,3 +155,15 @@ class ScanFeedback(Base):
     # Set up relationships for easier access to ScanHistory and UserAccount details
     scan = relationship("ScanHistory")
     user = relationship("UserAccount")
+
+
+class ScanRequest(BaseModel):
+    urls: Union[str, list[str]]
+
+    @field_validator("urls")
+    @classmethod
+    def normalize_urls(cls, v):
+        """Accept a single URL string or a list; always normalise to a list internally."""
+        if isinstance(v, str):
+            return [v]
+        return v
