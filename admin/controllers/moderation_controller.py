@@ -7,7 +7,14 @@ def get_pending_requests_dataframe():
     raw_data = api_client.fetch_pending_requests()
     if not raw_data:
         return pd.DataFrame()
-    return pd.DataFrame(raw_data)[["RequestID", "URLDomain", "UserID", "CreatedAt"]]
+    df = pd.DataFrame(raw_data)
+
+    # Backend now returns FullName directly via JOIN
+    df.rename(columns={"FullName": "RequestedBy"}, inplace=True)
+
+    cols = ["RequestID", "URLDomain", "RequestedBy", "CreatedAt"]
+    available = [c for c in cols if c in df.columns]
+    return df[available]
 
 
 def handle_review_action(request_id, action, moderator_id):

@@ -1,5 +1,5 @@
-import { View, Text } from "react-native"
-import { Shield, Eye } from "lucide-react-native"
+import { View, Text, Image } from "react-native"
+import { Eye } from "lucide-react-native"
 import { router } from "expo-router"
 import {
   AppButton,
@@ -12,9 +12,11 @@ export default function signup() {
     <View className="flex-1 bg-background">
       <View className="flex-1 justify-center px-6">
         <View className="mb-8 items-center">
-          <View className="mb-4 h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-            <Shield size={32} color="white" />
-          </View>
+          <Image
+            source={require("../assets/logo_no_text.png")}
+            className="mb-4 h-20 w-20 rounded-2xl"
+            resizeMode="contain"
+          />
           <Text className="text-2xl font-bold text-foreground">
             Sign Up
           </Text>

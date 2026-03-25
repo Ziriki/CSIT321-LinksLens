@@ -1,8 +1,10 @@
 import streamlit as st
 from controllers import auth_controller, user_controller
 from models import api_client
+from config import LOGO_PATH, PAGE_LAYOUT
+from utils import search_dataframe
 
-st.set_page_config(page_title="User Management", layout="wide")
+st.set_page_config(page_title="User Management", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 # Admin only (RoleID 1)
 current_user = auth_controller.require_role(1)
 auth_controller.render_sidebar()
@@ -24,11 +26,8 @@ if all_df.empty:
 all_df["Role"] = all_df["RoleID"].map(ROLE_MAP)
 
 # Search
-search_query = st.text_input("Search", placeholder="Search by email, role...")
-if search_query:
-    search_cols = ["UserID", "EmailAddress", "Role"]
-    mask = all_df[search_cols].apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)
-    all_df = all_df[mask].reset_index(drop=True)
+search_query = st.text_input("Search", placeholder="Search by name, email, role...")
+all_df = search_dataframe(all_df, search_query, columns=["FullName", "EmailAddress", "Role"])
 
 if "user_page" not in st.session_state:
     st.session_state["user_page"] = 0
@@ -39,7 +38,7 @@ start = page * PAGE_SIZE
 end = min(start + PAGE_SIZE, total)
 page_df = all_df.iloc[start:end]
 
-display_df = page_df[["UserID", "EmailAddress", "Role"]]
+display_df = page_df[["UserID", "FullName", "EmailAddress", "Role"]]
 
 event = st.dataframe(
     display_df,
@@ -82,27 +81,27 @@ st.subheader(f"Editing User #{uid}")
 
 col1, col2 = st.columns(2)
 with col1:
-    email = st.text_input("Email Address", value=user_row["EmailAddress"], key="edit_email")
+    email = st.text_input("Email Address", value=user_row["EmailAddress"], key=f"edit_email_{uid}")
     role = st.selectbox(
         "Role",
         options=[1, 2, 3],
         index=[1, 2, 3].index(int(user_row["RoleID"])),
         format_func=lambda x: ROLE_MAP[x],
-        key="edit_role",
+        key=f"edit_role_{uid}",
     )
-    full_name = st.text_input("Full Name", value=details.get("FullName") or "", key="edit_name")
+    full_name = st.text_input("Full Name", value=details.get("FullName") or "", key=f"edit_name_{uid}")
     gender = st.selectbox(
         "Gender",
         options=["Male", "Female", "Other"],
         index=["Male", "Female", "Other"].index(details.get("Gender", "Other") or "Other"),
-        key="edit_gender",
+        key=f"edit_gender_{uid}",
     )
 with col2:
-    phone = st.text_input("Phone Number", value=details.get("PhoneNumber") or "", key="edit_phone")
-    address = st.text_input("Address", value=details.get("Address") or "", key="edit_address")
-    dob = st.text_input("Date of Birth (YYYY-MM-DD)", value=details.get("DateOfBirth") or "", key="edit_dob")
+    phone = st.text_input("Phone Number", value=details.get("PhoneNumber") or "", key=f"edit_phone_{uid}")
+    address = st.text_input("Address", value=details.get("Address") or "", key=f"edit_address_{uid}")
+    dob = st.text_input("Date of Birth (YYYY-MM-DD)", value=details.get("DateOfBirth") or "", key=f"edit_dob_{uid}")
     status_label = "Active" if user_row["IsActive"] else "Inactive"
-    st.text_input("Status", value=status_label, disabled=True)
+    st.text_input("Status", value=status_label, disabled=True, key=f"edit_status_{uid}")
 
 # Build change payload only from actual diffs
 snapshot = {}
@@ -145,7 +144,8 @@ with btn_col1:
                 current_user["user_id"], "UPDATED_USER",
                 f"Updated User #{uid}: {changes}.",
             )
-            st.success(f"User {uid} updated successfully!")
+            st.session_state.pop("confirm_deactivate", None)
+            st.cache_data.clear()
             st.rerun()
 
 with btn_col2:
@@ -165,7 +165,7 @@ if st.session_state.get("confirm_deactivate") == uid:
                 f"Deactivated User #{uid}.",
             )
             st.session_state.pop("confirm_deactivate", None)
-            st.success(f"User {uid} deactivated.")
+            st.cache_data.clear()
             st.rerun()
     with confirm_col2:
         if st.button("Cancel", key="confirm_no"):

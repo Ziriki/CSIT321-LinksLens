@@ -131,7 +131,8 @@ def fetch_url_rules():
 # -- Scan History --
 
 def fetch_scan_list(skip: int = 0, limit: int = 25, search_url: str = None,
-                    status_indicator: str = None, user_id: int = None):
+                    status_indicator: str = None, user_id: int = None,
+                    search_user: str = None):
     """Fetch paginated scan history with optional filters."""
     params = {"skip": skip, "limit": limit}
     if search_url:
@@ -140,6 +141,8 @@ def fetch_scan_list(skip: int = 0, limit: int = 25, search_url: str = None,
         params["status_indicator"] = status_indicator
     if user_id:
         params["user_id"] = user_id
+    if search_user:
+        params["search_user"] = search_user
     response = requests.get(
         f"{BACKEND_URL}/api/scans/", params=params, headers=_get_headers()
     )
