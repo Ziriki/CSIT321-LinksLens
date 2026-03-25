@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, timezone
+
+from utils import get_fullname
 
 # Import custom files
 import models
@@ -104,7 +106,7 @@ def delete_request(request_id: int, db: Session = Depends(get_db), _: dict = Dep
 #########################################################
 # LIST function for BlacklistRequest table
 #########################################################
-@router.get("/", response_model=List[schemas.BlacklistRequestResponse])
+@router.get("/", response_model=None)
 def list_requests(
     status: Optional[models.RequestStatus] = None,
     user_id: Optional[int] = None,
@@ -113,7 +115,10 @@ def list_requests(
     db: Session = Depends(get_db),
     _: dict = Depends(require_role(1, 2))
 ):
-    query = db.query(models.BlacklistRequest)
+    query = db.query(models.BlacklistRequest).options(
+        joinedload(models.BlacklistRequest.requester).joinedload(models.UserAccount.details),
+        joinedload(models.BlacklistRequest.reviewer).joinedload(models.UserAccount.details),
+    )
 
     # Filter logic if a status is provided
     if status:
@@ -130,4 +135,19 @@ def list_requests(
         query = query.order_by(models.BlacklistRequest.CreatedAt.desc())
 
     # Execute the query with optional pagination
-    return query.offset(skip).limit(limit).all()
+    results = query.offset(skip).limit(limit).all()
+
+    return [
+        {
+            "RequestID": req.RequestID,
+            "UserID": req.UserID,
+            "FullName": get_fullname(req.requester),
+            "URLDomain": req.URLDomain,
+            "Status": req.Status.value if req.Status else None,
+            "ReviewedBy": req.ReviewedBy,
+            "ReviewedByFullName": get_fullname(req.reviewer, default=None),
+            "CreatedAt": req.CreatedAt,
+            "ReviewedAt": req.ReviewedAt,
+        }
+        for req in results
+    ]

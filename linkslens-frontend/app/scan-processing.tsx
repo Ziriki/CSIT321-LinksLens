@@ -1,12 +1,34 @@
+import { useEffect } from "react"
 import { View, Text } from "react-native"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import { Zap } from "lucide-react-native"
-import {
-    Card,
-    AppButton
-} from "../components/ui-components"
+import { Card } from "../components/ui-components"
+import { scanUrl } from "../lib/api"
 
 export default function scanProcessing() {
+  const { url } = useLocalSearchParams<{ url: string }>();
+
+  useEffect(() => {
+    if (!url) {
+      router.back();
+      return;
+    }
+
+    scanUrl(url)
+      .then((result) => {
+        router.replace({
+          pathname: "/scan-results",
+          params: { result: JSON.stringify(result) },
+        });
+      })
+      .catch(() => {
+        router.replace({
+          pathname: "/scan-results",
+          params: { error: "Scan failed. Please try again." },
+        });
+      });
+  }, [url]);
+
   return (
     <View className="flex-1 items-center justify-center bg-background px-6">
       {/* Scanning Visual */}
@@ -49,18 +71,9 @@ export default function scanProcessing() {
         </Text>
 
         <Text className="text-sm text-foreground" numberOfLines={1}>
-          https://...
+          {url ?? "..."}
         </Text>
       </Card>
-
-      <View className="mt-8">
-        <AppButton
-          variant="outline"
-          onPress={() => router.push("/scan-results")}
-        >
-          Continue (to be removed)
-        </AppButton>
-      </View>
     </View>
   )
 }

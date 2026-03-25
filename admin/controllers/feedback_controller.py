@@ -8,9 +8,7 @@ def get_feedback_dataframe():
         return pd.DataFrame()
     df = pd.DataFrame(raw_data)
 
-    # Replace UserID with user name/email
-    users = api_client.fetch_all_users()
-    user_map = {u["UserID"]: u["EmailAddress"] for u in users}
-    df["User"] = df["UserID"].map(user_map).fillna("Unknown")
+    # Backend now returns FullName directly via JOIN
+    df.rename(columns={"FullName": "User"}, inplace=True)
 
     return df[["FeedbackID", "User", "Feedback", "CreatedAt"]]
