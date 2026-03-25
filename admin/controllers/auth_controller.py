@@ -4,13 +4,17 @@ from models import api_client
 
 
 def _decode_token():
-    """Decode the stored JWT to extract user_id and role_id."""
+    """Decode the stored JWT to extract user_id and role_id (cached per rerun)."""
+    if "_decoded_user" in st.session_state:
+        return st.session_state["_decoded_user"]
     token = st.session_state.get("access_token")
     if not token:
         return None
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        return {"user_id": int(payload["sub"]), "role_id": int(payload["role"])}
+        user = {"user_id": int(payload["sub"]), "role_id": int(payload["role"])}
+        st.session_state["_decoded_user"] = user
+        return user
     except Exception:
         return None
 
@@ -22,10 +26,33 @@ def require_auth():
         st.stop()
 
 
+def _hide_pages_for_moderator():
+    """Inject CSS to hide admin-only pages from the moderator sidebar."""
+    user = _decode_token()
+    if user and user["role_id"] == 2:
+        # Admin-only pages to hide: Dashboard, User_Management, App_Feedback, Action_History_Log
+        hidden_pages = ["Dashboard", "User Management", "App Feedback", "Action History Log"]
+        css_selectors = ", ".join(
+            f'[data-testid="stSidebarNav"] a[href*="{name.replace(" ", "_")}"]'
+            for name in hidden_pages
+        )
+        st.markdown(
+            f"""
+            <style>
+                {css_selectors} {{
+                    display: none !important;
+                }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 def require_role(*allowed_roles: int):
     """Block users whose role is not in the allowed list."""
     require_auth()
     user = _decode_token()
+    _hide_pages_for_moderator()
     if not user or user["role_id"] not in allowed_roles:
         st.error("You do not have permission to view this page.")
         st.stop()
@@ -43,11 +70,13 @@ def render_sidebar():
     if user:
         role_label = {1: "Administrator", 2: "Moderator", 3: "User"}.get(user["role_id"], "Unknown")
         st.sidebar.write(f"Logged in as **{role_label}**")
+
     st.sidebar.markdown("---")
     if st.sidebar.button("Log Out"):
         if user:
             api_client.log_action(user["user_id"], "LOGOUT", "Logged out of admin portal.")
         st.session_state["access_token"] = None
+        st.session_state.pop("_decoded_user", None)
         st.switch_page("app.py")
 
 

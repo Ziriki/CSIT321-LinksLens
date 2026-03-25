@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
+from utils import get_fullname
 # Import custom files
 import models
 import schemas
@@ -86,7 +87,7 @@ def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = D
 #########################################################
 # LIST function for ScanFeedback table
 #########################################################
-@router.get("/", response_model=List[schemas.ScanFeedbackResponse])
+@router.get("/", response_model=None)
 def list_feedback(
     is_resolved: Optional[bool] = None,
     scan_id: Optional[int] = None,
@@ -96,7 +97,9 @@ def list_feedback(
     db: Session = Depends(get_db),
     _: dict = Depends(require_role(1, 2))
 ):
-    query = db.query(models.ScanFeedback)
+    query = db.query(models.ScanFeedback).options(
+        joinedload(models.ScanFeedback.user).joinedload(models.UserAccount.details)
+    )
 
     # Filter logic if optional query parameters are provided
     if is_resolved is not None:
@@ -111,7 +114,20 @@ def list_feedback(
         query = query.filter(models.ScanFeedback.UserID == user_id)
 
     # Execute the query with optional pagination
-    return query.offset(skip).limit(limit).all()
+    results = query.offset(skip).limit(limit).all()
+
+    return [
+        {
+            "FeedbackID": fb.FeedbackID,
+            "ScanID": fb.ScanID,
+            "UserID": fb.UserID,
+            "FullName": get_fullname(fb.user),
+            "SuggestedStatus": fb.SuggestedStatus.value if fb.SuggestedStatus else None,
+            "Comments": fb.Comments,
+            "IsResolved": fb.IsResolved,
+        }
+        for fb in results
+    ]
 
 #########################################################
 # LIST ENRICHED — returns feedback with joined scan + user info

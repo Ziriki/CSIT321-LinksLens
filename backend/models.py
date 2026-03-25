@@ -30,6 +30,7 @@ class UserAccount(Base):
 
     # Set up a relationship for easier access to the role details from an account
     role = relationship("UserRole")
+    details = relationship("UserDetails", uselist=False, back_populates="account")
 
 class UserDetails(Base):
     __tablename__ = "UserDetails"
@@ -71,6 +72,8 @@ class AppFeedback(Base):
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
     Feedback = Column(Text, nullable=False)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+
+    account = relationship("UserAccount")
 
 
 # Define the strict Enum for the BlacklistRequest status
