@@ -5,7 +5,7 @@ import { Zap } from "lucide-react-native"
 import { Card } from "../components/ui-components"
 import { scanUrl } from "../lib/api"
 
-export default function scanProcessing() {
+export default function ScanProcessing() {
   const { url } = useLocalSearchParams<{ url: string }>();
 
   useEffect(() => {

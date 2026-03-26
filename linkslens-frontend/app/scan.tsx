@@ -1,41 +1,12 @@
 import { View, Text } from "react-native"
 import { router } from "expo-router"
-import { Image as ImageIcon, Link2, Home, ScanLine, Clock, User } from "lucide-react-native"
+import { Image as ImageIcon, Link2 } from "lucide-react-native"
 import {
   Card,
-  RiskBadge,
-  AppButton,
-  InputField,
-  ListItem,
-  SectionHeader,
   ScreenHeader,
   BottomNav,
-  ConfidenceIndicator,
-  TextLink,
 } from "../components/ui-components"
-
-const bottomNavItems = [
-    {
-        icon: <Home size={20} />,
-        label: "Home",
-        href: "/home",
-    },
-    {
-        icon: <ScanLine size={20} />,
-        label: "Scan",
-        href: "/scan",
-    },
-    {
-        icon: <Clock size={20} />,
-        label: "History",
-        href: "/scan-history",
-    },
-    {
-        icon: <User size={20} />,
-        label: "Profile",
-        href: "/profile",
-    },
-]
+import { bottomNavItems } from "../lib/navigation"
 
 export default function scan() {
   return (
