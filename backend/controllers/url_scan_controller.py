@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import requests
 import time
@@ -137,6 +137,11 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
                 if results[url]["gsb_status"] != "MALICIOUS":
                     results[url]["gsb_status"] = "SUSPICIOUS"
 
+        # GSB returned 200 OK — URLs not flagged are confirmed SAFE
+        for url_key in results:
+            if not results[url_key]["flagged"]:
+                results[url_key]["gsb_status"] = "SAFE"
+
         return results
 
     # All retries exhausted — non-blocking, return safe defaults
@@ -268,11 +273,19 @@ def merge_status(gsb_status: str, urlscan_status: str) -> str:
 def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """
     Accept a single URL string or a list of URL strings.
-    Each URL is checked via Google Safe Browsing v5 first, then submitted to urlscan.io.
+    Each URL is checked via Google Safe Browsing v4 first, then submitted to urlscan.io.
     Results are merged (most severe verdict wins) and saved to ScanHistory.
     Always returns a list — one entry per URL submitted.
     """
     urls = request.urls
+
+    if not urls:
+        raise HTTPException(status_code=400, detail="At least one URL is required.")
+
+    for url in urls:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise HTTPException(status_code=400, detail=f"Invalid URL: {url}")
 
     # Step 1: Batch-check all URLs with Google Safe Browsing v4 (single round-trip)
     gsb_results = check_google_safe_browsing(urls)
@@ -298,6 +311,15 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         # Step 6: Merge GSB and urlscan verdicts — most severe status wins
         final_status = merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
 
+        # Step 6b: Check against internal URLRules (blacklist/whitelist) — overrides external verdicts
+        domain = urlparse(urlscan_result["initial_url"] or url).netloc
+        url_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == domain).first()
+        if url_rule:
+            if url_rule.ListType == models.ListTypeEnum.BLACKLIST:
+                final_status = "MALICIOUS"
+            elif url_rule.ListType == models.ListTypeEnum.WHITELIST:
+                final_status = "SAFE"
+
         # Step 7: Save to ScanHistory
         # initial_url falls back to the submitted url if urlscan returned nothing
         initial_url = urlscan_result["initial_url"] or url
@@ -313,24 +335,13 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         db.commit()
         db.refresh(scan_record)
 
-        # Step 8: If MALICIOUS or SUSPICIOUS, raise a BlacklistRequest for moderator review
-        if final_status in ("MALICIOUS", "SUSPICIOUS"):
-            domain = urlparse(initial_url).netloc
-            blacklist_record = models.BlacklistRequest(
-                UserID=current_user["user_id"],
-                URLDomain=domain,
-                Status=models.RequestStatus.PENDING,
-            )
-            db.add(blacklist_record)
-            db.commit()
-
         scan_results.append({
             "scan_id": scan_record.ScanID,
             "user_id": scan_record.UserID,
             "uuid": urlscan_result["uuid"],
             "initial_url": scan_record.InitialURL,
             "redirect_url": scan_record.RedirectURL,
-            "status_indicator": scan_record.StatusIndicator,
+            "status_indicator": scan_record.StatusIndicator.value,
             "score": urlscan_result["score"],
             "server_location": scan_record.ServerLocation,
             "ip_address": urlscan_result["ip_address"],
