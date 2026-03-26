@@ -91,7 +91,12 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 
 **Note:** API routes use `/api/` prefix. The `/scan` endpoint is the exception — it is top-level and drives the full scan pipeline.
 
-## Scan Pipeline (`url_scan_controller.py`)
+**`/scan` pipeline (`url_scan_controller.py`):**
+1. `POST /scan` accepts `{ "urls": str | list[str] }` — single string or list, always normalised to a list
+2. **Google Safe Browsing v5** — batch `GET /v5alpha1/urls:search` with all URLs in one round-trip; exponential backoff on 429/5xx; non-blocking (failures fall through to urlscan.io)
+3. **urlscan.io** — each URL submitted separately to `POST /api/v1/scan/` with `visibility: public`; result polled after 10s initial wait then every 5s up to 12 attempts
+4. Verdicts merged — most severe status wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; otherwise SAFE
+5. Each result saved to `ScanHistory`; returns a list of result objects (one per URL)
 
 `POST /scan` accepts `{ urls: string | string[] }` and returns an array of results.
 
