@@ -20,15 +20,17 @@ import {
 import type { ScanResponse } from "../lib/api"
 import type { RiskLevel } from "../lib/types"
 
-function verdictToRiskLevel(verdict: ScanResponse["verdict"]): RiskLevel {
-  return verdict === "SAFE" ? "safe" : "malicious";
+function verdictToRiskLevel(verdict: ScanResponse["status_indicator"]): RiskLevel {
+  if (verdict === "SAFE") return "safe";
+  if (verdict === "SUSPICIOUS") return "suspicious";
+  return "malicious";
 }
 
 export default function scanResults() {
   const { result, error } = useLocalSearchParams<{ result?: string; error?: string }>();
 
   const scanData: ScanResponse | null = result ? JSON.parse(result) : null;
-  const riskLevel: RiskLevel = scanData ? verdictToRiskLevel(scanData.verdict) : "safe";
+  const riskLevel: RiskLevel = scanData ? verdictToRiskLevel(scanData.status_indicator) : "safe";
   const isSafe = riskLevel === "safe";
 
   if (error || !scanData) {
@@ -41,7 +43,7 @@ export default function scanResults() {
             {error ?? "No result data available."}
           </Text>
           <View className="mt-8 w-full">
-            <AppButton fullWidth onPress={() => router.push("/")}>
+            <AppButton fullWidth onPress={() => router.push("/home")}>
               Go Home
             </AppButton>
           </View>
@@ -72,7 +74,7 @@ export default function scanResults() {
           <Text className="mt-4 px-4 text-center text-muted-foreground">
             {isSafe
               ? "This URL appears to be safe. No security threats detected."
-              : `Threats detected: ${scanData.threats.join(", ") || "Suspicious activity"}`}
+              : `Threats detected: ${scanData.gsb_threat_types.join(", ") || scanData.tags.join(", ") || "Suspicious activity"}`}
           </Text>
         </View>
 
@@ -83,7 +85,7 @@ export default function scanResults() {
           </Text>
 
           <Text className="text-sm text-foreground">
-            {scanData.url}
+            {scanData.initial_url}
           </Text>
 
           <View className="mt-3 flex-row items-center gap-2 border-t border-border pt-3">
@@ -102,7 +104,7 @@ export default function scanResults() {
             Analysis Confidence
           </Text>
 
-          <ConfidenceIndicator value={scanData.safety_score} />
+          <ConfidenceIndicator value={scanData.score} />
         </Card>
 
         {/* Advanced */}
