@@ -1,7 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel, field_validator
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import Union
 import requests
 import time
 import os
@@ -9,6 +7,7 @@ from dotenv import load_dotenv
 from urllib.parse import quote, urlparse
 
 import models
+from models import ScanRequest
 from database import get_db
 from dependencies import get_current_user
 
@@ -32,8 +31,8 @@ URLSCAN_SUBMIT_URL = "https://urlscan.io/api/v1/scan/"
 URLSCAN_RESULT_URL = "https://urlscan.io/api/v1/result/{uuid}/"
 URLSCAN_SCREENSHOT_URL = "https://urlscan.io/screenshots/{uuid}.png"
 
-# Google Safe Browsing v5alpha1 endpoint
-GSB_LOOKUP_URL = "https://safebrowsing.googleapis.com/v5alpha1/urls:search"
+# Google Safe Browsing v4 Lookup API endpoint
+GSB_LOOKUP_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 
 # Polling configuration: wait 10s before first poll, then every 5s, up to 12 attempts (70s total)
 INITIAL_WAIT_SECONDS = 10
@@ -48,44 +47,57 @@ _SUSPICIOUS_THREATS = {"UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"}
 _STATUS_SEVERITY = {"SAFE": 0, "SUSPICIOUS": 1, "MALICIOUS": 2}
 
 
-class ScanRequest(BaseModel):
-    urls: Union[str, list[str]]
-
-    @field_validator("urls")
-    @classmethod
-    def normalize_urls(cls, v):
-        """Accept a single URL string or a list; always normalise to a list internally."""
-        if isinstance(v, str):
-            return [v]
-        return v
-
 
 #########################################################
-# Helper: Check URLs against Google Safe Browsing v5
+# Helper: Check URLs against Google Safe Browsing v4
 #########################################################
 def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
     """
-    Batch-check a list of URLs via the GSB v5alpha1 urls:search endpoint.
+    Batch-check a list of URLs via the GSB v4 threatMatches:find endpoint.
 
-    Uses a GET request with the 'urls' parameter repeated for each URL, as required by the API.
-    Returns a dict keyed by URL: { flagged, threat_types, gsb_status }.
+    Uses a POST request with a JSON body containing client info and all threat types.
+    Supports up to 500 URLs per request. Returns a dict keyed by URL:
+    { flagged, threat_types, gsb_status }.
 
-    On API failure the function does NOT raise — it returns SAFE defaults so the
-    urlscan.io pipeline still runs.
+    On API failure the function does NOT raise — it returns SUSPICIOUS defaults so the
+    urlscan.io pipeline still runs. SUSPICIOUS is used rather than SAFE so that an
+    unreachable GSB API never silently passes a potentially harmful URL.
     """
     results = {
-        url: {"flagged": False, "threat_types": [], "gsb_status": "SAFE"}
+        url: {"flagged": False, "threat_types": [], "gsb_status": "SUSPICIOUS"}
         for url in urls
     }
 
-    # v5 uses GET with repeated 'urls' params; list-of-tuples preserves duplicates
-    params = [("key", GSB_API_KEY)] + [("urls", url) for url in urls]
-    headers = {"Accept": "application/json", "User-Agent": "LinksLens/1.0"}
+    # v4 uses POST with a structured JSON body; API key passed as query param
+    payload = {
+        "client": {
+            "clientId": "linkslens",
+            "clientVersion": "1.0"
+        },
+        "threatInfo": {
+            "threatTypes": [
+                "MALWARE",
+                "SOCIAL_ENGINEERING",
+                "UNWANTED_SOFTWARE",
+                "POTENTIALLY_HARMFUL_APPLICATION"
+            ],
+            "platformTypes": ["ANY_PLATFORM"],
+            "threatEntryTypes": ["URL"],
+            "threatEntries": [{"url": url} for url in urls]
+        }
+    }
+    headers = {"Content-Type": "application/json", "User-Agent": "LinksLens/1.0"}
 
     delay = 1
     for _ in range(4):
         try:
-            response = requests.get(GSB_LOOKUP_URL, params=params, headers=headers, timeout=10)
+            response = requests.post(
+                GSB_LOOKUP_URL,
+                params={"key": GSB_API_KEY},
+                json=payload,
+                headers=headers,
+                timeout=10
+            )
         except requests.RequestException:
             # Network failure — fall through to urlscan.io only
             return results
@@ -100,21 +112,30 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
             # Non-blocking: other errors should not abort the overall scan
             return results
 
-        # 200 OK — empty body or absent 'threats' key means all URLs are clean
-        for threat in response.json().get("threats", []):
-            url = threat.get("url", "")
-            threat_types = threat.get("threatTypes", [])
+        # 200 OK — empty body or absent 'matches' key means all URLs are clean
+        try:
+            data = response.json()
+        except Exception:
+            # Non-JSON body (e.g. HTML error page from invalid/unenabled API key) — non-blocking
+            return results
+
+        # v4 response: { "matches": [{ "threat": { "url": "..." }, "threatType": "..." }] }
+        for match in data.get("matches", []):
+            url = match.get("threat", {}).get("url", "")
+            threat_type = match.get("threatType", "")
             if url not in results:
                 continue
 
             results[url]["flagged"] = True
-            results[url]["threat_types"] = threat_types
+            if threat_type not in results[url]["threat_types"]:
+                results[url]["threat_types"].append(threat_type)
 
-            # Determine the worst status from the returned threat types
-            if any(t in _MALICIOUS_THREATS for t in threat_types):
+            # Determine the worst status from the returned threat type
+            if threat_type in _MALICIOUS_THREATS:
                 results[url]["gsb_status"] = "MALICIOUS"
-            elif any(t in _SUSPICIOUS_THREATS for t in threat_types):
-                results[url]["gsb_status"] = "SUSPICIOUS"
+            elif threat_type in _SUSPICIOUS_THREATS:
+                if results[url]["gsb_status"] != "MALICIOUS":
+                    results[url]["gsb_status"] = "SUSPICIOUS"
 
         return results
 
@@ -125,7 +146,8 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
 #########################################################
 # Helper: Submit a single URL to urlscan.io
 #########################################################
-def submit_scan(url: str) -> dict:
+def submit_scan(url: str) -> dict | None:
+    """Returns the submission JSON on success, or None if urlscan.io is unreachable/rejects."""
     safe_url = quote(url, safe='/:?=&')
     headers = {
         "API-Key": URLSCAN_API_KEY,
@@ -134,32 +156,33 @@ def submit_scan(url: str) -> dict:
     # Visibility is set to public as the quota for non-public calls is too small to be usable
     payload = {"url": safe_url, "visibility": "public"}
 
-    response = requests.post(URLSCAN_SUBMIT_URL, headers=headers, json=payload, timeout=15)
+    try:
+        response = requests.post(URLSCAN_SUBMIT_URL, headers=headers, json=payload, timeout=15)
+    except requests.RequestException:
+        return None
 
-    if response.status_code == 400:
-        detail = response.json().get("message", "Bad request")
-        raise HTTPException(status_code=400, detail=f"urlscan.io rejected the URL: {detail}")
-    if response.status_code == 401:
-        raise HTTPException(status_code=502, detail="urlscan.io API key is invalid or missing.")
-    if response.status_code == 429:
-        raise HTTPException(status_code=429, detail="urlscan.io rate limit reached. Please try again later.")
     if response.status_code not in (200, 201):
-        raise HTTPException(status_code=502, detail=f"urlscan.io submission failed (HTTP {response.status_code}).")
+        return None
 
-    return response.json()
+    data = response.json()
+    return data if data.get("uuid") else None
 
 
 #########################################################
 # Helper: Poll urlscan.io until the result is ready
 #########################################################
-def poll_result(uuid: str) -> dict:
+def poll_result(uuid: str) -> dict | None:
+    """Returns the raw result JSON on success, or None on timeout or unexpected error."""
     result_url = URLSCAN_RESULT_URL.format(uuid=uuid)
 
     # urlscan.io recommends waiting at least 10 seconds before the first poll
     time.sleep(INITIAL_WAIT_SECONDS)
 
     for attempt in range(MAX_POLL_ATTEMPTS):
-        response = requests.get(result_url, timeout=15)
+        try:
+            response = requests.get(result_url, timeout=15)
+        except requests.RequestException:
+            return None
 
         if response.status_code == 200:
             return response.json()
@@ -170,21 +193,33 @@ def poll_result(uuid: str) -> dict:
                 time.sleep(POLL_INTERVAL_SECONDS)
             continue
 
-        raise HTTPException(
-            status_code=502,
-            detail=f"Unexpected response from urlscan.io while polling (HTTP {response.status_code}).",
-        )
+        # Any other unexpected status — give up non-fatally
+        return None
 
-    raise HTTPException(
-        status_code=504,
-        detail="Scan timed out. urlscan.io did not return results within the allowed time.",
-    )
+    # All attempts exhausted
+    return None
 
 
 #########################################################
 # Helper: Map urlscan.io raw result to a structured dict
 #########################################################
-def process_result(uuid: str, raw_result: dict) -> dict:
+def process_result(uuid: str | None, raw_result: dict | None) -> dict:
+    # If the 2 scanning APIs returned nothing, fall back to safe empty values
+    if not raw_result or not uuid:
+        return {
+            "uuid": uuid,
+            "urlscan_status": "SUSPICIOUS",
+            "score": None,
+            "initial_url": None,
+            "redirect_url": None,
+            "server_location": None,
+            "ip_address": None,
+            "screenshot_url": None,
+            "result_url": None,
+            "brands": [],
+            "tags": [],
+        }
+
     page = raw_result.get("page", {})
     verdicts = raw_result.get("verdicts", {})
     overall = verdicts.get("overall", {})
@@ -220,7 +255,7 @@ def process_result(uuid: str, raw_result: dict) -> dict:
 #########################################################
 # Helper: Return the more severe of two status strings
 #########################################################
-def _merge_status(gsb_status: str, urlscan_status: str) -> str:
+def merge_status(gsb_status: str, urlscan_status: str) -> str:
     if _STATUS_SEVERITY.get(gsb_status, 0) >= _STATUS_SEVERITY.get(urlscan_status, 0):
         return gsb_status
     return urlscan_status
@@ -229,7 +264,6 @@ def _merge_status(gsb_status: str, urlscan_status: str) -> str:
 #########################################################
 # POST /scan — Submit one or more URLs and return results
 #########################################################
-# I will include an option to select quick or detailed later
 @router.post("")
 def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """
@@ -240,7 +274,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
     """
     urls = request.urls
 
-    # Step 1: Batch-check all URLs with Google Safe Browsing v5 (single round-trip)
+    # Step 1: Batch-check all URLs with Google Safe Browsing v4 (single round-trip)
     gsb_results = check_google_safe_browsing(urls)
 
     scan_results = []
@@ -248,25 +282,28 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
     for url in urls:
         gsb = gsb_results[url]
 
-        # Step 2: Submit to urlscan.io
+        # Step 2: Submit to urlscan.io — returns None on failure
         submission = submit_scan(url)
-        uuid = submission.get("uuid")
-        if not uuid:
-            raise HTTPException(status_code=502, detail=f"urlscan.io did not return a scan UUID for: {url}")
+        uuid = submission.get("uuid") if submission else None
 
-        # Step 3: Poll until the result is ready
-        raw_result = poll_result(uuid)
+        # Step 3: Poll for the result — returns None on timeout or failure
+        raw_result = poll_result(uuid) if uuid else None
 
-        # Step 4: Parse the urlscan.io result
+        # Step 4: Perform script level analysis - returns None on timeout or failure
+        # script_result = script_analysis(url)
+
+        # Step 5: Parse result — process_result handles None uuid/raw_result with SUSPICIOUS fallback
         urlscan_result = process_result(uuid, raw_result)
 
-        # Step 5: Merge GSB and urlscan verdicts — most severe status wins
-        final_status = _merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
+        # Step 6: Merge GSB and urlscan verdicts — most severe status wins
+        final_status = merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
 
-        # Step 6: Save to ScanHistory
+        # Step 7: Save to ScanHistory
+        # initial_url falls back to the submitted url if urlscan returned nothing
+        initial_url = urlscan_result["initial_url"] or url
         scan_record = models.ScanHistory(
             UserID=current_user["user_id"],
-            InitialURL=urlscan_result["initial_url"],
+            InitialURL=initial_url,
             RedirectURL=urlscan_result["redirect_url"],
             StatusIndicator=models.ScanStatusEnum(final_status),
             ServerLocation=urlscan_result["server_location"],
@@ -276,16 +313,16 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         db.commit()
         db.refresh(scan_record)
 
-        # Step 7: If MALICIOUS, also raise a BlacklistRequest
-        # if final_status == "MALICIOUS":
-        #     domain = urlparse(urlscan_result["initial_url"]).netloc
-        #     blacklist_record = models.BlacklistRequest(
-        #         UserID=current_user["user_id"],
-        #         URLDomain=domain,
-        #         Status=models.RequestStatus.PENDING,
-        #     )
-        #     db.add(blacklist_record)
-        #     db.commit()
+        # Step 8: If MALICIOUS or SUSPICIOUS, raise a BlacklistRequest for moderator review
+        if final_status in ("MALICIOUS", "SUSPICIOUS"):
+            domain = urlparse(initial_url).netloc
+            blacklist_record = models.BlacklistRequest(
+                UserID=current_user["user_id"],
+                URLDomain=domain,
+                Status=models.RequestStatus.PENDING,
+            )
+            db.add(blacklist_record)
+            db.commit()
 
         scan_results.append({
             "scan_id": scan_record.ScanID,
