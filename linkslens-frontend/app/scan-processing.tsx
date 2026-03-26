@@ -21,7 +21,8 @@ export default function scanProcessing() {
           params: { result: JSON.stringify(result) },
         });
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Scan error:", err?.message ?? err);
         router.replace({
           pathname: "/scan-results",
           params: { error: "Scan failed. Please try again." },
