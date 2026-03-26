@@ -1,14 +1,36 @@
-import { View, Text, Pressable, Image } from "react-native"
+import { View, Text, Pressable, Image, Alert } from "react-native"
 import { Eye } from "lucide-react-native"
 import { router } from "expo-router"
+import { useState } from "react"
 import {
   AppButton,
   InputField,
   TextLink,
 } from "../components/ui-components"
+import { login } from "../lib/api"
 
+export default function loginScreen() {
+  //TODO: Change back after Demo!
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
 
-export default function login() {
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert("Error", "Please enter your email and password.")
+      return
+    }
+    setLoading(true)
+    try {
+      await login(email, password)
+      router.replace("/home")
+    } catch (err: any) {
+      Alert.alert("Login Failed", err.message ?? "Invalid email or password.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <View className="flex-1 bg-white">
       <View className="flex-1 justify-center px-6">
@@ -23,10 +45,21 @@ export default function login() {
 
         {/* Form */}
         <View className="gap-4">
-          <InputField label="Email" placeholder="Enter your email" />
+          <InputField
+            label="Email"
+            placeholder="Enter your email"
+            value={email}
+            onChangeText={setEmail}
+          />
 
           <View className="relative">
-            <InputField label="Password" placeholder="Enter your password" secureTextEntry />
+            <InputField
+              label="Password"
+              placeholder="Enter your password"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
             <View className="absolute right-4 top-10">
               <Eye size={20} color="gray" />
             </View>
@@ -36,8 +69,8 @@ export default function login() {
             <Text className="text-sm font-medium text-primary">Forgot Password?</Text>
           </Pressable>
 
-          <AppButton fullWidth size="lg" className="mt-4" onPress={() => router.replace("/home")}>
-            Sign In
+          <AppButton fullWidth size="lg" className="mt-4" onPress={handleLogin} disabled={loading}>
+            {loading ? "Signing in..." : "Sign In"}
           </AppButton>
         </View>
       </View>
