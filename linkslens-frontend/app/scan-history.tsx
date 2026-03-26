@@ -1,67 +1,89 @@
-import { View, Text, ScrollView,Pressable } from "react-native"
+import { useEffect, useState, useMemo } from "react"
+import { View, Text, ScrollView, Pressable, Alert } from "react-native"
 import { router } from "expo-router"
-import { 
-  Search, 
-  ChevronDown, 
-  ScanLine, 
-  Square, 
-  CheckSquare, 
+import {
+  Search,
+  ScanLine,
   Trash2,
-  Home,
-  Clock,
-  User, 
 } from "lucide-react-native"
 
 import {
-  Card,
   RiskBadge,
   AppButton,
-  InputField,
-  ListItem,
-  SectionHeader,
-  ScreenHeader,
   BottomNav,
-  ConfidenceIndicator,
-  TextLink,
 } from "../components/ui-components"
+import { fetchScanHistory, clearScanHistory, getCurrentUserId } from "../lib/api"
+import type { ScanHistoryItem, ScanResponse } from "../lib/api"
+import { statusToRisk } from "../lib/types"
+import { bottomNavItems } from "../lib/navigation"
 
-const bottomNavItems = [
-    {
-        icon: <Home size={20} />,
-        label: "Home",
-        href: "/home",
-    },
-    {
-        icon: <ScanLine size={20} />,
-        label: "Scan",
-        href: "/scan",
-    },
-    {
-        icon: <Clock size={20} />,
-        label: "History",
-        href: "/scan-history",
-    },
-    {
-        icon: <User size={20} />,
-        label: "Profile",
-        href: "/profile",
-    },
-]
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
 
+export default function ScanHistory() {
+  const [scans, setScans] = useState<ScanHistoryItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState("")
 
-export default function scanHistory() {
+  useEffect(() => {
+    loadScans()
+  }, [])
+
+  async function loadScans() {
+    setLoading(true)
+    try {
+      const data = await fetchScanHistory()
+      setScans(data)
+    } catch {
+      // Silently fail
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleClearAll() {
+    Alert.alert("Clear History", "Delete all scan history?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete All",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const userId = await getCurrentUserId()
+            if (userId) await clearScanHistory(userId)
+            setScans([])
+          } catch {
+            Alert.alert("Error", "Failed to clear history.")
+          }
+        },
+      },
+    ])
+  }
+
+  const filtered = useMemo(
+    () => search
+      ? scans.filter((s) => s.InitialURL.toLowerCase().includes(search.toLowerCase()))
+      : scans,
+    [scans, search],
+  )
+
   return (
     <View className="flex-1 bg-background">
-
       {/* Header */}
       <View className="flex-row items-center justify-between border-b border-border bg-background px-4 py-3">
         <View className="w-10" />
         <Text className="text-lg font-semibold text-foreground">
           Previous Scans
         </Text>
-
-        <Pressable className="p-2">
-          <CheckSquare size={20} />
+        <Pressable className="p-2" onPress={handleClearAll}>
+          <Trash2 size={20} color="#dc2626" />
         </Pressable>
       </View>
 
@@ -69,134 +91,74 @@ export default function scanHistory() {
       <View className="px-4 pt-3">
         <View className="flex-row items-center gap-3 rounded-xl bg-secondary px-4 py-3">
           <Search size={20} />
-          <Text className="text-muted-foreground">Search scans...</Text>
+          <Text
+            className="flex-1 text-muted-foreground"
+            onPress={() => {/* TODO: open search input */}}
+          >
+            {search || "Search scans..."}
+          </Text>
         </View>
-      </View>
-
-      {/* Filters */}
-      <View className="flex-row gap-2 px-4 py-3">
-
-        <View className="flex-1 flex-row items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5">
-          <View>
-            <Text className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Status
-            </Text>
-            <Text className="text-sm font-medium text-foreground">All</Text>
-          </View>
-          <ChevronDown size={16} />
-        </View>
-
-        <View className="flex-1 flex-row items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5">
-          <View>
-            <Text className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Date
-            </Text>
-            <Text className="text-sm font-medium text-foreground">All Time</Text>
-          </View>
-          <ChevronDown size={16} />
-        </View>
-
-        <View className="flex-1 flex-row items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5">
-          <View>
-            <Text className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Source
-            </Text>
-            <Text className="text-sm font-medium text-foreground">All</Text>
-          </View>
-          <ChevronDown size={16} />
-        </View>
-
       </View>
 
       {/* List */}
-      <ScrollView className="flex-1 px-4 pb-4">
+      <ScrollView className="flex-1 px-4 py-3">
+        {loading && (
+          <Text className="text-center text-muted-foreground py-8">Loading...</Text>
+        )}
 
-        {/* Item 1 */}
-        <View className="flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-          <CheckSquare size={20} />
+        {!loading && filtered.length === 0 && (
+          <Text className="text-center text-muted-foreground py-8">No scans yet.</Text>
+        )}
 
-          <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
-            <ScanLine size={20} />
-          </View>
+        {filtered.map((scan) => (
+          <Pressable
+            key={scan.ScanID}
+            className="mb-2 flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
+            onPress={() =>
+              router.push({
+                pathname: "/scan-results",
+                params: {
+                  result: JSON.stringify({
+                    scan_id: scan.ScanID,
+                    user_id: scan.UserID,
+                    uuid: null,
+                    initial_url: scan.InitialURL,
+                    redirect_url: scan.RedirectURL,
+                    status_indicator: scan.StatusIndicator,
+                    score: 0,
+                    server_location: scan.ServerLocation,
+                    ip_address: null,
+                    screenshot_url: scan.ScreenshotURL,
+                    brands: [],
+                    tags: [],
+                    result_url: "",
+                    gsb_flagged: false,
+                    gsb_threat_types: [],
+                    scanned_at: scan.ScannedAt,
+                  } satisfies ScanResponse),
+                },
+              })
+            }
+          >
+            <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
+              <ScanLine size={20} />
+            </View>
 
-          <View className="flex-1">
-            <Text className="font-medium text-foreground">
-              example-url.com/page
-            </Text>
-            <Text className="text-sm text-muted-foreground">
-              Gallery - 2 hours ago
-            </Text>
-          </View>
+            <View className="flex-1">
+              <Text className="font-medium text-foreground" numberOfLines={1}>
+                {scan.InitialURL}
+              </Text>
+              <Text className="text-sm text-muted-foreground">
+                {timeAgo(scan.ScannedAt)}
+              </Text>
+            </View>
 
-          <RiskBadge riskLevel="safe" size="sm" />
-        </View>
-
-        {/* Item 2 */}
-        <View className="mt-2 flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-          <Square size={20} />
-
-          <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
-            <ScanLine size={20} />
-          </View>
-
-          <View className="flex-1">
-            <Text className="font-medium text-foreground">
-              suspicious-link.net
-            </Text>
-            <Text className="text-sm text-muted-foreground">
-              Manual - Yesterday
-            </Text>
-          </View>
-
-          <RiskBadge riskLevel="suspicious" size="sm" />
-        </View>
-
-        {/* Item 3 */}
-        <View className="mt-2 flex-row items-center gap-3 rounded-xl border-2 border-primary bg-card px-4 py-3">
-          <CheckSquare size={20} />
-
-          <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
-            <ScanLine size={20} />
-          </View>
-
-          <View className="flex-1">
-            <Text className="font-medium text-foreground">
-              malicious-site.xyz
-            </Text>
-            <Text className="text-sm text-muted-foreground">
-              Gallery - 3 days ago
-            </Text>
-          </View>
-
-          <RiskBadge riskLevel="malicious" size="sm" />
-        </View>
-
+            <RiskBadge riskLevel={statusToRisk(scan.StatusIndicator)} size="sm" />
+          </Pressable>
+        ))}
       </ScrollView>
 
-      {/* Delete bar */}
-      <View className="border-t border-border bg-card px-4 py-3">
-
-        <View className="mb-3 flex-row items-center justify-between">
-          <Text className="text-sm text-muted-foreground">
-            2 items selected
-          </Text>
-
-          <Text className="text-sm font-medium text-primary">
-            Select All
-          </Text>
-        </View>
-
-        <AppButton fullWidth variant="primary">
-          <View className="flex-row items-center justify-center gap-2">
-            <Trash2 size={16} color="white" />
-            <Text className="text-white">Delete Selected</Text>
-          </View>
-        </AppButton>
-
-      </View>
-
       <BottomNav activeIndex={2} items={bottomNavItems} />
-
     </View>
   )
 }
