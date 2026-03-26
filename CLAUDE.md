@@ -17,13 +17,13 @@ LinksLens is a mobile-first weblink security scanner. Users submit URLs (via cam
 
 - **Mobile App:** React Native + Expo (`linkslens-frontend/`) — NativeWind (Tailwind CSS), Expo Router, on-device ML Kit OCR. Scan pipeline wired to backend; auth and most other screens still UI-only stubs.
 - **Admin Portal:** Streamlit (`admin/`) — fully wired to backend via `admin/models/api_client.py`
-- **Backend API:** FastAPI (`backend/`) — real scan pipeline using Google Safe Browsing + urlscan.io
+- **Backend API:** FastAPI (`backend/`) — real scan pipeline using Google Safe Browsing v4 + urlscan.io
 - **Database:** MySQL 8.0 (port 3306)
 - **Server:** AWS EC2 t2.medium, Ubuntu 24.04 LTS
 - **Reverse Proxy:** Nginx with Certbot SSL
 - **Containerization:** Docker Compose (FastAPI + Streamlit + MySQL on `fyp_net` bridge network)
 - **CI/CD:** GitHub Actions → SSH into EC2 → sync code, rebuild Docker, copy static HTML
-- **External Services:** urlscan.io API (`URLSCAN_API_KEY`), Google Safe Browsing v5 (`GOOGLE_SAFE_BROWSING_API_KEY`), Resend for email (`RESEND_KEY`)
+- **External Services:** urlscan.io API (`URLSCAN_API_KEY`), Google Safe Browsing v4 (`GOOGLE_SAFE_BROWSING_API_KEY`), Resend for email (`RESEND_KEY`)
 
 ## Commands
 
@@ -71,7 +71,7 @@ mysql -u root -p LinksLens-DB < DB_Creation_Script.sql   # Initialize schema
 
 ## Backend Code Architecture
 
-The backend is **flat** — all models are in `backend/models.py`, all Pydantic schemas in `backend/schemas.py`. No `app/` subdirectory or `services/`/`utils/` structure.
+The backend is **flat** — all models are in `backend/models.py`, all Pydantic schemas in `backend/schemas.py` (exception: `ScanRequest` Pydantic model lives in `models.py`). Shared helpers are in `backend/utils.py` (`get_fullname`, `get_password_hash`, `verify_password`).
 
 **Controller pattern:** Each controller in `backend/controllers/` defines a FastAPI `APIRouter` with `prefix="/api/<resource>"` and implements standard CRUDL endpoints. All routers are imported and registered in `main.py`.
 
@@ -92,29 +92,22 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 **Note:** API routes use `/api/` prefix. The `/scan` endpoint is the exception — it is top-level and drives the full scan pipeline.
 
 **`/scan` pipeline (`url_scan_controller.py`):**
-1. `POST /scan` accepts `{ "urls": str | list[str] }` — single string or list, always normalised to a list
-2. **Google Safe Browsing v5** — batch `GET /v5alpha1/urls:search` with all URLs in one round-trip; exponential backoff on 429/5xx; non-blocking (failures fall through to urlscan.io)
-3. **urlscan.io** — each URL submitted separately to `POST /api/v1/scan/` with `visibility: public`; result polled after 10s initial wait then every 5s up to 12 attempts
-4. Verdicts merged — most severe status wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; otherwise SAFE
-5. Each result saved to `ScanHistory`; returns a list of result objects (one per URL)
+`POST /scan` accepts `{ "urls": str | list[str] }` — single string or list, always normalised to a list. Returns an array of results (one per URL).
 
-`POST /scan` accepts `{ urls: string | string[] }` and returns an array of results.
-
-**Pipeline per URL:**
-1. **Google Safe Browsing v5** — batch GET to `safebrowsing.googleapis.com/v5alpha1/urls:search`; non-blocking (returns SAFE defaults on failure)
-2. **urlscan.io submission** — POST to `urlscan.io/api/v1/scan/` with `visibility: public`
+1. **Google Safe Browsing v4** — batch `POST` to `safebrowsing.googleapis.com/v4/threatMatches:find` with all URLs in one round-trip; exponential backoff on 429/5xx; non-blocking (failures return SUSPICIOUS defaults so urlscan.io still runs)
+2. **urlscan.io submission** — each URL submitted separately to `POST urlscan.io/api/v1/scan/` with `visibility: public`
 3. **Poll for result** — waits 10s, then polls every 5s up to 12 attempts (70s total timeout)
-4. **Merge verdicts** — most severe status wins between GSB and urlscan.io
-5. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `StatusIndicator`, `ServerLocation`, `ScreenshotURL`
-
-**Status thresholds:** `malicious: true` → MALICIOUS; `score ≥ 50` → SUSPICIOUS; otherwise SAFE.
+4. **Merge verdicts** — most severe status wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; otherwise SAFE
+5. **Check internal URLRules** — if the domain is in the `URLRules` table, BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (admin/moderator rules have final say)
+6. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `StatusIndicator`, `ServerLocation`, `ScreenshotURL`
 
 **Response shape per URL:**
 ```json
 {
-  "scan_id", "initial_url", "redirect_url", "status_indicator",
-  "score", "server_location", "screenshot_url", "brands", "tags",
-  "result_url", "gsb_flagged", "gsb_threat_types", "scanned_at"
+  "scan_id", "user_id", "uuid", "initial_url", "redirect_url",
+  "status_indicator", "score", "server_location", "ip_address",
+  "screenshot_url", "brands", "tags", "result_url",
+  "scanned_at", "gsb_flagged", "gsb_threat_types"
 }
 ```
 
@@ -180,10 +173,10 @@ RESEND_KEY
 
 ## Code Style & Conventions
 
-- **Python:** PEP 8, type hints throughout. FastAPI route handlers should be `async`. Required env vars must `raise ValueError` on missing — never fall back silently.
+- **Python:** PEP 8, type hints throughout. Route handlers use sync `def` (not `async`). Required env vars must `raise ValueError` on missing — never fall back silently.
 - **TypeScript/JavaScript:** Functional components with hooks only. No class components.
 - **Naming:** snake_case for Python, camelCase for JS/TS, PascalCase for DB columns and SQLAlchemy model attributes.
-- **Schemas:** Follow the `Base / Create / Update / Response` Pydantic pattern in `schemas.py`. `Response` schemas always set `model_config = ConfigDict(from_attributes=True)`.
+- **Schemas:** Follow the `Base / Create / Update / Response` Pydantic pattern in `schemas.py`. `Response` schemas always set `class Config: from_attributes = True`.
 - **Partial updates:** Use `model_dump(exclude_unset=True)` in PUT handlers.
 
 ## Roles & Permissions
@@ -204,8 +197,71 @@ RESEND_KEY
 - `BlacklistRequest` has no rejection reason field.
 - No Redis caching — repeated scans re-run the full pipeline.
 
-## Reference Documents
+## User Stories
 
-- `DB_Creation_Script.sql` — Full database schema
-- `UserStories.txt` — Complete list of user stories
-- `HighLevelArchitecture.png` — System architecture diagram
+### User (Mobile App)
+
+**URL Input & Scanning:**
+1. As a user, I want to use my device camera to take photos of links so that I can perform a URL scan.
+2. As a user, I want to select images from my photo gallery so that I can scan URLs from past images.
+3. As a user, I want to manually input a URL into the application so that I can still use the application if the image scan doesn't work.
+4. As a user, I want to share my current browsing link to the application so that I don't have to open the app to share a link.
+
+**Scan Results & Display:**
+5. As a user, I want the system to display link redirects so that I can see the actual destination of shortened links.
+6. As a user, I want to be able to toggle between different scan result modes so that I can read my scan in different levels of detail.
+7. As a user, I want to see a status indicator of the website immediately after scanning so that I will easily understand if it is safe to open.
+8. As a user, I want to view the raw text content of the page so that I can read articles without advertisements.
+9. As a user, I want to export a scan report so that I can share the scan results to other people.
+10. As a user, I want to be able to share my scan report directly to messaging apps so that I can message others about the scan quickly.
+
+**Scan History:**
+11. As a user, I want to see my scan history so that I can track what I browsed in the past.
+12. As a user, I want to search my scan history by keywords to find a specific scan.
+13. As a user, I want to filter my scan history by status indicator of the scan so that I can easily view scans that matter to me.
+14. As a user, I want to clear my entire scan history so that I can protect my privacy.
+
+**Feedback & Requests:**
+15. As a user, I want to log feedback about a scan so that I can alert the system where there is an incorrect categorization.
+16. As a user, I want to submit a domain blacklist request so that I can flag a suspicious website for moderator review.
+17. As a user, I want to submit feedback about the application so that I can report issues or suggest improvements to the team.
+
+**Preferences & UX:**
+18. As a user, I want to toggle between Dark and Light themes so that I can view the application comfortably around different light sources.
+19. As a user, I want the device to vibrate when a scan completes so that I am physically alerted.
+20. As a user, I want to receive a push notification when a scan is completed so that I am alerted.
+21. As a user, I want to select my preferred browser so that I can start using the link after a scan.
+22. As a user, I want to receive a tutorial when I first open the app that I can learn how to use the application.
+23. As a user, I want to select the language of my scan report so that I can share it to others without manually translating.
+24. As a user, I want to be able to associate a scan with a person so that I can track my scans to specific individuals in the future.
+25. As a user, I want to be able to have seamless transfer between the application and my browser of choice so that I can have a smooth user experience.
+
+**Account Management:**
+26. As a user, I want to register a user account so that I can use the application.
+27. As a user, I want to update my user account information so that my details remain accurate.
+28. As a user, I want to log in to the system so that I can access the application.
+29. As a user, I want to log out of the system so that I can keep my user account secure when not in use.
+30. As a user, I want to reset my password via email so that I can regain access to my account if I forget my credentials.
+31. As a user, I want to view and update my application preferences in one place so that I can manage all my settings conveniently.
+
+### Moderator (Web Portal)
+
+32. As a moderator, I want to view the domain registration age so that I can better assess the website's credibility.
+33. As a moderator, I want to see the geographical location of the server hosting the website so that I can judge its credibility.
+34. As a moderator, I want to see a safe static screenshot of the webpage without actually visiting it so that I can judge its credibility.
+35. As a moderator, I want to be able to approve or reject user blacklist requests, so that I can update the application blacklist database.
+36. As a moderator, I want to view unresolved scan feedback so that I can identify incorrectly categorised URLs.
+37. As a moderator, I want to mark scan feedback as resolved so that I can track which disputes have been addressed.
+
+### Administrator (Web Portal)
+
+38. As an administrator, I want to be able to see an overview of the system health so that I can accurately plan for routine maintenance.
+39. As an administrator, I want to be able to have my blacklist & whitelist automatically maintain so that I can better allocate manpower elsewhere.
+40. As an administrator, I want to be able to perform sampling of my moderators request so that I can determine if my moderators are competent.
+41. As an administrator, I want to view all user accounts so that I can manage user accounts.
+42. As an administrator, I want to update user accounts so that I can make changes to user details and roles.
+43. As an administrator, I want to deactivate user accounts so that inactive or invalid users are removed.
+44. As an administrator, I want to view user feedback about the application so that I can plan for changes and improvements to the application.
+45. As an administrator, I want to manually add a domain to the blacklist or whitelist so that I can make immediate corrections outside of the automated process.
+46. As an administrator, I want to remove a domain from the blacklist or whitelist so that I can correct entries that were incorrectly flagged.
+47. As an administrator, I want to view the action history of users so that I can audit activity and investigate suspicious behaviour.

@@ -18,19 +18,14 @@ import {
   ScreenHeader,
 } from "../components/ui-components"
 import type { ScanResponse } from "../lib/api"
-import type { RiskLevel } from "../lib/types"
+import { statusToRisk, type RiskLevel } from "../lib/types"
 
-function verdictToRiskLevel(verdict: ScanResponse["status_indicator"]): RiskLevel {
-  if (verdict === "SAFE") return "safe";
-  if (verdict === "SUSPICIOUS") return "suspicious";
-  return "malicious";
-}
-
-export default function scanResults() {
+export default function ScanResults() {
   const { result, error } = useLocalSearchParams<{ result?: string; error?: string }>();
 
-  const scanData: ScanResponse | null = result ? JSON.parse(result) : null;
-  const riskLevel: RiskLevel = scanData ? verdictToRiskLevel(scanData.status_indicator) : "safe";
+  let scanData: ScanResponse | null = null;
+  try { if (result) scanData = JSON.parse(result); } catch { /* corrupted param */ }
+  const riskLevel: RiskLevel = scanData ? statusToRisk(scanData.status_indicator) : "safe";
   const isSafe = riskLevel === "safe";
 
   if (error || !scanData) {
@@ -109,8 +104,7 @@ export default function scanResults() {
 
         {/* Advanced */}
         <Card
-          className="mt-4"
-          onPress={() => router.push("/scan-results-advanced")}
+          className="mt-4 opacity-50"
         >
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-3">
@@ -125,14 +119,19 @@ export default function scanResults() {
           </View>
 
           <Text className="mt-2 text-xs text-muted-foreground">
-            View WHOIS data, SSL info, DNS records, and more
+            Coming soon — WHOIS data, SSL info, DNS records, and more
           </Text>
         </Card>
 
         {/* Report incorrect */}
         <Card
           className="mt-4"
-          onPress={() => router.push("/report-scan")}
+          onPress={() =>
+            router.push({
+              pathname: "/report-scan",
+              params: { scanId: String(scanData.scan_id) },
+            })
+          }
         >
           <View className="flex-row items-center justify-between">
 
