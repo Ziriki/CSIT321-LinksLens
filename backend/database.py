@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -11,8 +12,11 @@ MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "LinksLens-DB")
 MYSQL_HOST = os.getenv("MYSQL_HOST", "db") 
 
-# Build the connection URL
-SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:3306/{MYSQL_DATABASE}"
+# URL-encode credentials to safely handle special characters (e.g. @, #, $) in passwords
+SQLALCHEMY_DATABASE_URL = (
+    f"mysql+pymysql://{quote_plus(MYSQL_USER)}:{quote_plus(MYSQL_PASSWORD)}"
+    f"@{MYSQL_HOST}:3306/{MYSQL_DATABASE}"
+)
 
 # Initialize the SQLAlchemy engine
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
