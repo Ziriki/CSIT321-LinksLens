@@ -301,7 +301,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             "brands": urlscan_result["brands"],
             "tags": urlscan_result["tags"],
             "result_url": urlscan_result["result_url"],
-            "scanned_at": scan_record.ScannedAt,
+            "scanned_at": scan_record.ScannedAt.isoformat() if scan_record.ScannedAt else None,
             "gsb_flagged": gsb["flagged"],
             "gsb_threat_types": gsb["threat_types"],
         })
