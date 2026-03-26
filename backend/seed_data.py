@@ -5,7 +5,6 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from passlib.context import CryptContext
 from faker import Faker
 
 import models
@@ -16,7 +15,8 @@ fake = Faker()
 
 # Rebuild all tables
 models.Base.metadata.create_all(bind=engine)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+from utils import get_password_hash
 
 def generate_secure_password(length=16):
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
@@ -56,11 +56,11 @@ def seed_massive_database():
         
         # 5 Master Accounts
         master_accounts = [
-            models.UserAccount(EmailAddress="admin@linkslens.com", PasswordHash=pwd_context.hash("o4LU6t$pGKGhEXZP"), RoleID=admin_role_id),
-            models.UserAccount(EmailAddress="mod1@linkslens.com", PasswordHash=pwd_context.hash("X4tFpfErsT*ETWdI"), RoleID=mod_role_id),
-            models.UserAccount(EmailAddress="mod2@linkslens.com", PasswordHash=pwd_context.hash("msqb2&RsN5%18pn1"), RoleID=mod_role_id),
-            models.UserAccount(EmailAddress="user1@gmail.com", PasswordHash=pwd_context.hash("##3NQwuNGFL3EepW"), RoleID=user_role_id),
-            models.UserAccount(EmailAddress="user2@gmail.com", PasswordHash=pwd_context.hash("bL86S70^5WW&yJNj"), RoleID=user_role_id),
+            models.UserAccount(EmailAddress="admin@linkslens.com", PasswordHash=get_password_hash("o4LU6t$pGKGhEXZP"), RoleID=admin_role_id),
+            models.UserAccount(EmailAddress="mod1@linkslens.com", PasswordHash=get_password_hash("X4tFpfErsT*ETWdI"), RoleID=mod_role_id),
+            models.UserAccount(EmailAddress="mod2@linkslens.com", PasswordHash=get_password_hash("msqb2&RsN5%18pn1"), RoleID=mod_role_id),
+            models.UserAccount(EmailAddress="user1@gmail.com", PasswordHash=get_password_hash("##3NQwuNGFL3EepW"), RoleID=user_role_id),
+            models.UserAccount(EmailAddress="user2@gmail.com", PasswordHash=get_password_hash("bL86S70^5WW&yJNj"), RoleID=user_role_id),
         ]
         users.extend(master_accounts)
 
@@ -73,7 +73,7 @@ def seed_massive_database():
             
             users.append(models.UserAccount(
                 EmailAddress=fake_email,
-                PasswordHash=pwd_context.hash(fake_password),
+                PasswordHash=get_password_hash(fake_password),
                 RoleID=user_role_id,
                 CreatedAt=fake.date_time_between(start_date='-1y', end_date='now', tzinfo=timezone.utc)
             ))
