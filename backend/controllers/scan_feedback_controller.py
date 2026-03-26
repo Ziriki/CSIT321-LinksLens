@@ -142,7 +142,7 @@ def list_feedback_enriched(
 ):
     query = db.query(models.ScanFeedback).options(
         joinedload(models.ScanFeedback.scan),
-        joinedload(models.ScanFeedback.user)
+        joinedload(models.ScanFeedback.user).joinedload(models.UserAccount.details)
     )
 
     if is_resolved is not None:
@@ -152,17 +152,12 @@ def list_feedback_enriched(
 
     enriched = []
     for fb in results:
-        # Look up user details (FullName)
-        user_detail = db.query(models.UserDetails).filter(
-            models.UserDetails.UserID == fb.UserID
-        ).first()
-
         enriched.append({
             "FeedbackID": fb.FeedbackID,
             "ScanID": fb.ScanID,
             "UserID": fb.UserID,
             "UserEmail": fb.user.EmailAddress if fb.user else "Unknown",
-            "UserName": user_detail.FullName if user_detail else "N/A",
+            "UserName": get_fullname(fb.user),
             "InitialURL": fb.scan.InitialURL if fb.scan else "N/A",
             "CurrentStatus": fb.scan.StatusIndicator.value if fb.scan and fb.scan.StatusIndicator else "N/A",
             "SuggestedStatus": fb.SuggestedStatus.value if fb.SuggestedStatus else "N/A",
