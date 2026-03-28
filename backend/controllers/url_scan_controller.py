@@ -287,6 +287,8 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise HTTPException(status_code=400, detail=f"Invalid URL: {url}")
 
+    # Note: Perform the requests and db query async, wait for results before determine if script analysis is necessary
+
     # Step 1: Batch-check all URLs with Google Safe Browsing v4 (single round-trip)
     gsb_results = check_google_safe_browsing(urls)
 
