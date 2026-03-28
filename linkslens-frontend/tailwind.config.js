@@ -9,23 +9,24 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: "#ffffff",
-        foreground: "#171717",
+        background: "var(--background)",
+        foreground: "var(--foreground)",
 
-        card: "#ffffff",
-        "card-foreground": "#171717",
+        card: "var(--card)",
+        "card-foreground": "var(--card-foreground)",
 
+        // primary stays hardcoded so bg-primary/10 opacity modifiers work
         primary: "#2563eb",
         "primary-foreground": "#ffffff",
 
-        secondary: "#f3f4f6",
-        "secondary-foreground": "#171717",
+        secondary: "var(--secondary)",
+        "secondary-foreground": "var(--secondary-foreground)",
 
-        muted: "#f3f4f6",
-        "muted-foreground": "#6b7280",
+        muted: "var(--muted)",
+        "muted-foreground": "var(--muted-foreground)",
 
-        border: "#e5e7eb",
-        input: "#e5e7eb",
+        border: "var(--border)",
+        input: "var(--input)",
 
         safe: "#22c55e",
         suspicious: "#f59e0b",
