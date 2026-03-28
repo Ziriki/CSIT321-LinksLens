@@ -22,8 +22,10 @@ import { fetchDetails, fetchScanHistory, getCurrentUserId } from "../lib/api"
 import type { ScanHistoryItem } from "../lib/api"
 import { statusToRisk, countScansThisMonth } from "../lib/types"
 import { bottomNavItems } from "../lib/navigation"
+import { useIconColor } from "../lib/theme"
 
 export default function HomePage() {
+  const iconCol = useIconColor()
   const [name, setName] = useState("User")
   const [monthScans, setMonthScans] = useState(0)
   const [totalScans, setTotalScans] = useState(0)
@@ -65,7 +67,7 @@ export default function HomePage() {
             className="h-11 w-11 items-center justify-center rounded-full bg-secondary"
             onPress={() => router.push("/profile")}
           >
-            <User size={20} color="black" />
+            <User size={20} color={iconCol} />
           </Pressable>
         </View>
       </View>
