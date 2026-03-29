@@ -32,6 +32,7 @@ class UserAccount(Base):
     role = relationship("UserRole")
     details = relationship("UserDetails", uselist=False, back_populates="account")
     reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
+    verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
 
 class UserDetails(Base):
     __tablename__ = "UserDetails"
@@ -128,7 +129,8 @@ class ScanHistory(Base):
     ScanID = Column(Integer, primary_key=True, index=True, autoincrement=True)
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=True) 
     InitialURL = Column(String(2048), nullable=False)
-    RedirectURL = Column(String(2048), nullable=True) 
+    RedirectURL = Column(String(2048), nullable=True)
+    RedirectChain = Column(JSON, nullable=True)  # Ordered list of all redirect URLs
     StatusIndicator = Column(Enum(ScanStatusEnum), default=ScanStatusEnum.PENDING, nullable=False)
     DomainAgeDays = Column(Integer, nullable=True)
     ServerLocation = Column(String(100), nullable=True)
@@ -183,3 +185,15 @@ class PasswordResetToken(Base):
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("UserAccount", back_populates="reset_tokens")
+
+class EmailVerificationToken(Base):
+    __tablename__ = "EmailVerificationToken"
+
+    TokenID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    Token = Column(String(255), unique=True, nullable=False, index=True)
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
+    ExpiresAt = Column(DateTime(timezone=True), nullable=False)
+    IsUsed = Column(Boolean, default=False)
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("UserAccount", back_populates="verification_tokens")

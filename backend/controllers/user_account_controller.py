@@ -4,10 +4,9 @@ from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import secrets
 import os
-import resend
 from dotenv import load_dotenv
 
-from utils import get_fullname, get_password_hash
+from utils import get_fullname, get_password_hash, hash_token, normalize_expiry, send_email
 
 load_dotenv()
 
@@ -159,6 +158,74 @@ def list_accounts(
     ]
 
 #########################################################
+# REGISTER - Create Account + Send Verification Email
+#########################################################
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get_db)):
+    if db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == request.EmailAddress).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    hashed_pwd = get_password_hash(request.Password)
+    db_account = models.UserAccount(
+        EmailAddress=request.EmailAddress,
+        PasswordHash=hashed_pwd,
+        RoleID=3,
+        IsActive=False,
+    )
+    db.add(db_account)
+    db.flush()  # needed to get auto-generated UserID
+
+    db.add(models.UserDetails(UserID=db_account.UserID, FullName=request.FullName))
+
+    raw_token = secrets.token_urlsafe(32)
+    db.add(models.EmailVerificationToken(
+        Token=hash_token(raw_token),
+        UserID=db_account.UserID,
+        ExpiresAt=datetime.now(timezone.utc) + timedelta(hours=24),
+        IsUsed=False,
+    ))
+
+    verify_link = f"https://linkslens.com/verify-email?token={raw_token}"
+    email_html = f"""
+    <h2>Welcome to LinksLens!</h2>
+    <p>Hi {request.FullName}, thanks for signing up. Please verify your email address to activate your account.</p>
+    <p>This link expires in 24 hours.</p>
+    <a href="{verify_link}" style="display:inline-block; padding:10px 20px; background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">Verify Email Address</a>
+    """
+
+    try:
+        send_email(request.EmailAddress, "Verify your LinksLens account", email_html)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to send verification email. Please try again.")
+
+    db.commit()
+    return {"message": "Account created. Please check your email to verify your account."}
+
+
+#########################################################
+# VERIFY EMAIL - Activate Account
+#########################################################
+@router.post("/verify-email")
+def verify_email(request: schemas.VerifyEmailRequest, db: Session = Depends(get_db)):
+    token_record = db.query(models.EmailVerificationToken).filter(
+        models.EmailVerificationToken.Token == hash_token(request.Token)
+    ).first()
+
+    if not token_record or token_record.IsUsed:
+        raise HTTPException(status_code=400, detail="Invalid or already used verification link.")
+
+    if datetime.now(timezone.utc) > normalize_expiry(token_record.ExpiresAt):
+        raise HTTPException(status_code=400, detail="Verification link has expired. Please register again.")
+
+    token_record.user.IsActive = True
+    token_record.IsUsed = True
+    db.commit()
+
+    return {"message": "Email verified successfully. You can now log in."}
+
+
+#########################################################
 # FORGOT PASSWORD - Create Token Record & Send Email
 #########################################################
 @router.post("/forgot-password")
@@ -175,33 +242,24 @@ def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depend
         models.PasswordResetToken.IsUsed == False
     ).update({"IsUsed": True})
 
-    token = secrets.token_urlsafe(32)
-    expiry_time = datetime.now(timezone.utc) + timedelta(minutes=15)
-
-    db_token = models.PasswordResetToken(
-        Token=token,
+    raw_token = secrets.token_urlsafe(32)
+    db.add(models.PasswordResetToken(
+        Token=hash_token(raw_token),
         UserID=user.UserID,
-        ExpiresAt=expiry_time,
-        IsUsed=False
-    )
-    db.add(db_token)
+        ExpiresAt=datetime.now(timezone.utc) + timedelta(minutes=15),
+        IsUsed=False,
+    ))
     db.flush()
 
-    reset_link = f"https://linkslens.com/reset-password?token={token}"
+    reset_link = f"https://linkslens.com/reset-password?token={raw_token}"
     email_html = f"""
     <h2>LinksLens Password Reset</h2>
     <p>You requested a password reset. Click the link below to choose a new password. This link expires in 15 minutes.</p>
     <a href="{reset_link}" style="display:inline-block; padding:10px 20px; background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">Reset Password</a>
     """
 
-    resend.api_key = os.getenv("RESEND_KEY")
     try:
-        resend.Emails.send({
-            "from": "LinksLens Security <noreply@linkslens.com>",
-            "to": [user.EmailAddress],
-            "subject": "Reset your LinksLens Password",
-            "html": email_html
-        })
+        send_email(user.EmailAddress, "Reset your LinksLens Password", email_html, from_name="LinksLens Security")
     except Exception:
         db.rollback()
         return generic_message
@@ -215,7 +273,7 @@ def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depend
 @router.post("/reset-password")
 def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
     token_record = db.query(models.PasswordResetToken).filter(
-        models.PasswordResetToken.Token == request.Token
+        models.PasswordResetToken.Token == hash_token(request.Token)
     ).first()
 
     if not token_record:
@@ -224,12 +282,7 @@ def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(
     if token_record.IsUsed:
         raise HTTPException(status_code=400, detail="This token has already been used.")
 
-    current_time = datetime.now(timezone.utc)
-    expiry_time = token_record.ExpiresAt
-    if expiry_time.tzinfo is None:
-        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
-
-    if current_time > expiry_time:
+    if datetime.now(timezone.utc) > normalize_expiry(token_record.ExpiresAt):
         raise HTTPException(status_code=400, detail="Reset token has expired. Please request a new one.")
 
     user = token_record.user
