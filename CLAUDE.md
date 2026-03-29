@@ -71,14 +71,14 @@ mysql -u root -p LinksLens-DB < DB_Creation_Script.sql   # Initialize schema
 
 ## Backend Code Architecture
 
-The backend is **flat** — all models are in `backend/models.py`, all Pydantic schemas in `backend/schemas.py` (exception: `ScanRequest` Pydantic model lives in `models.py`). Shared helpers are in `backend/utils.py` (`get_fullname`, `get_password_hash`, `verify_password`).
+The backend is **flat** — all models are in `backend/models.py`, all Pydantic schemas in `backend/schemas.py` (exception: `ScanRequest` Pydantic model lives in `models.py`). Shared helpers are in `backend/utils.py` (`get_fullname`, `get_password_hash`, `verify_password`, `hash_token`, `normalize_expiry`, `send_email`).
 
 **Controller pattern:** Each controller in `backend/controllers/` defines a FastAPI `APIRouter` with `prefix="/api/<resource>"` and implements standard CRUDL endpoints. All routers are imported and registered in `main.py`.
 
 **Controllers and their prefixes:**
 - `auth_controller.py` → `/api/auth` (login/logout)
 - `user_role_controller.py` → `/api/roles`
-- `user_account_controller.py` → `/api/accounts` (includes forgot/reset-password)
+- `user_account_controller.py` → `/api/accounts` (includes register, verify-email, forgot-password, reset-password)
 - `user_details_controller.py` → `/api/details`
 - `user_preferences_controller.py` → `/api/preferences`
 - `action_history_controller.py` → `/api/history`
@@ -89,7 +89,7 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `scan_feedback_controller.py` → `/api/scan-feedback`
 - `url_scan_controller.py` → `/scan` (external scanning pipeline — not a CRUDL controller)
 
-**Note:** API routes use `/api/` prefix. The `/scan` endpoint is the exception — it is top-level and drives the full scan pipeline.
+**Note:** API routes use `/api/` prefix. The `/scan` endpoint is the exception — it is top-level and drives the full scan pipeline. System health is at `/api/health` (admin only).
 
 **`/scan` pipeline (`url_scan_controller.py`):**
 `POST /scan` accepts `{ "urls": str | list[str] }` — single string or list, always normalised to a list. Returns an array of results (one per URL).
@@ -98,14 +98,15 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 2. **urlscan.io submission** — each URL submitted separately to `POST urlscan.io/api/v1/scan/` with `visibility: public`
 3. **Poll for result** — waits 10s, then polls every 5s up to 12 attempts (70s total timeout)
 4. **Merge verdicts** — most severe status wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; otherwise SAFE
-5. **Check internal URLRules** — if the domain is in the `URLRules` table, BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (admin/moderator rules have final say)
-6. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `StatusIndicator`, `ServerLocation`, `ScreenshotURL`
+5. **WHOIS domain age** — `get_domain_age_days(domain)` does a WHOIS lookup and computes the domain's age in days; saved to `ScanHistory.DomainAgeDays`; non-blocking (failures return `None`)
+6. **Check internal URLRules** — if the domain is in the `URLRules` table, BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (admin/moderator rules have final say)
+7. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`
 
 **Response shape per URL:**
 ```json
 {
   "scan_id", "user_id", "uuid", "initial_url", "redirect_url",
-  "status_indicator", "score", "server_location", "ip_address",
+  "status_indicator", "score", "domain_age_days", "server_location", "ip_address",
   "screenshot_url", "brands", "tags", "result_url",
   "scanned_at", "gsb_flagged", "gsb_threat_types"
 }
@@ -123,9 +124,18 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `get_current_user()` — extracts JWT from cookie (web) or `Authorization: Bearer` header (mobile); returns `{"user_id": int, "role_id": int}`
 - `require_role(*role_ids)` — route-level RBAC; e.g. `Depends(require_role(1))` for admin-only
 
+**Registration & email verification flow (`user_account_controller.py`):**
+1. `POST /api/accounts/register` — creates account with `IsActive=False`, creates `UserDetails` with `FullName`, generates SHA-256-hashed `EmailVerificationToken` (24h expiry), sends verification link via Resend
+2. `POST /api/accounts/verify-email` — validates token is unused/unexpired, sets `IsActive=True`, marks token used
+3. Login on an unverified account returns HTTP 403 "Please verify your email address before logging in."
+
 **Password reset flow (`user_account_controller.py`):**
 1. `POST /api/accounts/forgot-password` → generates token, saves `PasswordResetToken` row (15-min expiry), sends link via Resend from `noreply@linkslens.com`
 2. `POST /api/accounts/reset-password` → validates token is unused/unexpired, updates `PasswordHash`, marks token used
+
+**Token security:** Both `EmailVerificationToken` and `PasswordResetToken` store only the SHA-256 hash of the raw token in the database. The raw token is sent to the user; the hash is stored. `hash_token()`, `normalize_expiry()`, and `send_email()` in `utils.py` are shared across all token endpoints.
+
+**Design decision:** Password reset is web-only. The mobile "Forgot Password?" button opens `https://linkslens.com/reset-password` in the device browser via `Linking.openURL`. No in-app reset screen.
 
 ## Mobile App (`linkslens-frontend/`)
 
@@ -135,6 +145,7 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 
 **Auth (implemented):**
 - `index.tsx` → calls `login(email, password)` from `lib/api.ts` → `POST /api/auth/login` with `ClientType: "mobile"` → JWT stored via `expo-secure-store`
+- `signup.tsx` → calls `signup(fullName, email, password)` → `POST /api/accounts/register` → shows "check your email" confirmation screen
 - `lib/api.ts` exports `saveToken`, `getToken`, `clearToken`, `authHeaders()` — all authenticated requests use `authHeaders()` which attaches `Authorization: Bearer <token>`
 - `expo-secure-store` is registered as an Expo plugin in `app.json` and is a native module — requires `expo run:android` build
 
@@ -144,6 +155,10 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `scan-link.tsx` → manual URL entry, navigates to `scan-processing`
 - `scan-processing.tsx` → calls `scanUrl(url)` from `lib/api.ts` → `POST /scan` (with JWT) → navigates to `scan-results`
 - `scan-results.tsx` → displays `status_indicator`, `score`, `gsb_threat_types`, `initial_url`
+
+**Shared frontend utilities:**
+- `lib/types.ts` — `statusToRisk()`, `countScansThisMonth()`, shared TypeScript types
+- `lib/navigation.tsx` — `bottomNavItems` shared across all screens with the bottom nav bar
 
 **Not yet implemented (UI stubs):** Scan history loading, profile, feedback submission, all settings screens.
 
@@ -167,7 +182,9 @@ GOOGLE_SAFE_BROWSING_API_KEY
 RESEND_KEY
 ```
 
-**Tables (11):** `UserRole`, `UserAccount`, `UserDetails`, `UserPreferences`, `AppFeedback`, `ActionHistory`, `URLRules`, `BlacklistRequest`, `ScanHistory`, `ScanFeedback`, `PasswordResetToken`
+**Tables (12):** `UserRole`, `UserAccount`, `UserDetails`, `UserPreferences`, `AppFeedback`, `ActionHistory`, `URLRules`, `BlacklistRequest`, `ScanHistory`, `ScanFeedback`, `PasswordResetToken`, `EmailVerificationToken`
+
+**Connection pool:** `pool_pre_ping=True, pool_recycle=3600` on the SQLAlchemy engine — prevents "MySQL server has gone away" errors on long-idle connections.
 
 **Enum columns** defined as Python `enum.Enum` subclasses in `models.py`, re-imported into `schemas.py`: `RequestStatus`, `ListTypeEnum`, `ScanStatusEnum`, `SuggestedStatusEnum`, `ClientTypeEnum`.
 
@@ -196,6 +213,7 @@ RESEND_KEY
 - `ScanFeedback` has no `CreatedAt` timestamp.
 - `BlacklistRequest` has no rejection reason field.
 - No Redis caching — repeated scans re-run the full pipeline.
+- WHOIS lookups in the scan pipeline may time out on some domains; `DomainAgeDays` will be `null` in those cases.
 
 ## User Stories
 
@@ -233,35 +251,32 @@ RESEND_KEY
 21. As a user, I want to select my preferred browser so that I can start using the link after a scan.
 22. As a user, I want to receive a tutorial when I first open the app that I can learn how to use the application.
 23. As a user, I want to select the language of my scan report so that I can share it to others without manually translating.
-24. As a user, I want to be able to associate a scan with a person so that I can track my scans to specific individuals in the future.
-25. As a user, I want to be able to have seamless transfer between the application and my browser of choice so that I can have a smooth user experience.
+24. As a user, I want to be able to have seamless transfer between the application and my browser of choice so that I can have a smooth user experience.
 
 **Account Management:**
-26. As a user, I want to register a user account so that I can use the application.
-27. As a user, I want to update my user account information so that my details remain accurate.
-28. As a user, I want to log in to the system so that I can access the application.
-29. As a user, I want to log out of the system so that I can keep my user account secure when not in use.
-30. As a user, I want to reset my password via email so that I can regain access to my account if I forget my credentials.
-31. As a user, I want to view and update my application preferences in one place so that I can manage all my settings conveniently.
+25. As a user, I want to register a user account so that I can use the application.
+26. As a user, I want to update my user account information so that my details remain accurate.
+27. As a user, I want to log in to the system so that I can access the application.
+28. As a user, I want to log out of the system so that I can keep my user account secure when not in use.
+29. As a user, I want to reset my password via email so that I can regain access to my account if I forget my credentials.
+30. As a user, I want to view and update my application preferences in one place so that I can manage all my settings conveniently.
 
 ### Moderator (Web Portal)
 
-32. As a moderator, I want to view the domain registration age so that I can better assess the website's credibility.
-33. As a moderator, I want to see the geographical location of the server hosting the website so that I can judge its credibility.
-34. As a moderator, I want to see a safe static screenshot of the webpage without actually visiting it so that I can judge its credibility.
-35. As a moderator, I want to be able to approve or reject user blacklist requests, so that I can update the application blacklist database.
-36. As a moderator, I want to view unresolved scan feedback so that I can identify incorrectly categorised URLs.
-37. As a moderator, I want to mark scan feedback as resolved so that I can track which disputes have been addressed.
+31. As a moderator, I want to view the domain registration age so that I can better assess the website's credibility.
+32. As a moderator, I want to see the geographical location of the server hosting the website so that I can judge its credibility.
+33. As a moderator, I want to see a safe static screenshot of the webpage without actually visiting it so that I can judge its credibility.
+34. As a moderator, I want to be able to approve or reject user blacklist requests, so that I can update the application blacklist database.
+35. As a moderator, I want to view unresolved scan feedback so that I can identify incorrectly categorised URLs.
+36. As a moderator, I want to mark scan feedback as resolved so that I can track which disputes have been addressed.
 
 ### Administrator (Web Portal)
 
-38. As an administrator, I want to be able to see an overview of the system health so that I can accurately plan for routine maintenance.
-39. As an administrator, I want to be able to have my blacklist & whitelist automatically maintain so that I can better allocate manpower elsewhere.
-40. As an administrator, I want to be able to perform sampling of my moderators request so that I can determine if my moderators are competent.
-41. As an administrator, I want to view all user accounts so that I can manage user accounts.
-42. As an administrator, I want to update user accounts so that I can make changes to user details and roles.
-43. As an administrator, I want to deactivate user accounts so that inactive or invalid users are removed.
-44. As an administrator, I want to view user feedback about the application so that I can plan for changes and improvements to the application.
-45. As an administrator, I want to manually add a domain to the blacklist or whitelist so that I can make immediate corrections outside of the automated process.
-46. As an administrator, I want to remove a domain from the blacklist or whitelist so that I can correct entries that were incorrectly flagged.
-47. As an administrator, I want to view the action history of users so that I can audit activity and investigate suspicious behaviour.
+37. As an administrator, I want to be able to see an overview of the system health so that I can accurately plan for routine maintenance.
+38. As an administrator, I want to view all user accounts so that I can manage user accounts.
+39. As an administrator, I want to update user accounts so that I can make changes to user details and roles.
+40. As an administrator, I want to deactivate user accounts so that inactive or invalid users are removed.
+41. As an administrator, I want to view user feedback about the application so that I can plan for changes and improvements to the application.
+42. As an administrator, I want to manually add a domain to the blacklist or whitelist so that I can make immediate corrections outside of the automated process.
+43. As an administrator, I want to remove a domain from the blacklist or whitelist so that I can correct entries that were incorrectly flagged.
+44. As an administrator, I want to view the action history of users so that I can audit activity and investigate suspicious behaviour.

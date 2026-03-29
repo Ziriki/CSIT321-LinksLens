@@ -16,6 +16,7 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [done, setDone] = useState(false)
 
   const canSubmit = fullName.trim() && email.trim() && password && confirmPassword
 
@@ -31,12 +32,29 @@ export default function Signup() {
     setLoading(true)
     try {
       await signup(fullName.trim(), email.trim(), password)
-      router.replace("/home")
+      setDone(true)
     } catch (e: any) {
       Alert.alert("Signup Failed", e.message ?? "Please try again.")
     } finally {
       setLoading(false)
     }
+  }
+
+  if (done) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-6">
+        <Text className="text-4xl mb-4">📧</Text>
+        <Text className="text-2xl font-bold text-foreground mb-2">Check your email</Text>
+        <Text className="text-center text-muted-foreground mb-8">
+          We sent a verification link to{" "}
+          <Text className="font-medium text-foreground">{email}</Text>
+          {". Please click the link to activate your account."}
+        </Text>
+        <AppButton fullWidth onPress={() => router.replace("/")}>
+          Back to Sign In
+        </AppButton>
+      </View>
+    )
   }
 
   return (

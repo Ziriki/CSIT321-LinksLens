@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 import requests
 import time
 import os
+import whois
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from urllib.parse import quote, urlparse
 
@@ -46,6 +48,29 @@ _SUSPICIOUS_THREATS = {"UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"}
 # Severity order used when merging two verdicts
 _STATUS_SEVERITY = {"SAFE": 0, "SUSPICIOUS": 1, "MALICIOUS": 2}
 
+
+
+#########################################################
+# Helper: Get domain age in days via WHOIS
+#########################################################
+def get_domain_age_days(domain: str) -> int | None:
+    """
+    Look up the domain creation date via WHOIS and return its age in days.
+    Returns None if the lookup fails or the creation date is unavailable.
+    Non-blocking — failures must never abort the scan pipeline.
+    """
+    try:
+        info = whois.whois(domain)
+        creation_date = info.creation_date
+        if isinstance(creation_date, list):
+            creation_date = creation_date[0]
+        if not isinstance(creation_date, datetime):
+            return None
+        if creation_date.tzinfo is None:
+            creation_date = creation_date.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - creation_date).days
+    except Exception:
+        return None
 
 
 #########################################################
@@ -206,6 +231,43 @@ def poll_result(uuid: str) -> dict | None:
 
 
 #########################################################
+# Helper: Extract the full redirect chain from urlscan.io result
+#########################################################
+def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
+    """
+    Build an ordered list of redirect URLs from urlscan.io result data.
+    Parses data.requests for 3xx responses to reconstruct the chain.
+    Returns an empty list if there were no redirects or the data is unavailable.
+    Non-blocking — failures must never abort the scan pipeline.
+    """
+    if not raw_result:
+        return []
+
+    final_url = raw_result.get("page", {}).get("url", "")
+    if not final_url or final_url == initial_url:
+        return []
+
+    try:
+        requests_data = raw_result.get("data", {}).get("requests", [])
+        chain = []
+        for req in requests_data:
+            response_obj = req.get("response", {}).get("response", {})
+            status = response_obj.get("status", 0)
+            if 300 <= status < 400:
+                url = response_obj.get("url", "")
+                if url and url not in chain:
+                    chain.append(url)
+
+        if chain and final_url not in chain:
+            chain.append(final_url)
+
+        return chain if chain else [final_url]
+    except Exception:
+        # Fallback: just the final URL so we always return something useful
+        return [final_url]
+
+
+#########################################################
 # Helper: Map urlscan.io raw result to a structured dict
 #########################################################
 def process_result(uuid: str | None, raw_result: dict | None) -> dict:
@@ -312,7 +374,10 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         final_status = merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
 
         # Step 6b: Check against internal URLRules (blacklist/whitelist) — overrides external verdicts
-        domain = urlparse(urlscan_result["initial_url"] or url).netloc
+        initial_url_resolved = urlscan_result["initial_url"] or url
+        domain = urlparse(initial_url_resolved).netloc
+        domain_age_days = get_domain_age_days(domain)
+        redirect_chain = extract_redirect_chain(initial_url_resolved, raw_result)
         url_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == domain).first()
         if url_rule:
             if url_rule.ListType == models.ListTypeEnum.BLACKLIST:
@@ -321,13 +386,13 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 final_status = "SAFE"
 
         # Step 7: Save to ScanHistory
-        # initial_url falls back to the submitted url if urlscan returned nothing
-        initial_url = urlscan_result["initial_url"] or url
         scan_record = models.ScanHistory(
             UserID=current_user["user_id"],
-            InitialURL=initial_url,
+            InitialURL=initial_url_resolved,
             RedirectURL=urlscan_result["redirect_url"],
+            RedirectChain=redirect_chain if redirect_chain else None,
             StatusIndicator=models.ScanStatusEnum(final_status),
+            DomainAgeDays=domain_age_days,
             ServerLocation=urlscan_result["server_location"],
             ScreenshotURL=urlscan_result["screenshot_url"],
         )
@@ -341,8 +406,10 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             "uuid": urlscan_result["uuid"],
             "initial_url": scan_record.InitialURL,
             "redirect_url": scan_record.RedirectURL,
+            "redirect_chain": scan_record.RedirectChain or [],
             "status_indicator": scan_record.StatusIndicator.value,
             "score": urlscan_result["score"],
+            "domain_age_days": scan_record.DomainAgeDays,
             "server_location": scan_record.ServerLocation,
             "ip_address": urlscan_result["ip_address"],
             "screenshot_url": scan_record.ScreenshotURL,
