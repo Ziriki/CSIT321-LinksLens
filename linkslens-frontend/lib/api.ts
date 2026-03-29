@@ -77,34 +77,14 @@ export async function signup(
   email: string,
   password: string,
 ): Promise<void> {
-  // Step 1: Create account (public endpoint)
-  const accRes = await fetch(`${API_BASE_URL}/api/accounts/`, {
+  const res = await fetch(`${API_BASE_URL}/api/accounts/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      EmailAddress: email,
-      Password: password,
-      RoleID: 3,
-    }),
+    body: JSON.stringify({ EmailAddress: email, Password: password, FullName: fullName }),
   });
-  if (!accRes.ok) {
-    const err = await accRes.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Signup failed: ${accRes.status}`);
-  }
-  const account = await accRes.json();
-
-  // Step 2: Log in to get a token
-  await login(email, password);
-
-  // Step 3: Create user details with the full name
-  const detRes = await fetch(`${API_BASE_URL}/api/details/`, {
-    method: "POST",
-    headers: await authHeaders(),
-    body: JSON.stringify({ UserID: account.UserID, FullName: fullName }),
-  });
-  if (!detRes.ok) {
-    const err = await detRes.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Failed to save profile: ${detRes.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? `Signup failed: ${res.status}`);
   }
 }
 
