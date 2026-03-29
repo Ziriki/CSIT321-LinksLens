@@ -52,18 +52,27 @@ def create_access_token(data: dict):
 @router.post("/login", response_model=schemas.TokenResponse)
 def login(credentials: schemas.UserLogin, response: Response, db: Session = Depends(get_db)):
     # 1. Find the user by email
-    user = db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == credentials.EmailAddress).first()
-    
+    user = db.query(models.UserAccount).filter(
+        models.UserAccount.EmailAddress == credentials.EmailAddress
+    ).first()
+
     # 2. Verify user exists and password matches
     if not user or not verify_password(credentials.Password, user.PasswordHash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
-    
-    # 3. Check if account is active
+
+    # 3. Check if account is active (covers both unverified and admin-deactivated accounts)
     if not user.IsActive:
-        raise HTTPException(status_code=403, detail="Account is deactivated")
+        # Only query verification tokens when needed (inactive accounts are rare)
+        has_pending_verification = db.query(models.EmailVerificationToken).filter(
+            models.EmailVerificationToken.UserID == user.UserID,
+            models.EmailVerificationToken.IsUsed == False,
+        ).first() is not None
+        if has_pending_verification:
+            raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
+        raise HTTPException(status_code=403, detail="This account has been deactivated. Please contact support.")
 
     # 4. Generate the JWT Token payload
     token_data = {"sub": str(user.UserID), "role": user.RoleID}
