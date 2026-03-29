@@ -138,6 +138,7 @@ def list_scans(
             "FullName": get_fullname(scan.user),
             "InitialURL": scan.InitialURL,
             "RedirectURL": scan.RedirectURL,
+            "RedirectChain": scan.RedirectChain or [],
             "StatusIndicator": scan.StatusIndicator.value if scan.StatusIndicator else None,
             "DomainAgeDays": scan.DomainAgeDays,
             "ServerLocation": scan.ServerLocation,
