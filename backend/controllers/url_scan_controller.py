@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from concurrent.futures import ThreadPoolExecutor
 import requests
 import time
 import os
@@ -43,10 +44,15 @@ MAX_POLL_ATTEMPTS = 12
 _MALICIOUS_THREATS = {"MALWARE", "SOCIAL_ENGINEERING"}
 _SUSPICIOUS_THREATS = {"UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"}
 
-# Severity order used when merging two verdicts
-_STATUS_SEVERITY = {"SAFE": 0, "SUSPICIOUS": 1, "MALICIOUS": 2}
+# Weights applied when combining GSB and urlscan scores (must sum to 1.0)
+_GSB_WEIGHT      = 0.55   # GSB is a large, authoritative threat database
+_URLSCAN_WEIGHT  = 0.45   # urlscan provides behavioural and visual analysis
 
-
+# Weighted-score thresholds for mapping to status
+# GSB MALWARE alone scores 100 × 0.55 = 55 → threshold ≤ 55 ensures it reaches MALICIOUS
+# GSB UNWANTED alone scores  60 × 0.55 = 33 → threshold ≤ 33 ensures it reaches SUSPICIOUS
+_MALICIOUS_THRESHOLD  = 50   # weighted score ≥ 50 → MALICIOUS
+_SUSPICIOUS_THRESHOLD = 30   # weighted score ≥ 30 → SUSPICIOUS
 
 #########################################################
 # Helper: Check URLs against Google Safe Browsing v4
@@ -247,7 +253,7 @@ def process_result(uuid: str | None, raw_result: dict | None) -> dict:
         "urlscan_status": urlscan_status,
         "score": score,
         "initial_url": initial_url,
-        "redirect_url": redirect_url if redirect_url and redirect_url != initial_url else None,
+        "redirect_url": redirect_url if redirect_url and redirect_url != initial_url and redirect_url.startswith("http") else None,
         "server_location": page.get("country"),
         "ip_address": page.get("ip"),
         "screenshot_url": URLSCAN_SCREENSHOT_URL.format(uuid=uuid),
@@ -258,12 +264,116 @@ def process_result(uuid: str | None, raw_result: dict | None) -> dict:
 
 
 #########################################################
-# Helper: Return the more severe of two status strings
+# Helper: Run the full urlscan.io pipeline for one URL
 #########################################################
-def merge_status(gsb_status: str, urlscan_status: str) -> str:
-    if _STATUS_SEVERITY.get(gsb_status, 0) >= _STATUS_SEVERITY.get(urlscan_status, 0):
-        return gsb_status
-    return urlscan_status
+def run_urlscan(url: str) -> dict:
+    """Submit, poll and process a single URL through urlscan.io. Returns fallback on any failure."""
+    submission = submit_scan(url)
+    uuid = submission.get("uuid") if submission else None
+    raw_result = poll_result(uuid) if uuid else None
+    return process_result(uuid, raw_result)
+
+
+#########################################################
+# Helper: Query DB blacklist/whitelist for a URL domain
+#########################################################
+def check_blacklist_db(url: str) -> dict:
+    """
+    Check the URL domain against URLRules and BlacklistRequest tables.
+    Uses get_db() manually for thread safety — does not share the request session.
+    Returns: { domain, url_rule_type, is_approved_blacklist }
+    """
+    domain = urlparse(url).netloc
+    db_gen = get_db()
+    db = next(db_gen)
+    try:
+        url_rule = db.query(models.URLRules).filter(
+            models.URLRules.URLDomain == domain
+        ).first()
+
+        approved_blacklist = db.query(models.BlacklistRequest).filter(
+            models.BlacklistRequest.URLDomain == domain,
+            models.BlacklistRequest.Status == models.RequestStatus.APPROVED
+        ).first()
+
+        return {
+            "domain": domain,
+            "url_rule_type": url_rule.ListType.value if url_rule else None,
+            "is_approved_blacklist": approved_blacklist is not None,
+        }
+    finally:
+        next(db_gen, None)
+
+
+#########################################################
+# Helper: Compare GSB, urlscan and DB results
+#########################################################
+def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict) -> dict:
+    """
+    Derive a final_status by weighing all three verdict sources.
+
+    Step 1 — Convert raw signals to 0-100 scores:
+      GSB score:
+        Any MALWARE / SOCIAL_ENGINEERING threat type  → 100
+        Any UNWANTED_SOFTWARE / POTENTIALLY_HARMFUL   → 60
+        No threats flagged                            → 0
+
+      urlscan score: numeric field from result (0-100)
+
+    Step 2 — Weighted combination:
+      weighted_score = (gsb_score × 0.55) + (urlscan_score × 0.45)
+
+    Step 3 — Map to api_status:
+      weighted_score ≥ 70 → MALICIOUS
+      weighted_score ≥ 40 → SUSPICIOUS
+      weighted_score < 40 → SAFE
+
+    Step 4 — DB rule override (authoritative — admin/moderator has final say):
+      URLRules BLACKLIST or approved BlacklistRequest → MALICIOUS
+      URLRules WHITELIST                              → SAFE
+    """
+    # Step 1: derive scores
+    threat_types = gsb.get("threat_types", [])
+    if any(t in _MALICIOUS_THREATS for t in threat_types):
+        gsb_score = 100
+    elif any(t in _SUSPICIOUS_THREATS for t in threat_types):
+        gsb_score = 60
+    else:
+        gsb_score = 0
+
+    urlscan_score = urlscan_result.get("score") or 0
+
+    # Step 2: weighted combination
+    weighted_score = (gsb_score * _GSB_WEIGHT) + (urlscan_score * _URLSCAN_WEIGHT)
+
+    # Step 3: map to api_status
+    if weighted_score >= _MALICIOUS_THRESHOLD:
+        api_status = "MALICIOUS"
+    elif weighted_score >= _SUSPICIOUS_THRESHOLD:
+        api_status = "SUSPICIOUS"
+    else:
+        api_status = "SAFE"
+
+    # Step 4: DB rule override
+    url_rule = blacklist_check.get("url_rule_type")
+    is_approved_blacklist = blacklist_check.get("is_approved_blacklist", False)
+
+    if url_rule == "BLACKLIST" or is_approved_blacklist:
+        final_status = "MALICIOUS"
+    elif url_rule == "WHITELIST":
+        final_status = "SAFE"
+    else:
+        final_status = api_status
+
+    return final_status
+
+
+#########################################################
+# Placeholder: Perform task based on comparison result
+#########################################################
+def perform_task(final_status: str) -> dict:
+    # TODO: implement task logic
+    pass
 
 
 #########################################################
@@ -272,88 +382,85 @@ def merge_status(gsb_status: str, urlscan_status: str) -> str:
 @router.post("")
 def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """
-    Accept a single URL string or a list of URL strings.
-    Each URL is checked via Google Safe Browsing v4 first, then submitted to urlscan.io.
-    Results are merged (most severe verdict wins) and saved to ScanHistory.
-    Always returns a list — one entry per URL submitted.
+    For each URL:
+      1. Fire GSB, urlscan.io and DB blacklist check concurrently
+      2. Wait for all three results
+      3. compare_results() — placeholder
+      4. perform_task()    — placeholder
+      5. Merge verdicts, save to ScanHistory, return response
     """
-    urls = request.urls
-
-    if not urls:
-        raise HTTPException(status_code=400, detail="At least one URL is required.")
-
-    for url in urls:
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise HTTPException(status_code=400, detail=f"Invalid URL: {url}")
-
-    # Note: Perform the requests and db query async, wait for results before determine if script analysis is necessary
-
-    # Step 1: Batch-check all URLs with Google Safe Browsing v4 (single round-trip)
-    gsb_results = check_google_safe_browsing(urls)
-
     scan_results = []
+    try:
+        urls = request.urls
 
-    for url in urls:
-        gsb = gsb_results[url]
+        if not urls:
+            #Will change error message
+            raise HTTPException(status_code=400, detail="At least one URL is required.")
 
-        # Step 2: Submit to urlscan.io — returns None on failure
-        submission = submit_scan(url)
-        uuid = submission.get("uuid") if submission else None
+        for url in urls:
+            parsed = urlparse(url)
+            #Will change error message
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise HTTPException(status_code=400, detail=f"Invalid URL: {url}")
 
-        # Step 3: Poll for the result — returns None on timeout or failure
-        raw_result = poll_result(uuid) if uuid else None
+        for url in urls:
+            # Step 1: Fire GSB, urlscan.io and DB blacklist check concurrently
+            # Step 2: Collect results — .result() blocks until each future completes
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                gsb_future       = executor.submit(check_google_safe_browsing, [url])
+                urlscan_future   = executor.submit(run_urlscan, url)
+                blacklist_future = executor.submit(check_blacklist_db, url)
 
-        # Step 4: Perform script level analysis - returns None on timeout or failure
-        # script_result = script_analysis(url)
+                gsb             = gsb_future.result()[url]
+                urlscan_result  = urlscan_future.result()
+                blacklist_check = blacklist_future.result()
 
-        # Step 5: Parse result — process_result handles None uuid/raw_result with SUSPICIOUS fallback
-        urlscan_result = process_result(uuid, raw_result)
+            # Step 3: Compare results — weighted scoring + DB rule override
+            final_status = compare_async_results(gsb, urlscan_result, blacklist_check)
 
-        # Step 6: Merge GSB and urlscan verdicts — most severe status wins
-        final_status = merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
+            # Step 4: Perform task based on comparison (placeholder)
+            # process_result(comparison)
 
-        # Step 6b: Check against internal URLRules (blacklist/whitelist) — overrides external verdicts
-        domain = urlparse(urlscan_result["initial_url"] or url).netloc
-        url_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == domain).first()
-        if url_rule:
-            if url_rule.ListType == models.ListTypeEnum.BLACKLIST:
-                final_status = "MALICIOUS"
-            elif url_rule.ListType == models.ListTypeEnum.WHITELIST:
-                final_status = "SAFE"
+            # Step 6: Save to ScanHistory
+            initial_url = urlscan_result["initial_url"] or url
+            scan_record = models.ScanHistory(
+                UserID=current_user["user_id"],
+                InitialURL=initial_url,
+                RedirectURL=urlscan_result["redirect_url"],
+                StatusIndicator=models.ScanStatusEnum(final_status),
+                ServerLocation=urlscan_result["server_location"],
+                ScreenshotURL=urlscan_result["screenshot_url"],
+            )
+            db.add(scan_record)
+            db.commit()
+            db.refresh(scan_record)
 
-        # Step 7: Save to ScanHistory
-        # initial_url falls back to the submitted url if urlscan returned nothing
-        initial_url = urlscan_result["initial_url"] or url
-        scan_record = models.ScanHistory(
-            UserID=current_user["user_id"],
-            InitialURL=initial_url,
-            RedirectURL=urlscan_result["redirect_url"],
-            StatusIndicator=models.ScanStatusEnum(final_status),
-            ServerLocation=urlscan_result["server_location"],
-            ScreenshotURL=urlscan_result["screenshot_url"],
-        )
-        db.add(scan_record)
-        db.commit()
-        db.refresh(scan_record)
+            scan_results.append({
+                "scan_id": scan_record.ScanID,
+                "user_id": scan_record.UserID,
+                "uuid": urlscan_result["uuid"],
+                "initial_url": scan_record.InitialURL,
+                "redirect_url": scan_record.RedirectURL,
+                "status_indicator": scan_record.StatusIndicator.value,
+                "score": urlscan_result["score"],
+                "server_location": scan_record.ServerLocation,
+                "ip_address": urlscan_result["ip_address"],
+                "screenshot_url": scan_record.ScreenshotURL,
+                "brands": urlscan_result["brands"],
+                "tags": urlscan_result["tags"],
+                "result_url": urlscan_result["result_url"],
+                "scanned_at": scan_record.ScannedAt.isoformat() if scan_record.ScannedAt else None,
+                "gsb_flagged": gsb["flagged"],
+                "gsb_threat_types": gsb["threat_types"],
+            })
+    
+    except HTTPException:
+        raise
 
-        scan_results.append({
-            "scan_id": scan_record.ScanID,
-            "user_id": scan_record.UserID,
-            "uuid": urlscan_result["uuid"],
-            "initial_url": scan_record.InitialURL,
-            "redirect_url": scan_record.RedirectURL,
-            "status_indicator": scan_record.StatusIndicator.value,
-            "score": urlscan_result["score"],
-            "server_location": scan_record.ServerLocation,
-            "ip_address": urlscan_result["ip_address"],
-            "screenshot_url": scan_record.ScreenshotURL,
-            "brands": urlscan_result["brands"],
-            "tags": urlscan_result["tags"],
-            "result_url": urlscan_result["result_url"],
-            "scanned_at": scan_record.ScannedAt.isoformat() if scan_record.ScannedAt else None,
-            "gsb_flagged": gsb["flagged"],
-            "gsb_threat_types": gsb["threat_types"],
-        })
+    except SyntaxError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid request syntax: {str(e)}")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
     return scan_results
