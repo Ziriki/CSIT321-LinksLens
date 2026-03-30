@@ -121,6 +121,7 @@ class ScanStatusEnum(str, enum.Enum):
     SAFE = "SAFE"
     SUSPICIOUS = "SUSPICIOUS"
     MALICIOUS = "MALICIOUS"
+    UNAVAILABLE = "UNAVAILABLE"  # Domain could not be reached by the backend
     PENDING = "PENDING"
 
 class ScanHistory(Base):
