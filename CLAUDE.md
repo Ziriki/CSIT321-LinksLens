@@ -89,7 +89,7 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `scan_feedback_controller.py` → `/api/scan-feedback`
 - `url_scan_controller.py` → `/scan` (external scanning pipeline — not a CRUDL controller)
 
-**Note:** API routes use `/api/` prefix. The `/scan` endpoint is the exception — it is top-level and drives the full scan pipeline. System health is at `/api/health` (admin only).
+**Note:** API routes use `/api/` prefix. The `/scan` endpoint is the exception — it is top-level and drives the full scan pipeline. System health is at `/api/health` (admin only) — live-checks all external services and returns operational work-queue metrics.
 
 **`/scan` pipeline (`url_scan_controller.py`):**
 `POST /scan` accepts `{ "urls": str | list[str] }` — single string or list, always normalised to a list. Returns an array of results (one per URL).
@@ -97,7 +97,7 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 1. **Google Safe Browsing v4** — batch `POST` to `safebrowsing.googleapis.com/v4/threatMatches:find` with all URLs in one round-trip; exponential backoff on 429/5xx; non-blocking (failures return SUSPICIOUS defaults so urlscan.io still runs)
 2. **urlscan.io submission** — each URL submitted separately to `POST urlscan.io/api/v1/scan/` with `visibility: public`
 3. **Poll for result** — waits 10s, then polls every 5s up to 12 attempts (70s total timeout)
-4. **Merge verdicts** — most severe status wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; otherwise SAFE
+4. **Merge verdicts** — most severe status wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; otherwise SAFE. If urlscan.io could not reach the domain at all (submission failed or poll timed out) **and** GSB has no signal → UNAVAILABLE
 5. **WHOIS domain age** — `get_domain_age_days(domain)` does a WHOIS lookup and computes the domain's age in days; saved to `ScanHistory.DomainAgeDays`; non-blocking (failures return `None`)
 6. **Check internal URLRules** — if the domain is in the `URLRules` table, BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (admin/moderator rules have final say)
 7. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`
