@@ -367,11 +367,17 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         # Step 4: Perform script level analysis - returns None on timeout or failure
         # script_result = script_analysis(url)
 
-        # Step 5: Parse result — process_result handles None uuid/raw_result with SUSPICIOUS fallback
+        # Step 5: Parse result
         urlscan_result = process_result(uuid, raw_result)
 
-        # Step 6: Merge GSB and urlscan verdicts — most severe status wins
-        final_status = merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
+        # Step 6: Determine final verdict
+        # If urlscan.io couldn't reach the domain at all and GSB has no signal, mark UNAVAILABLE.
+        # If GSB flagged it, its verdict still stands even when urlscan.io failed.
+        urlscan_failed = uuid is None or raw_result is None
+        if urlscan_failed and not gsb["flagged"]:
+            final_status = "UNAVAILABLE"
+        else:
+            final_status = merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
 
         # Step 6b: Check against internal URLRules (blacklist/whitelist) — overrides external verdicts
         initial_url_resolved = urlscan_result["initial_url"] or url
