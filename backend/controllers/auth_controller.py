@@ -74,11 +74,19 @@ def login(credentials: schemas.UserLogin, response: Response, db: Session = Depe
             raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
         raise HTTPException(status_code=403, detail="This account has been deactivated. Please contact support.")
 
-    # 4. Generate the JWT Token payload
+    # 4. Enforce client type restrictions by role
+    is_staff = user.RoleID in (1, 2)
+    is_web   = credentials.ClientType == schemas.ClientTypeEnum.WEB
+    if is_staff and not is_web:
+        raise HTTPException(status_code=403, detail="Staff accounts must log in via the web portal.")
+    if not is_staff and is_web:
+        raise HTTPException(status_code=403, detail="User accounts must log in via the mobile app.")
+
+    # 5. Generate the JWT Token payload
     token_data = {"sub": str(user.UserID), "role": user.RoleID}
     token = create_access_token(token_data)
 
-    # 5. Route the response based on the platform!
+    # 6. Route the response based on the platform
     if credentials.ClientType == schemas.ClientTypeEnum.WEB:
         # For Web: Set an HttpOnly cookie. The browser handles it automatically.
         response.set_cookie(

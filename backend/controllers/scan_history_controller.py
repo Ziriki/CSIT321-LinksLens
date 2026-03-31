@@ -88,7 +88,6 @@ def list_scans(
     status_indicator: Optional[models.ScanStatusEnum] = None,
     search_url: Optional[str] = None,
     search_user: Optional[str] = None,
-    associated_person: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -122,10 +121,6 @@ def list_scans(
             )
         )
 
-    # Search by associated person
-    if associated_person:
-        query = query.filter(models.ScanHistory.AssociatedPerson.ilike(f"%{associated_person}%"))
-
     # Always return newest scans first (by ScanID)
     query = query.order_by(models.ScanHistory.ScanID.desc())
 
@@ -143,8 +138,6 @@ def list_scans(
             "DomainAgeDays": scan.DomainAgeDays,
             "ServerLocation": scan.ServerLocation,
             "ScreenshotURL": scan.ScreenshotURL,
-            "RawText": scan.RawText,
-            "AssociatedPerson": scan.AssociatedPerson,
             "ScannedAt": scan.ScannedAt,
         }
         for scan in results
