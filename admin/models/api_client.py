@@ -16,10 +16,9 @@ def _get_headers():
 # -- Auth --
 
 def authenticate_user(email: str, password: str):
-    """Login via mobile client type so we get the JWT in the response body."""
     return requests.post(
         f"{BACKEND_URL}/api/auth/login",
-        json={"EmailAddress": email, "Password": password, "ClientType": "mobile"},
+        json={"EmailAddress": email, "Password": password, "ClientType": "web"},
     )
 
 
