@@ -86,6 +86,8 @@ def handle_login(email, password):
     if not email or not password:
         st.error("Please fill in both fields.")
         return
+    # Clear any stale decoded-user cache so the new token is always decoded fresh
+    st.session_state.pop("_decoded_user", None)
     with st.spinner("Authenticating..."):
         response = api_client.authenticate_user(email, password)
         if response.status_code == 200:
