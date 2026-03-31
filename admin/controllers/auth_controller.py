@@ -68,6 +68,7 @@ def get_current_user():
 
 def render_sidebar():
     """Show role label and logout button in the sidebar."""
+    _hide_pages_for_moderator()
     user = _decode_token()
     if user:
         role_label = {1: "Administrator", 2: "Moderator", 3: "User"}.get(user["role_id"], "Unknown")
