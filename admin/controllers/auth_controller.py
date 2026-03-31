@@ -26,15 +26,17 @@ def require_auth():
         st.stop()
 
 
+# Streamlit uses the page filename as the sidebar link href — match on filename substrings.
+_MODERATOR_HIDDEN_PAGES = ["1_Dashboard", "3_User_Management", "4_App_Feedback", "5_Action_History_Log"]
+
+
 def _hide_pages_for_moderator():
     """Inject CSS to hide admin-only pages from the moderator sidebar."""
     user = _decode_token()
     if user and user["role_id"] == 2:
-        # Admin-only pages to hide: Dashboard, User_Management, App_Feedback, Action_History_Log
-        hidden_pages = ["Dashboard", "User Management", "App Feedback", "Action History Log"]
         css_selectors = ", ".join(
-            f'[data-testid="stSidebarNav"] a[href*="{name.replace(" ", "_")}"]'
-            for name in hidden_pages
+            f'[data-testid="stSidebarNav"] a[href*="{name}"]'
+            for name in _MODERATOR_HIDDEN_PAGES
         )
         st.markdown(
             f"""

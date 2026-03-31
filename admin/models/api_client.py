@@ -128,6 +128,22 @@ def fetch_url_rules():
     return response.json() if response.status_code == 200 else []
 
 
+def create_url_rule(domain: str, list_type: str, added_by: int):
+    response = requests.post(
+        f"{BACKEND_URL}/api/url-rules/",
+        json={"URLDomain": domain, "ListType": list_type, "AddedBy": added_by},
+        headers=_get_headers(),
+    )
+    return response.status_code == 201
+
+
+def delete_url_rule(rule_id: int):
+    response = requests.delete(
+        f"{BACKEND_URL}/api/url-rules/{rule_id}", headers=_get_headers()
+    )
+    return response.status_code == 204
+
+
 # -- Scan History --
 
 def fetch_scan_list(skip: int = 0, limit: int = 25, search_url: str = None,

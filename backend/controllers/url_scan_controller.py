@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from concurrent.futures import ThreadPoolExecutor
 import requests
 import time
 import os
@@ -329,6 +330,36 @@ def merge_status(gsb_status: str, urlscan_status: str) -> str:
 
 
 #########################################################
+# Helper: Run urlscan.io submit + poll for a single URL
+#########################################################
+def _run_urlscan(url: str) -> tuple[str | None, dict | None]:
+    """Submit to urlscan.io and poll for the result. Returns (uuid, raw_result)."""
+    submission = submit_scan(url)
+    uuid = submission.get("uuid") if submission else None
+    raw_result = poll_result(uuid) if uuid else None
+    return uuid, raw_result
+
+
+#########################################################
+# Helper: Fetch all external data for a single URL
+# (urlscan.io + WHOIS run concurrently — no DB access)
+#########################################################
+def _fetch_external_data(url: str) -> tuple[str | None, dict | None, int | None]:
+    """
+    Run urlscan.io and WHOIS in parallel for one URL.
+    WHOIS runs during the mandatory urlscan.io wait, adding zero extra latency.
+    Returns (uuid, raw_result, domain_age_days).
+    """
+    domain = urlparse(url).netloc
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        urlscan_future = executor.submit(_run_urlscan, url)
+        whois_future = executor.submit(get_domain_age_days, domain)
+        uuid, raw_result = urlscan_future.result()
+        domain_age_days = whois_future.result()
+    return uuid, raw_result, domain_age_days
+
+
+#########################################################
 # POST /scan — Submit one or more URLs and return results
 #########################################################
 @router.post("")
@@ -352,38 +383,31 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
     # Step 1: Batch-check all URLs with Google Safe Browsing v4 (single round-trip)
     gsb_results = check_google_safe_browsing(urls)
 
+    # Steps 2–5: urlscan.io + WHOIS — run all URLs in parallel, each doing both concurrently.
+    # DB operations are excluded from threads: SQLAlchemy sessions are not thread-safe.
+    with ThreadPoolExecutor() as executor:
+        external_results = list(executor.map(_fetch_external_data, urls))
+
+    # Steps 6–7: verdict merging, URLRules override, and DB writes (main thread only)
     scan_results = []
 
-    for url in urls:
+    for url, (uuid, raw_result, domain_age_days) in zip(urls, external_results):
         gsb = gsb_results[url]
-
-        # Step 2: Submit to urlscan.io — returns None on failure
-        submission = submit_scan(url)
-        uuid = submission.get("uuid") if submission else None
-
-        # Step 3: Poll for the result — returns None on timeout or failure
-        raw_result = poll_result(uuid) if uuid else None
-
-        # Step 4: Perform script level analysis - returns None on timeout or failure
-        # script_result = script_analysis(url)
-
-        # Step 5: Parse result
         urlscan_result = process_result(uuid, raw_result)
 
-        # Step 6: Determine final verdict
-        # If urlscan.io couldn't reach the domain at all and GSB has no signal, mark UNAVAILABLE.
-        # If GSB flagged it, its verdict still stands even when urlscan.io failed.
+        # If urlscan.io couldn't reach the domain at all and GSB has no signal → UNAVAILABLE.
+        # GSB verdict still wins if it flagged the URL.
         urlscan_failed = uuid is None or raw_result is None
         if urlscan_failed and not gsb["flagged"]:
             final_status = "UNAVAILABLE"
         else:
             final_status = merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
 
-        # Step 6b: Check against internal URLRules (blacklist/whitelist) — overrides external verdicts
         initial_url_resolved = urlscan_result["initial_url"] or url
         domain = urlparse(initial_url_resolved).netloc
-        domain_age_days = get_domain_age_days(domain)
         redirect_chain = extract_redirect_chain(initial_url_resolved, raw_result)
+
+        # Internal URLRules have final say over external API verdicts
         url_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == domain).first()
         if url_rule:
             if url_rule.ListType == models.ListTypeEnum.BLACKLIST:
@@ -391,7 +415,6 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             elif url_rule.ListType == models.ListTypeEnum.WHITELIST:
                 final_status = "SAFE"
 
-        # Step 7: Save to ScanHistory
         scan_record = models.ScanHistory(
             UserID=current_user["user_id"],
             InitialURL=initial_url_resolved,

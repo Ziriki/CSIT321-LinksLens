@@ -214,8 +214,6 @@ class ScanHistoryBase(BaseModel):
     DomainAgeDays: Optional[int] = None
     ServerLocation: Optional[str] = None
     ScreenshotURL: Optional[str] = None
-    RawText: Optional[str] = None
-    AssociatedPerson: Optional[str] = None
 
 # Used when initiating a new scan
 class ScanHistoryCreate(ScanHistoryBase):
@@ -229,8 +227,6 @@ class ScanHistoryUpdate(BaseModel):
     DomainAgeDays: Optional[int] = None
     ServerLocation: Optional[str] = None
     ScreenshotURL: Optional[str] = None
-    RawText: Optional[str] = None
-    AssociatedPerson: Optional[str] = None
 
 # Used for Responses
 class ScanHistoryResponse(ScanHistoryBase):
