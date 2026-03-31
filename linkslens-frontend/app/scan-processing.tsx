@@ -1,34 +1,65 @@
-import { useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import { View, Text } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import { Zap } from "lucide-react-native"
 import { Card } from "../components/ui-components"
 import { scanUrl } from "../lib/api"
+import { notifyScanComplete } from "../lib/notifications"
+import type { ScanStatus } from "../lib/types"
+
+// Timings mirror the real backend pipeline so messages stay accurate
+const STEPS = [
+  { at: 0,  message: "Checking Google Safe Browsing database...", progress: 10 },
+  { at: 2,  message: "Submitting URL to security scanner...",      progress: 22 },
+  { at: 4,  message: "Waiting for scan analysis to complete...",   progress: 35 },
+  { at: 14, message: "Retrieving server location...",              progress: 60 },
+  { at: 17, message: "Checking domain registration age...",        progress: 75 },
+  { at: 19, message: "Analysing redirect chain...",                progress: 88 },
+  { at: 21, message: "Finalising verdict...",                      progress: 95 },
+]
 
 export default function ScanProcessing() {
-  const { url } = useLocalSearchParams<{ url: string }>();
+  const { url } = useLocalSearchParams<{ url: string }>()
+
+  const [stepIndex, setStepIndex] = useState(0)
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  const { message, progress } = STEPS[stepIndex]
 
   useEffect(() => {
     if (!url) {
-      router.back();
-      return;
+      router.back()
+      return
+    }
+
+    timersRef.current = []
+
+    for (let i = 1; i < STEPS.length; i++) {
+      const id = setTimeout(() => setStepIndex(i), STEPS[i].at * 1000)
+      timersRef.current.push(id)
     }
 
     scanUrl(url)
       .then((result) => {
+        timersRef.current.forEach(clearTimeout)
+        setStepIndex(STEPS.length - 1)
+        notifyScanComplete(result.status_indicator as ScanStatus, url)
         router.replace({
           pathname: "/scan-results",
           params: { result: JSON.stringify(result) },
-        });
+        })
       })
       .catch((err) => {
-        console.error("Scan error:", err?.message ?? err);
+        console.error("Scan error:", err?.message ?? err)
+        timersRef.current.forEach(clearTimeout)
         router.replace({
           pathname: "/scan-results",
           params: { error: "Scan failed. Please try again." },
-        });
-      });
-  }, [url]);
+        })
+      })
+
+    return () => timersRef.current.forEach(clearTimeout)
+  }, [url])
 
   return (
     <View className="flex-1 items-center justify-center bg-background px-6">
@@ -48,7 +79,7 @@ export default function ScanProcessing() {
       </Text>
 
       <Text className="mb-6 text-center text-muted-foreground">
-        Cross-referencing databases...
+        {message}
       </Text>
 
       {/* Progress Bar */}
@@ -56,12 +87,12 @@ export default function ScanProcessing() {
         <View className="h-2 overflow-hidden rounded-full bg-secondary">
           <View
             className="h-full rounded-full bg-primary"
-            style={{ width: "72%" }}
+            style={{ width: `${progress}%` }}
           />
         </View>
 
         <Text className="mt-2 text-center text-sm text-muted-foreground">
-          Analyzing...
+          {progress}%
         </Text>
       </View>
 
