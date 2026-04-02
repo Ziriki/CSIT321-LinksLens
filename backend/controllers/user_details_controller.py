@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
+from utils import get_or_404, apply_updates
 # Import custom files
 import models
 import schemas
@@ -48,9 +49,7 @@ def read_user_details(user_id: int, db: Session = Depends(get_db), current_user:
     # Regular users can only view their own details
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own details")
-    details = db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first()
-    if not details:
-        raise HTTPException(status_code=404, detail="User details not found")
+    details = get_or_404(db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first(), "User details not found")
     return details
 
 #########################################################
@@ -61,23 +60,9 @@ def update_user_details(user_id: int, details_update: schemas.UserDetailsUpdate,
     # Regular users can only update their own details
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only update your own details")
-    db_details = db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first()
-    if not db_details:
-        raise HTTPException(status_code=404, detail="User details not found")
-
-    update_data = details_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_details, key, value)
-
-    db.commit()
-    db.refresh(db_details)
+    db_details = get_or_404(db.query(models.UserDetails).filter(models.UserDetails.UserID == user_id).first(), "User details not found")
+    apply_updates(db, db_details, details_update)
     return db_details
-
-#########################################################
-# DELETE function for UserDetails table
-#########################################################
-# When a user account is deleted (soft delete), the details will simply become inaccessible. 
-# It is not necessary to implement a delete function for UserDetails table
 
 #########################################################
 # LIST function for UserDetails table

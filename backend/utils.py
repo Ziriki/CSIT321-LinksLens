@@ -2,6 +2,8 @@ import hashlib
 import os
 from datetime import datetime, timezone
 from passlib.context import CryptContext
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
 import resend as resend_lib
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -26,6 +28,19 @@ def normalize_expiry(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+def get_or_404(obj, detail: str):
+    """Raise HTTP 404 if obj is None, otherwise return it."""
+    if not obj:
+        raise HTTPException(status_code=404, detail=detail)
+    return obj
+
+def apply_updates(db: Session, obj, update_schema) -> None:
+    """Apply a Pydantic update schema to a SQLAlchemy model, commit, and refresh."""
+    for key, value in update_schema.model_dump(exclude_unset=True).items():
+        setattr(obj, key, value)
+    db.commit()
+    db.refresh(obj)
 
 def send_email(to: str, subject: str, html: str, from_name: str = "LinksLens") -> None:
     """Send an email via Resend. Raises Exception on failure."""

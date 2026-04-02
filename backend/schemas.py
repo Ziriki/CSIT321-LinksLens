@@ -214,6 +214,7 @@ class ScanHistoryBase(BaseModel):
     DomainAgeDays: Optional[int] = None
     ServerLocation: Optional[str] = None
     ScreenshotURL: Optional[str] = None
+    ScriptAnalysis: Optional[dict] = None
 
 # Used when initiating a new scan
 class ScanHistoryCreate(ScanHistoryBase):

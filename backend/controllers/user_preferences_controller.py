@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified # For JSON updates
 from typing import List
 
+from utils import get_or_404
 # Import custom files
 import models
 import schemas
@@ -52,9 +53,7 @@ def read_preferences(user_id: int, db: Session = Depends(get_db), current_user: 
     # Regular users can only view their own preferences
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own preferences")
-    prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
-    if not prefs:
-        raise HTTPException(status_code=404, detail="Preferences not found")
+    prefs = get_or_404(db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first(), "Preferences not found")
     return prefs
 
 #########################################################
@@ -65,9 +64,7 @@ def update_preferences(user_id: int, prefs_update: schemas.UserPreferencesUpdate
     # Regular users can only update their own preferences
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only update your own preferences")
-    db_prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
-    if not db_prefs:
-        raise HTTPException(status_code=404, detail="Preferences not found")
+    db_prefs = get_or_404(db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first(), "Preferences not found")
 
     # Merge the existing JSON with the new JSON. 
     # This way, if a user only updates "Theme", it doesn't delete "ReportLanguage"
@@ -90,10 +87,8 @@ def delete_preferences(user_id: int, db: Session = Depends(get_db), current_user
     # Regular users can only delete their own preferences
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only delete your own preferences")
-    db_prefs = db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first()
-    if not db_prefs:
-        raise HTTPException(status_code=404, detail="Preferences not found")
-    
+    db_prefs = get_or_404(db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first(), "Preferences not found")
+
     db.delete(db_prefs)
     db.commit()
     return None
