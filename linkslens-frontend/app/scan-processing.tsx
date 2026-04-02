@@ -3,6 +3,7 @@ import { View, Text } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import { Zap } from "lucide-react-native"
 import { Card } from "../components/ui-components"
+import * as Haptics from "expo-haptics"
 import { scanUrl } from "../lib/api"
 import { notifyScanComplete } from "../lib/notifications"
 import type { ScanStatus } from "../lib/types"
@@ -43,7 +44,17 @@ export default function ScanProcessing() {
       .then((result) => {
         timersRef.current.forEach(clearTimeout)
         setStepIndex(STEPS.length - 1)
-        notifyScanComplete(result.status_indicator as ScanStatus, url)
+        const status = result.status_indicator as ScanStatus
+        try {
+          Haptics.notificationAsync(
+            status === "SAFE"
+              ? Haptics.NotificationFeedbackType.Success
+              : status === "SUSPICIOUS"
+                ? Haptics.NotificationFeedbackType.Warning
+                : Haptics.NotificationFeedbackType.Error,
+          )
+        } catch { /* haptics unavailable on some devices */ }
+        notifyScanComplete(status, url)
         router.replace({
           pathname: "/scan-results",
           params: { result: JSON.stringify(result) },

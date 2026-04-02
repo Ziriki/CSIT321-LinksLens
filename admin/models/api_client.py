@@ -4,6 +4,8 @@ import streamlit as st
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 
+_TIMEOUT = 10
+
 
 def _get_headers():
     """Attach the JWT Bearer token from session state to every API call."""
@@ -19,19 +21,20 @@ def authenticate_user(email: str, password: str):
     """Login via mobile client type so we get the JWT in the response body."""
     return requests.post(
         f"{BACKEND_URL}/api/auth/login",
-        json={"EmailAddress": email, "Password": password, "ClientType": "mobile"},
+        json={"EmailAddress": email, "Password": password, "ClientType": "web"},
+        timeout=_TIMEOUT,
     )
 
 
 # -- System Health --
 
 def check_backend_health():
-    return requests.get(f"{BACKEND_URL}/", headers=_get_headers())
+    return requests.get(f"{BACKEND_URL}/", headers=_get_headers(), timeout=_TIMEOUT)
 
 
 def fetch_system_health():
     """Fetches detailed system health stats (admin only)."""
-    response = requests.get(f"{BACKEND_URL}/api/health", headers=_get_headers())
+    response = requests.get(f"{BACKEND_URL}/api/health", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else None
 
 
@@ -39,7 +42,9 @@ def fetch_system_health():
 
 def fetch_pending_requests():
     response = requests.get(
-        f"{BACKEND_URL}/api/blacklist-requests/?status=PENDING", headers=_get_headers()
+        f"{BACKEND_URL}/api/blacklist-requests/?status=PENDING",
+        headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.json() if response.status_code == 200 else []
 
@@ -50,6 +55,7 @@ def update_request_status(request_id: int, status: str, moderator_id: int):
         f"{BACKEND_URL}/api/blacklist-requests/{request_id}",
         json=payload,
         headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.status_code == 200
 
@@ -57,7 +63,7 @@ def update_request_status(request_id: int, status: str, moderator_id: int):
 # -- User Accounts --
 
 def fetch_all_users():
-    response = requests.get(f"{BACKEND_URL}/api/accounts/", headers=_get_headers())
+    response = requests.get(f"{BACKEND_URL}/api/accounts/", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
@@ -66,6 +72,7 @@ def deactivate_user(user_id: int):
         f"{BACKEND_URL}/api/accounts/{user_id}",
         json={"IsActive": False},
         headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.status_code == 200
 
@@ -75,6 +82,7 @@ def update_user_details(user_id: int, payload: dict):
         f"{BACKEND_URL}/api/accounts/{user_id}",
         json=payload,
         headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.status_code == 200
 
@@ -83,7 +91,7 @@ def update_user_details(user_id: int, payload: dict):
 
 def fetch_user_detail(user_id: int):
     response = requests.get(
-        f"{BACKEND_URL}/api/details/{user_id}", headers=_get_headers()
+        f"{BACKEND_URL}/api/details/{user_id}", headers=_get_headers(), timeout=_TIMEOUT
     )
     return response.json() if response.status_code == 200 else None
 
@@ -94,6 +102,7 @@ def update_user_profile(user_id: int, payload: dict):
         f"{BACKEND_URL}/api/details/{user_id}",
         json=payload,
         headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.status_code == 200
 
@@ -101,30 +110,34 @@ def update_user_profile(user_id: int, payload: dict):
 # -- App Feedback --
 
 def fetch_app_feedback():
-    response = requests.get(f"{BACKEND_URL}/api/feedback/", headers=_get_headers())
+    response = requests.get(f"{BACKEND_URL}/api/feedback/", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
 # -- Action History --
 
 def fetch_action_history():
-    response = requests.get(f"{BACKEND_URL}/api/history/", headers=_get_headers())
+    response = requests.get(f"{BACKEND_URL}/api/history/", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
 def log_action(user_id: int, action_type: str, action: str):
-    """Insert an audit log entry."""
-    requests.post(
-        f"{BACKEND_URL}/api/history/",
-        json={"UserID": user_id, "ActionType": action_type, "Action": action},
-        headers=_get_headers(),
-    )
+    """Insert an audit log entry. Silently ignores failures — logging is non-critical."""
+    try:
+        requests.post(
+            f"{BACKEND_URL}/api/history/",
+            json={"UserID": user_id, "ActionType": action_type, "Action": action},
+            headers=_get_headers(),
+            timeout=_TIMEOUT,
+        )
+    except Exception:
+        pass
 
 
 # -- URL Rules --
 
 def fetch_url_rules():
-    response = requests.get(f"{BACKEND_URL}/api/url-rules/", headers=_get_headers())
+    response = requests.get(f"{BACKEND_URL}/api/url-rules/", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
@@ -133,13 +146,14 @@ def create_url_rule(domain: str, list_type: str, added_by: int):
         f"{BACKEND_URL}/api/url-rules/",
         json={"URLDomain": domain, "ListType": list_type, "AddedBy": added_by},
         headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.status_code == 201
 
 
 def delete_url_rule(rule_id: int):
     response = requests.delete(
-        f"{BACKEND_URL}/api/url-rules/{rule_id}", headers=_get_headers()
+        f"{BACKEND_URL}/api/url-rules/{rule_id}", headers=_get_headers(), timeout=_TIMEOUT
     )
     return response.status_code == 204
 
@@ -160,14 +174,14 @@ def fetch_scan_list(skip: int = 0, limit: int = 25, search_url: str = None,
     if search_user:
         params["search_user"] = search_user
     response = requests.get(
-        f"{BACKEND_URL}/api/scans/", params=params, headers=_get_headers()
+        f"{BACKEND_URL}/api/scans/", params=params, headers=_get_headers(), timeout=_TIMEOUT
     )
     return response.json() if response.status_code == 200 else []
 
 
 def fetch_scan_details(scan_id: int):
     response = requests.get(
-        f"{BACKEND_URL}/api/scans/{scan_id}", headers=_get_headers()
+        f"{BACKEND_URL}/api/scans/{scan_id}", headers=_get_headers(), timeout=_TIMEOUT
     )
     return response.json() if response.status_code == 200 else None
 
@@ -179,7 +193,7 @@ def fetch_scan_feedback(is_resolved: bool = None):
     if is_resolved is not None:
         params["is_resolved"] = str(is_resolved).lower()
     response = requests.get(
-        f"{BACKEND_URL}/api/scan-feedback/", params=params, headers=_get_headers()
+        f"{BACKEND_URL}/api/scan-feedback/", params=params, headers=_get_headers(), timeout=_TIMEOUT
     )
     return response.json() if response.status_code == 200 else []
 
@@ -190,7 +204,10 @@ def fetch_scan_feedback_enriched(is_resolved: bool = None):
     if is_resolved is not None:
         params["is_resolved"] = str(is_resolved).lower()
     response = requests.get(
-        f"{BACKEND_URL}/api/scan-feedback/enriched/", params=params, headers=_get_headers()
+        f"{BACKEND_URL}/api/scan-feedback/enriched/",
+        params=params,
+        headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.json() if response.status_code == 200 else []
 
@@ -200,6 +217,7 @@ def resolve_scan_feedback(feedback_id: int):
         f"{BACKEND_URL}/api/scan-feedback/{feedback_id}",
         json={"IsResolved": True},
         headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.status_code == 200
 
@@ -210,5 +228,6 @@ def update_scan_status(scan_id: int, new_status: str):
         f"{BACKEND_URL}/api/scans/{scan_id}",
         json={"StatusIndicator": new_status},
         headers=_get_headers(),
+        timeout=_TIMEOUT,
     )
     return response.status_code == 200

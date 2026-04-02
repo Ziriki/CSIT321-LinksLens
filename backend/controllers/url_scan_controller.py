@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
+import re
 import requests
 import time
 import os
@@ -330,6 +331,146 @@ def merge_status(gsb_status: str, urlscan_status: str) -> str:
 
 
 #########################################################
+# Script-level analysis using urlscan.io script data
+#########################################################
+
+_AD_DOMAINS = {
+    "doubleclick.net", "googlesyndication.com", "amazon-adsystem.com",
+    "adnxs.com", "advertising.com", "taboola.com", "outbrain.com",
+    "criteo.com", "rubiconproject.com", "pubmatic.com", "openx.net",
+    "moatads.com", "scorecardresearch.com", "adsafeprotected.com",
+    "sharethrough.com", "33across.com", "appnexus.com", "smartadserver.com",
+}
+
+_CRYPTO_MINER_DOMAINS = {
+    "coinhive.com", "coin-hive.com", "cryptoloot.pro", "webmine.pro",
+    "minero.cc", "jsecoin.com", "monerominer.rocks", "coinimp.com",
+    "papoto.com", "authedmine.com",
+}
+
+_MALICIOUS_SCRIPT_DOMAINS = {
+    "greatbigstuff.net", "trackyoudown.net", "blackhatseo.tech",
+}
+
+# Scripts from these domains are considered trusted — reduces false-positive noise
+_TRUSTED_CDN_DOMAINS = {
+    "cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com",
+    "ajax.googleapis.com", "code.jquery.com", "stackpath.bootstrapcdn.com",
+    "maxcdn.bootstrapcdn.com", "cdn.tailwindcss.com", "cdn.ampproject.org",
+}
+
+# Free hosting domains commonly abused to serve malicious scripts
+_FREE_HOSTING_DOMAINS = {
+    "pastebin.com", "paste.ee", "hastebin.com", "ghostbin.com",
+    "raw.githubusercontent.com", "gist.githubusercontent.com",
+}
+
+_AD_HEAVY_THRESHOLD = 5
+_OBFUSCATED_NAME_RE = re.compile(r"/[a-z0-9]{8,}\.js$", re.IGNORECASE)
+_IP_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+
+def _reg_domain(netloc: str) -> str:
+    """Return the registrable domain (last two labels) from a netloc string."""
+    parts = netloc.lower().removeprefix("www.").split(".")
+    return ".".join(parts[-2:]) if len(parts) >= 2 else netloc
+
+
+def analyze_scripts(raw_result: dict | None) -> dict:
+    """
+    Comprehensive script-level analysis using urlscan.io result data.
+
+    Signals produced:
+    - total / trusted_count / ad_count / ad_heavy
+    - crypto_miners / malicious_scripts (verdict-impacting)
+    - suspicious_patterns: IP-hosted scripts, HTTP-on-HTTPS, free-hosting abuse,
+      obfuscated filenames
+    - tech_stack: technologies detected by Wappalyzer (via urlscan)
+    - script_risk_score: composite 0–100 score
+    """
+    if not raw_result:
+        return {
+            "total": 0, "trusted_count": 0, "ad_count": 0, "ad_heavy": False,
+            "crypto_miners": [], "malicious_scripts": [],
+            "suspicious_patterns": [], "tech_stack": [], "script_risk_score": 0,
+        }
+
+    data = raw_result.get("data", {})
+    page_url = raw_result.get("page", {}).get("url", "")
+    page_scheme = urlparse(page_url).scheme.lower()
+    scripts: list[str] = data.get("lists", {}).get("scripts", [])
+
+    ad_scripts: list[str] = []
+    crypto_miners: list[str] = []
+    malicious_scripts: list[str] = []
+    trusted_scripts: list[str] = []
+    suspicious_patterns: list[dict] = []
+
+    for script_url in scripts:
+        parsed = urlparse(script_url)
+        netloc = parsed.netloc.lower()
+        reg = _reg_domain(netloc)
+
+        # IP-address hosted scripts — no legitimate CDN serves from a bare IP
+        if _IP_RE.match(netloc):
+            suspicious_patterns.append({"url": script_url, "reason": "IP-hosted script"})
+            continue
+
+        # Mixed content — HTTP script on an HTTPS page leaks integrity guarantees.
+        # No continue: a mixed-content crypto miner deserves both signals in the score.
+        if page_scheme == "https" and parsed.scheme == "http":
+            suspicious_patterns.append({"url": script_url, "reason": "HTTP script on HTTPS page"})
+
+        # Free hosting abuse
+        if reg in _FREE_HOSTING_DOMAINS:
+            suspicious_patterns.append({"url": script_url, "reason": "Script from free hosting service"})
+            continue
+
+        # Classify by domain (exact netloc match for CDNs avoids over-trusting subdomains)
+        if reg in _CRYPTO_MINER_DOMAINS:
+            crypto_miners.append(script_url)
+        elif reg in _MALICIOUS_SCRIPT_DOMAINS:
+            malicious_scripts.append(script_url)
+        elif reg in _AD_DOMAINS:
+            ad_scripts.append(script_url)
+        elif netloc in _TRUSTED_CDN_DOMAINS:
+            trusted_scripts.append(script_url)
+        elif _OBFUSCATED_NAME_RE.search(parsed.path):
+            suspicious_patterns.append({"url": script_url, "reason": "Obfuscated script filename"})
+
+    # Technology stack from Wappalyzer (urlscan runs it automatically)
+    wappa_data = data.get("meta", {}).get("processors", {}).get("wappa", {}).get("data", [])
+    tech_stack = [
+        {"name": t.get("app", ""), "categories": [c.get("name", "") for c in t.get("categories", [])]}
+        for t in wappa_data
+        if t.get("app")
+    ]
+
+    # Composite risk score (0–100)
+    score = 0
+    score += min(len(crypto_miners) * 35, 70)       # crypto miners: very high signal
+    score += min(len(malicious_scripts) * 25, 50)   # known malicious domains
+    score += min(len(suspicious_patterns) * 10, 30) # suspicious URL patterns
+    ad_heavy = len(ad_scripts) >= _AD_HEAVY_THRESHOLD
+    score += min(len(ad_scripts) * 2, 15)           # ad scripts: low individual signal
+    score += 10 if ad_heavy else 0
+    score -= min(len(trusted_scripts) * 3, 15)      # trusted CDNs reduce noise
+    score = max(0, min(score, 100))
+
+    return {
+        "total": len(scripts),
+        "trusted_count": len(trusted_scripts),
+        "ad_count": len(ad_scripts),
+        "ad_heavy": ad_heavy,
+        "crypto_miners": crypto_miners[:20],
+        "malicious_scripts": malicious_scripts[:20],
+        "suspicious_patterns": suspicious_patterns[:20],
+        "tech_stack": tech_stack,
+        "script_risk_score": score,
+    }
+
+
+#########################################################
 # Helper: Run urlscan.io submit + poll for a single URL
 #########################################################
 def _run_urlscan(url: str) -> tuple[str | None, dict | None]:
@@ -406,6 +547,11 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         initial_url_resolved = urlscan_result["initial_url"] or url
         domain = urlparse(initial_url_resolved).netloc
         redirect_chain = extract_redirect_chain(initial_url_resolved, raw_result)
+        script_analysis = analyze_scripts(raw_result)
+
+        # Crypto-mining scripts on the page → escalate to at least SUSPICIOUS
+        if script_analysis["crypto_miners"] and final_status == "SAFE":
+            final_status = "SUSPICIOUS"
 
         # Internal URLRules have final say over external API verdicts
         url_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == domain).first()
@@ -424,6 +570,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             DomainAgeDays=domain_age_days,
             ServerLocation=urlscan_result["server_location"],
             ScreenshotURL=urlscan_result["screenshot_url"],
+            ScriptAnalysis=script_analysis,
         )
         db.add(scan_record)
         db.commit()
@@ -448,6 +595,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             "scanned_at": scan_record.ScannedAt.isoformat() if scan_record.ScannedAt else None,
             "gsb_flagged": gsb["flagged"],
             "gsb_threat_types": gsb["threat_types"],
+            "script_analysis": script_analysis,
         })
 
     return scan_results

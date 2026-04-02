@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
-from utils import get_fullname
+from utils import get_fullname, get_or_404, apply_updates
 # Import custom files
 import models
 import schemas
@@ -41,9 +41,7 @@ def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: 
 #########################################################
 @router.get("/{rule_id}", response_model=schemas.URLRulesResponse)
 def read_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
-    rule = db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first()
-    if not rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
+    rule = get_or_404(db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first(), "Rule not found")
     return rule
 
 #########################################################
@@ -51,9 +49,7 @@ def read_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(get
 #########################################################
 @router.put("/{rule_id}", response_model=schemas.URLRulesResponse)
 def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    db_rule = db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first()
-    if not db_rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
+    db_rule = get_or_404(db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first(), "Rule not found")
 
     # If updating the domain, ensure the new domain isn't already listed elsewhere
     if rule_update.URLDomain:
@@ -61,12 +57,7 @@ def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session =
         if duplicate_check and duplicate_check.RuleID != rule_id:
             raise HTTPException(status_code=400, detail="This domain is already in the master list.")
 
-    update_data = rule_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_rule, key, value)
-
-    db.commit()
-    db.refresh(db_rule)
+    apply_updates(db, db_rule, rule_update)
     return db_rule
 
 #########################################################
@@ -74,10 +65,8 @@ def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session =
 #########################################################
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    db_rule = db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first()
-    if not db_rule:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    
+    db_rule = get_or_404(db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first(), "Rule not found")
+
     db.delete(db_rule)
     db.commit()
     return None

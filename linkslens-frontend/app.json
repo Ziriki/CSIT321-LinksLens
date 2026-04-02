@@ -33,7 +33,14 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.linkslensfrontend"
+      "package": "com.anonymous.linkslensfrontend",
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "data": [{ "mimeType": "text/plain" }],
+          "category": ["DEFAULT"]
+        }
+      ]
     }
   }
 }
