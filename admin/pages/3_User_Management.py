@@ -1,8 +1,9 @@
 import streamlit as st
 from controllers import auth_controller, user_controller
+from controllers.auth_controller import ROLE_LABELS
 from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
-from utils import search_dataframe
+from utils import search_dataframe, render_pagination
 
 st.set_page_config(page_title="User Management", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 # Admin only (RoleID 1)
@@ -11,7 +12,6 @@ auth_controller.render_sidebar()
 
 st.title("User Management")
 
-ROLE_MAP = {1: "Administrator", 2: "Moderator", 3: "User"}
 PAGE_SIZE = 20
 
 # ---------------------------------------------------------------------------
@@ -23,43 +23,23 @@ if all_df.empty:
     st.stop()
 
 # Map RoleID to label for display
-all_df["Role"] = all_df["RoleID"].map(ROLE_MAP)
+all_df["Role"] = all_df["RoleID"].map(ROLE_LABELS)
 
 # Search
 search_query = st.text_input("Search", placeholder="Search by name, email, role...")
 all_df = search_dataframe(all_df, search_query, columns=["FullName", "EmailAddress", "Role"])
 
-if "user_page" not in st.session_state:
-    st.session_state["user_page"] = 0
-
 total = len(all_df)
-page = st.session_state["user_page"]
-start = page * PAGE_SIZE
-end = min(start + PAGE_SIZE, total)
+start, end = render_pagination("user_page", total, PAGE_SIZE)
 page_df = all_df.iloc[start:end]
 
-display_df = page_df[["UserID", "FullName", "EmailAddress", "Role"]]
-
 event = st.dataframe(
-    display_df,
+    page_df[["UserID", "FullName", "EmailAddress", "Role"]],
     use_container_width=True,
     hide_index=True,
     on_select="rerun",
     selection_mode="single-row",
 )
-
-# Pagination controls
-col_prev, col_info, col_next = st.columns([1, 4, 1])
-with col_prev:
-    if st.button("Previous", disabled=(page == 0), key="user_prev"):
-        st.session_state["user_page"] = max(0, page - 1)
-        st.rerun()
-with col_info:
-    st.markdown(f"Showing **{start + 1}–{end}** of {total} (Page {page + 1})")
-with col_next:
-    if st.button("Next", disabled=(end >= total), key="user_next"):
-        st.session_state["user_page"] = page + 1
-        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Detect row selection
@@ -86,7 +66,7 @@ with col1:
         "Role",
         options=[1, 2, 3],
         index=[1, 2, 3].index(int(user_row["RoleID"])),
-        format_func=lambda x: ROLE_MAP[x],
+        format_func=lambda x: ROLE_LABELS[x],
         key=f"edit_role_{uid}",
     )
     full_name = st.text_input("Full Name", value=details.get("FullName") or "", key=f"edit_name_{uid}")
