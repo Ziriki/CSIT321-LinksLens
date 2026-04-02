@@ -32,9 +32,11 @@
 ## Features
 
 ### Mobile App (Users)
-- Scan URLs via **camera OCR**, **gallery image**, or **manual input**
+- Scan URLs via **camera OCR**, **QR code camera scanner**, **gallery image**, or **manual input**
+- **QR phishing detection ("quishing")** — live camera decodes QR codes and runs them through the full security pipeline
 - Instant **SAFE / SUSPICIOUS / MALICIOUS** verdict with score
 - View **redirect chains** and **server location**
+- **IDN Homograph detection** — flags Unicode-spoofed domains (e.g., Cyrillic 'а' replacing Latin 'a')
 - Browse **scan history** with search and filter
 - Submit **scan feedback** to flag incorrect results
 - Submit **blacklist requests** for suspicious domains
@@ -50,6 +52,7 @@
 - **App Feedback** — review feedback submitted by users
 - **Action History Log** — audit trail of all user activity
 - **Scan History** — browse all historical scans across all users
+- **Threat Intelligence** — global threat heatmap (Folium) + recent defanged malicious/suspicious scan feed
 
 ---
 
@@ -297,14 +300,18 @@ python backend/seed_data.py
 1. **Google Safe Browsing v4** — batch lookup against Google's threat database; exponential backoff on rate limits; failures fall back to SUSPICIOUS so the pipeline continues
 2. **urlscan.io submission** — submits each URL for full page analysis (public visibility)
 3. **Result polling** — waits 10s, then polls every 5s for up to 70s total
-4. **Verdict merge** — most severe result wins:
+4. **Script-level analysis** — `analyze_scripts()` classifies scripts from the urlscan.io result (ad networks, crypto miners, malicious domains, obfuscated filenames, etc.)
+5. **Homograph detection** — `detect_homograph_risk()` uses `unicodedata` (stdlib) to detect Unicode script mixing in domain labels (e.g., Cyrillic + Latin); IDN homographs on an otherwise-safe page are escalated to SUSPICIOUS
+6. **Verdict merge** — most severe result wins:
    - GSB `MALWARE` / `SOCIAL_ENGINEERING` → **MALICIOUS**
    - GSB `UNWANTED_SOFTWARE` / `POTENTIALLY_HARMFUL_APPLICATION` → **SUSPICIOUS**
    - urlscan.io `malicious: true` → **MALICIOUS**
    - urlscan.io `score ≥ 50` → **SUSPICIOUS**
+   - Crypto miners detected → at least **SUSPICIOUS**
+   - IDN homograph detected → at least **SUSPICIOUS**
    - Otherwise → **SAFE**
-5. **URLRules override** — domain in `URLRules` table takes final precedence: BLACKLIST → MALICIOUS, WHITELIST → SAFE
-6. **Persist** — saves result to `ScanHistory` including redirect URL, server location, and screenshot URL
+7. **URLRules override** — domain in `URLRules` table takes final precedence: BLACKLIST → MALICIOUS, WHITELIST → SAFE
+8. **Persist** — saves result to `ScanHistory` including redirect URL, server location, screenshot URL, script analysis, and homograph analysis
 
 ---
 

@@ -215,6 +215,7 @@ class ScanHistoryBase(BaseModel):
     ServerLocation: Optional[str] = None
     ScreenshotURL: Optional[str] = None
     ScriptAnalysis: Optional[dict] = None
+    HomographAnalysis: Optional[dict] = None
 
 # Used when initiating a new scan
 class ScanHistoryCreate(ScanHistoryBase):
