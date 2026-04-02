@@ -137,6 +137,7 @@ class ScanHistory(Base):
     ServerLocation = Column(String(100), nullable=True)
     ScreenshotURL = Column(String(2048), nullable=True)
     ScriptAnalysis = Column(JSON, nullable=True)
+    HomographAnalysis = Column(JSON, nullable=True)
     ScannedAt = Column(DateTime(timezone=True), server_default=func.now())
 
     # Set up relationship for easier access to the user account details

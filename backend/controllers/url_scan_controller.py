@@ -5,6 +5,7 @@ import re
 import requests
 import time
 import os
+import unicodedata
 import whois
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -471,6 +472,109 @@ def analyze_scripts(raw_result: dict | None) -> dict:
 
 
 #########################################################
+# Helper: Detect IDN homograph / homoglyph attacks
+#########################################################
+# Scripts whose characters are visually confusable with common Latin letters
+_CONFUSABLE_SCRIPTS = {"CYRILLIC", "GREEK", "ARMENIAN", "CHEROKEE", "GEORGIAN"}
+
+
+def detect_homograph_risk(url: str) -> dict:
+    """
+    Detect IDN homograph attacks in the URL's domain.
+
+    Checks for:
+    - Non-ASCII characters that mix Unicode scripts within a domain label
+      (e.g., Cyrillic 'а' alongside Latin letters — visually identical but different code points)
+    - Pure-Punycode (xn--) labels decoded to expose the underlying Unicode
+
+    Returns a risk dict. Never raises — failures silently return safe defaults so the
+    scan pipeline is never aborted by detection errors.
+    """
+    result: dict = {
+        "is_homograph": False,
+        "risk_score": 0,
+        "punycode": None,
+        "mixed_scripts": [],
+        "confusable_chars": [],
+        "details": None,
+    }
+    try:
+        domain = urlparse(url).hostname or ""
+        if not domain:
+            return result
+
+        # Check whether the domain is pure ASCII
+        try:
+            domain.encode("ascii")
+            # Pure ASCII — only proceed if it contains xn-- Punycode labels
+            if "xn--" not in domain.lower():
+                return result
+            # Decode each Punycode label back to Unicode for analysis
+            labels = domain.lower().split(".")
+            decoded_labels = []
+            for label in labels:
+                if label.startswith("xn--"):
+                    try:
+                        decoded_labels.append(label.encode("ascii").decode("idna"))
+                    except Exception:
+                        decoded_labels.append(label)
+                else:
+                    decoded_labels.append(label)
+            result["punycode"] = domain
+            domain = ".".join(decoded_labels)
+        except UnicodeEncodeError:
+            # Non-ASCII domain — encode to Punycode for reference
+            try:
+                labels = domain.lower().split(".")
+                punycode_parts = []
+                for label in labels:
+                    try:
+                        punycode_parts.append(label.encode("idna").decode("ascii"))
+                    except Exception:
+                        punycode_parts.append(label)
+                result["punycode"] = ".".join(punycode_parts)
+            except Exception:
+                pass
+
+        # Classify each character by its Unicode script
+        scripts_found: set[str] = set()
+        confusable_chars: list[str] = []
+
+        for char in domain:
+            if char in ".-":
+                continue
+            char_name = unicodedata.name(char, "")
+            script = char_name.split(" ")[0] if char_name else "UNKNOWN"
+            scripts_found.add(script)
+            if script in _CONFUSABLE_SCRIPTS and len(confusable_chars) < 10:
+                confusable_chars.append(f"'{char}' ({char_name})")
+
+        latin_present = "LATIN" in scripts_found
+        non_latin = scripts_found - {"LATIN", "DIGIT", "UNKNOWN"}
+
+        if confusable_chars:
+            result["is_homograph"] = True
+            result["mixed_scripts"] = sorted(scripts_found - {"UNKNOWN"})
+            result["confusable_chars"] = confusable_chars
+            if latin_present and non_latin:
+                result["risk_score"] = min(90, 50 + len(confusable_chars) * 8)
+                result["details"] = (
+                    f"Domain mixes scripts ({', '.join(sorted(non_latin))} + Latin) "
+                    f"with {len(confusable_chars)} visually confusable character(s)."
+                )
+            else:
+                result["risk_score"] = min(80, 40 + len(confusable_chars) * 8)
+                result["details"] = (
+                    f"Domain contains {len(confusable_chars)} character(s) from "
+                    f"{', '.join(sorted(non_latin or {'unknown script'}))} "
+                    f"that visually resemble ASCII letters."
+                )
+    except Exception:
+        pass  # Never abort the scan pipeline
+    return result
+
+
+#########################################################
 # Helper: Run urlscan.io submit + poll for a single URL
 #########################################################
 def _run_urlscan(url: str) -> tuple[str | None, dict | None]:
@@ -548,9 +652,14 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         domain = urlparse(initial_url_resolved).netloc
         redirect_chain = extract_redirect_chain(initial_url_resolved, raw_result)
         script_analysis = analyze_scripts(raw_result)
+        homograph_analysis = detect_homograph_risk(initial_url_resolved)
 
         # Crypto-mining scripts on the page → escalate to at least SUSPICIOUS
         if script_analysis["crypto_miners"] and final_status == "SAFE":
+            final_status = "SUSPICIOUS"
+
+        # IDN homograph detected on an otherwise-safe page → escalate to SUSPICIOUS
+        if homograph_analysis["is_homograph"] and final_status == "SAFE":
             final_status = "SUSPICIOUS"
 
         # Internal URLRules have final say over external API verdicts
@@ -571,6 +680,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             ServerLocation=urlscan_result["server_location"],
             ScreenshotURL=urlscan_result["screenshot_url"],
             ScriptAnalysis=script_analysis,
+            HomographAnalysis=homograph_analysis,
         )
         db.add(scan_record)
         db.commit()
@@ -596,6 +706,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             "gsb_flagged": gsb["flagged"],
             "gsb_threat_types": gsb["threat_types"],
             "script_analysis": script_analysis,
+            "homograph_analysis": homograph_analysis,
         })
 
     return scan_results
