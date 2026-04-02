@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
-from utils import get_fullname
+from utils import get_fullname, get_or_404, apply_updates
 # Import custom files
 import models
 import schemas
@@ -39,9 +39,7 @@ def create_feedback(feedback: schemas.AppFeedbackCreate, db: Session = Depends(g
 #########################################################
 @router.get("/{feedback_id}", response_model=schemas.AppFeedbackResponse)
 def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    feedback = db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first()
-    if not feedback:
-        raise HTTPException(status_code=404, detail="Feedback not found")
+    feedback = get_or_404(db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
     return feedback
 
 #########################################################
@@ -49,13 +47,8 @@ def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Dep
 #########################################################
 @router.put("/{feedback_id}", response_model=schemas.AppFeedbackResponse)
 def update_feedback(feedback_id: int, feedback_update: schemas.AppFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    db_feedback = db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first()
-    if not db_feedback:
-        raise HTTPException(status_code=404, detail="Feedback not found")
-    
-    db_feedback.Feedback = feedback_update.Feedback
-    db.commit()
-    db.refresh(db_feedback)
+    db_feedback = get_or_404(db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
+    apply_updates(db, db_feedback, feedback_update)
     return db_feedback
 
 #########################################################
@@ -63,10 +56,8 @@ def update_feedback(feedback_id: int, feedback_update: schemas.AppFeedbackUpdate
 #########################################################
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    db_feedback = db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first()
-    if not db_feedback:
-        raise HTTPException(status_code=404, detail="Feedback not found")
-    
+    db_feedback = get_or_404(db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
+
     db.delete(db_feedback)
     db.commit()
     return None

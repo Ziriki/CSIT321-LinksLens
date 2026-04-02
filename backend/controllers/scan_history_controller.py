@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
-from utils import get_fullname
+from utils import get_fullname, get_or_404, apply_updates
 # Import custom files
 import models
 import schemas
@@ -37,9 +37,7 @@ def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db)):
 #########################################################
 @router.get("/{scan_id}", response_model=schemas.ScanHistoryResponse)
 def read_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
+    scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
     # Regular users can only view their own scans
     if current_user["role_id"] not in (1, 2) and scan.UserID != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own scans")
@@ -50,17 +48,8 @@ def read_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = 
 #########################################################
 @router.put("/{scan_id}", response_model=schemas.ScanHistoryResponse)
 def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    db_scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
-    if not db_scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
-
-    # Update only the provided fields
-    update_data = scan_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_scan, key, value)
-
-    db.commit()
-    db.refresh(db_scan)
+    db_scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
+    apply_updates(db, db_scan, scan_update)
     return db_scan
 
 #########################################################
@@ -68,9 +57,7 @@ def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Sessio
 #########################################################
 @router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    db_scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first()
-    if not db_scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
+    db_scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
     # Regular users can only delete their own scans
     if current_user["role_id"] not in (1, 2) and db_scan.UserID != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only delete your own scans")
@@ -138,6 +125,7 @@ def list_scans(
             "DomainAgeDays": scan.DomainAgeDays,
             "ServerLocation": scan.ServerLocation,
             "ScreenshotURL": scan.ScreenshotURL,
+            "ScriptAnalysis": scan.ScriptAnalysis,
             "ScannedAt": scan.ScannedAt,
         }
         for scan in results
@@ -153,10 +141,7 @@ def clear_all_user_scans(user_id: int, db: Session = Depends(get_db), current_us
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only clear your own scan history")
 
-    # Verify user exists
-    account = db.query(models.UserAccount).filter(models.UserAccount.UserID == user_id).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="User Account not found")
+    get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == user_id).first(), "User Account not found")
 
     # Delete all scans belonging to this user
     db.query(models.ScanHistory).filter(models.ScanHistory.UserID == user_id).delete()

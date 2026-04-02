@@ -2,6 +2,8 @@ import jwt
 import streamlit as st
 from models import api_client
 
+ROLE_LABELS = {1: "Administrator", 2: "Moderator", 3: "User"}
+
 
 def _decode_token():
     """Decode the stored JWT to extract user_id and role_id (cached per rerun)."""
@@ -71,7 +73,7 @@ def render_sidebar():
     _hide_pages_for_moderator()
     user = _decode_token()
     if user:
-        role_label = {1: "Administrator", 2: "Moderator", 3: "User"}.get(user["role_id"], "Unknown")
+        role_label = ROLE_LABELS.get(user["role_id"], "Unknown")
         st.sidebar.write(f"Logged in as **{role_label}**")
 
     st.sidebar.markdown("---")

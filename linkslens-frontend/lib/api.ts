@@ -5,6 +5,11 @@ const API_BASE_URL =
 
 const TOKEN_KEY = "access_token";
 
+async function throwApiError(res: Response, msg: string): Promise<never> {
+  const err = await res.json().catch(() => ({}));
+  throw new Error((err as any).detail ?? `${msg}: ${res.status}`);
+}
+
 // ─── Token helpers ────────────────────────────────────────────────────────────
 
 export async function saveToken(token: string): Promise<void> {
@@ -63,10 +68,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
       ClientType: "mobile",
     }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Login failed: ${res.status}`);
-  }
+  if (!res.ok) await throwApiError(res, "Login failed");
   const data: LoginResponse = await res.json();
   await saveToken(data.access_token);
   return data;
@@ -82,10 +84,7 @@ export async function signup(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ EmailAddress: email, Password: password, FullName: fullName }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Signup failed: ${res.status}`);
-  }
+  if (!res.ok) await throwApiError(res, "Signup failed");
 }
 
 export async function logout(): Promise<void> {
@@ -140,14 +139,28 @@ export async function updateDetails(
 
 // ─── Scan ─────────────────────────────────────────────────────────────────────
 
+export interface ScriptAnalysis {
+  total: number;
+  trusted_count: number;
+  ad_count: number;
+  ad_heavy: boolean;
+  crypto_miners: string[];
+  malicious_scripts: string[];
+  suspicious_patterns: string[];
+  tech_stack: string[];
+  script_risk_score: number;
+}
+
 export interface ScanResponse {
   scan_id: number;
   user_id: number;
   uuid: string | null;
   initial_url: string;
   redirect_url: string | null;
-  status_indicator: "SAFE" | "SUSPICIOUS" | "MALICIOUS";
+  redirect_chain: string[] | null;
+  status_indicator: "SAFE" | "SUSPICIOUS" | "MALICIOUS" | "UNAVAILABLE";
   score: number;
+  domain_age_days: number | null;
   server_location: string | null;
   ip_address: string | null;
   screenshot_url: string | null;
@@ -156,6 +169,7 @@ export interface ScanResponse {
   result_url: string;
   gsb_flagged: boolean;
   gsb_threat_types: string[];
+  script_analysis: ScriptAnalysis | null;
   scanned_at: string;
 }
 
@@ -180,12 +194,12 @@ export interface ScanHistoryItem {
   FullName: string | null;
   InitialURL: string;
   RedirectURL: string | null;
+  RedirectChain: string[] | null;
   StatusIndicator: string | null;
   DomainAgeDays: number | null;
   ServerLocation: string | null;
   ScreenshotURL: string | null;
-  RawText: string | null;
-  AssociatedPerson: string | null;
+  ScriptAnalysis: ScriptAnalysis | null;
   ScannedAt: string;
 }
 
@@ -211,6 +225,29 @@ export async function clearScanHistory(userId: number): Promise<void> {
     headers: await authHeaders(),
   });
   if (!res.ok) throw new Error(`Failed to clear scan history: ${res.status}`);
+}
+
+// ─── Preferences ──────────────────────────────────────────────────────────────
+
+export const PREF_HAS_SEEN_ONBOARDING = "has_seen_onboarding"
+
+export async function fetchPreferences(userId: number): Promise<Record<string, string>> {
+  const res = await fetch(`${API_BASE_URL}/api/preferences/${userId}`, {
+    headers: await authHeaders(),
+  });
+  if (res.status === 404) return {};
+  if (!res.ok) throw new Error(`Failed to fetch preferences: ${res.status}`);
+  const data = await res.json();
+  return data.Preferences ?? {};
+}
+
+export async function updatePreferences(userId: number, prefs: Record<string, string>): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/api/preferences/${userId}`, {
+    method: "PUT",
+    headers: await authHeaders(),
+    body: JSON.stringify({ Preferences: prefs }),
+  });
+  if (!res.ok) throw new Error(`Failed to update preferences: ${res.status}`);
 }
 
 // ─── Feedback ─────────────────────────────────────────────────────────────────
@@ -240,8 +277,5 @@ export async function submitScanFeedback(
       Comments: comments,
     }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Failed to submit report: ${res.status}`);
-  }
+  if (!res.ok) await throwApiError(res, "Failed to submit report");
 }
