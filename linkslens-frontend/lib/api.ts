@@ -151,6 +151,15 @@ export interface ScriptAnalysis {
   script_risk_score: number;
 }
 
+export interface HomographAnalysis {
+  is_homograph: boolean;
+  risk_score: number;
+  punycode: string | null;
+  mixed_scripts: string[];
+  confusable_chars: string[];
+  details: string | null;
+}
+
 export interface ScanResponse {
   scan_id: number;
   user_id: number;
@@ -170,6 +179,7 @@ export interface ScanResponse {
   gsb_flagged: boolean;
   gsb_threat_types: string[];
   script_analysis: ScriptAnalysis | null;
+  homograph_analysis: HomographAnalysis | null;
   scanned_at: string;
 }
 
@@ -200,6 +210,7 @@ export interface ScanHistoryItem {
   ServerLocation: string | null;
   ScreenshotURL: string | null;
   ScriptAnalysis: ScriptAnalysis | null;
+  HomographAnalysis: HomographAnalysis | null;
   ScannedAt: string;
 }
 

@@ -230,3 +230,23 @@ def update_scan_status(scan_id: int, new_status: str):
         timeout=_TIMEOUT,
     )
     return response.status_code == 200
+
+
+def fetch_threat_stats():
+    """Return per-country threat counts aggregated from ScanHistory."""
+    response = requests.get(
+        f"{BACKEND_URL}/api/scans/stats/threats",
+        headers=_get_headers(),
+        timeout=_TIMEOUT,
+    )
+    return response.json() if response.status_code == 200 else []
+
+
+def fetch_recent_threats():
+    """Return the last 20 defanged MALICIOUS/SUSPICIOUS scan records."""
+    response = requests.get(
+        f"{BACKEND_URL}/api/scans/stats/recent-threats",
+        headers=_get_headers(),
+        timeout=_TIMEOUT,
+    )
+    return response.json() if response.status_code == 200 else []
