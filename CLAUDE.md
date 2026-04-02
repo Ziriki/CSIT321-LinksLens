@@ -19,11 +19,13 @@ The official project spec (CSIT-26-S1-05) lists these key functionalities. All m
 
 | Requirement | Status | Implementation |
 |---|---|---|
-| URL observation from browser or camera captures | ✅ Done | ML Kit OCR (`scan-image.tsx`), manual input (`scan-link.tsx`), Android share intent (pending) |
+| URL observation from browser or camera captures | ✅ Done | ML Kit OCR (`scan-image.tsx`), manual input (`scan-link.tsx`), QR camera scanner (`scan-qr.tsx`), Android share intent (pending) |
 | Link security analysis against common security risks | ✅ Done | Google Safe Browsing v4 + urlscan.io in `/scan` pipeline |
 | Security notification | ✅ Done | `expo-notifications` local push on scan complete (`lib/notifications.ts`) |
 | Comprehensive security analysis based on script level inspection | ✅ Done | `analyze_scripts()` in `url_scan_controller.py` — classifies scripts from urlscan.io result |
 | Potentially reduce Ad intensive websites | ✅ Done | `ad_heavy` flag + `ad_count` in `ScriptAnalysis` — surfaced in scan response |
+| Homograph / IDN attack detection | ✅ Done | `detect_homograph_risk()` in `url_scan_controller.py` — Unicode script mixing, confusable chars, Punycode analysis |
+| Community threat heatmap | ✅ Done | `9_Threat_Intelligence.py` admin page — Folium world map + recent threats feed |
 
 ## Architecture
 
@@ -113,7 +115,8 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 3. **Poll for result** — waits 10s, then polls every 5s up to 12 attempts (70s total timeout)
 4. **WHOIS domain age** — `get_domain_age_days(domain)` runs concurrently with urlscan.io polling; non-blocking (failures return `None`)
 5. **Script-level analysis** — `analyze_scripts(raw_result)` parses urlscan.io result for: ad networks, crypto miners, known malicious script domains, IP-hosted scripts, mixed content (HTTP on HTTPS), free-hosting abuse, obfuscated filenames, trusted CDN recognition, technology stack (Wappalyzer), and a composite `script_risk_score` (0–100). Crypto miners on an otherwise-SAFE page → escalated to SUSPICIOUS.
-6. **Merge verdicts** — most severe wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; crypto miners found → at least SUSPICIOUS; otherwise SAFE. If urlscan.io failed entirely AND GSB has no signal → UNAVAILABLE
+5b. **Homograph detection** — `detect_homograph_risk(url)` uses `unicodedata` (stdlib) to classify each domain character by Unicode script. Flags domains that mix Latin with confusable scripts (Cyrillic, Greek, Armenian, Cherokee, Georgian). Returns `is_homograph`, `risk_score`, `punycode`, `mixed_scripts`, `confusable_chars`, `details`. IDN homograph on an otherwise-SAFE page → escalated to SUSPICIOUS.
+6. **Merge verdicts** — most severe wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; crypto miners found → at least SUSPICIOUS; IDN homograph found → at least SUSPICIOUS; otherwise SAFE. If urlscan.io failed entirely AND GSB has no signal → UNAVAILABLE
 7. **Check internal URLRules** — BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (final say)
 8. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `RedirectChain`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`, `ScriptAnalysis`
 
@@ -128,6 +131,10 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
     "total", "trusted_count", "ad_count", "ad_heavy",
     "crypto_miners", "malicious_scripts", "suspicious_patterns",
     "tech_stack", "script_risk_score"
+  },
+  "homograph_analysis": {
+    "is_homograph", "risk_score", "punycode",
+    "mixed_scripts", "confusable_chars", "details"
   }
 }
 ```
@@ -176,6 +183,7 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 | `6_URL_Registry.py` — Blacklist/whitelist domains | ✅ | ✅ |
 | `7_Scan_History.py` — All scan records | ✅ | ✅ |
 | `8_Scan_Feedback.py` — Resolve scan disputes | ✅ | ✅ |
+| `9_Threat_Intelligence.py` — Global threat heatmap + recent threats feed | ✅ | ✅ |
 
 **Sidebar hiding:** `_hide_pages_for_moderator()` in `admin/controllers/auth_controller.py` injects CSS to hide admin-only pages. Called from both `require_role()` and `render_sidebar()` so it applies on every page including the home page. Selectors match on filename substrings (`1_Dashboard`, `3_User_Management`, etc.) — list stored in `_MODERATOR_HIDDEN_PAGES` module-level constant.
 
@@ -194,8 +202,9 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `expo-secure-store` is registered as an Expo plugin in `app.json` and is a native module — requires `expo run:android` build
 
 **Scan flow (implemented):**
-- `scan.tsx` → user picks OCR image or manual entry
+- `scan.tsx` → user picks from three entry methods: OCR image, QR camera scan, or manual entry
 - `scan-image.tsx` → ML Kit OCR extracts text, editable `TextInput` lets user correct it, navigates to `scan-processing` with `url` param
+- `scan-qr.tsx` → live camera QR code scanner (`expo-camera` `CameraView`); decodes QR URL and navigates to `scan-processing`; handles camera permission state (loading/denied/granted); displays scan-frame overlay with corner accents and status feedback
 - `scan-link.tsx` → manual URL entry, navigates to `scan-processing`
 - `scan-processing.tsx` → shows simulated progress messages timed to backend pipeline steps (7 stages, 0–21s) → calls `scanUrl(url)` → on result fires local push notification via `lib/notifications.ts` → navigates to `scan-results`
 - `scan-results.tsx` → displays `status_indicator`, `score`, `gsb_threat_types`, `initial_url`
@@ -214,6 +223,8 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 **Not yet implemented (UI stubs):** Scan history loading, profile, feedback submission, all settings screens. `script_analysis` data from scan response not yet displayed.
 
 **MLKit note:** `@infinitered/react-native-mlkit-text-recognition` is a native module — requires `expo run:android` (custom dev client), not Expo Go.
+
+**expo-camera note:** `expo-camera` (`~16.0.10`) is registered as an Expo plugin in `app.json` and is a native module — requires `npx expo prebuild --clean` + `npx expo run:android` after adding. Provides `CameraView` with `onBarcodeScanned` / `barcodeScannerSettings` for QR scanning. URL validation regex shared via `lib/url-validation.ts`.
 
 **Icon/splash changes:** Require `npx expo prebuild --clean` + `npx expo run:android` to take effect. Uninstall the old APK from the device first.
 
@@ -235,7 +246,7 @@ RESEND_KEY
 
 **Tables (12):** `UserRole`, `UserAccount`, `UserDetails`, `UserPreferences`, `AppFeedback`, `ActionHistory`, `URLRules`, `BlacklistRequest`, `ScanHistory`, `ScanFeedback`, `PasswordResetToken`, `EmailVerificationToken`
 
-**`ScanHistory` columns (current):** `ScanID`, `UserID`, `InitialURL`, `RedirectURL`, `RedirectChain` (JSON), `StatusIndicator` (ENUM incl. UNAVAILABLE), `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`, `ScriptAnalysis` (JSON), `ScannedAt`
+**`ScanHistory` columns (current):** `ScanID`, `UserID`, `InitialURL`, `RedirectURL`, `RedirectChain` (JSON), `StatusIndicator` (ENUM incl. UNAVAILABLE), `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`, `ScriptAnalysis` (JSON), `HomographAnalysis` (JSON), `ScannedAt`
 
 **Pending DB migrations (must be run on server if not yet applied):**
 ```sql
@@ -253,6 +264,9 @@ ALTER TABLE `ScanHistory`
 ALTER TABLE `ScanHistory`
   DROP COLUMN `RawText`,
   DROP COLUMN `AssociatedPerson`;
+
+ALTER TABLE `ScanHistory`
+  ADD COLUMN `HomographAnalysis` JSON NULL AFTER `ScriptAnalysis`;
 ```
 
 **Connection pool:** `pool_pre_ping=True, pool_recycle=3600` on the SQLAlchemy engine — prevents "MySQL server has gone away" errors on long-idle connections.

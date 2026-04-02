@@ -304,6 +304,17 @@ export default function ScanResults() {
               </>
             )}
 
+            {/* Homograph / IDN attack risk */}
+            {scanData.homograph_analysis?.is_homograph && (
+              <View className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+                <Text className="text-xs font-semibold text-red-700">IDN Homograph Risk Detected</Text>
+                <Text className="mt-1 text-xs text-foreground">{scanData.homograph_analysis.details}</Text>
+                <Text className="mt-1 text-xs text-muted-foreground">
+                  Confusable chars: {scanData.homograph_analysis.confusable_chars.join(", ")}
+                </Text>
+              </View>
+            )}
+
             {!sa && !scanData.domain_age_days && !scanData.server_location && (
               <Text className="text-xs text-muted-foreground">
                 No additional analysis data available for this scan.

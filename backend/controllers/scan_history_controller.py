@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
@@ -8,6 +9,8 @@ import models
 import schemas
 from database import get_db
 from dependencies import get_current_user, require_role
+
+_THREAT_STATUSES = [models.ScanStatusEnum.MALICIOUS, models.ScanStatusEnum.SUSPICIOUS]
 
 # Create a router for this controller
 router = APIRouter(
@@ -31,6 +34,63 @@ def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_scan)
     return db_scan
+
+#########################################################
+# Stats: Per-country threat aggregation (Admin only)
+#########################################################
+@router.get("/stats/threats")
+def get_threat_stats(db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+    """Return per-country threat counts aggregated from ScanHistory."""
+    rows = (
+        db.query(
+            models.ScanHistory.ServerLocation,
+            models.ScanHistory.StatusIndicator,
+            func.count().label("count"),
+        )
+        .filter(
+            models.ScanHistory.ServerLocation.isnot(None),
+            models.ScanHistory.StatusIndicator.in_(_THREAT_STATUSES),
+        )
+        .group_by(models.ScanHistory.ServerLocation, models.ScanHistory.StatusIndicator)
+        .all()
+    )
+
+    # Aggregate into per-location dicts
+    aggregated: dict = {}
+    for location, indicator, count in rows:
+        if location not in aggregated:
+            aggregated[location] = {"location": location, "malicious": 0, "suspicious": 0, "total": 0}
+        key = indicator.value.lower()
+        aggregated[location][key] = count
+        aggregated[location]["total"] += count
+
+    return list(aggregated.values())
+
+
+#########################################################
+# Stats: Recent malicious/suspicious scans feed (Admin + Moderator)
+#########################################################
+@router.get("/stats/recent-threats")
+def get_recent_threats(db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
+    """Return the last 20 MALICIOUS/SUSPICIOUS scans with defanged URLs."""
+    scans = (
+        db.query(models.ScanHistory)
+        .filter(models.ScanHistory.StatusIndicator.in_(_THREAT_STATUSES))
+        .order_by(models.ScanHistory.ScanID.desc())
+        .limit(20)
+        .all()
+    )
+
+    return [
+        {
+            "url": scan.InitialURL.replace("https://", "hxxps://").replace("http://", "hxxp://"),
+            "status": scan.StatusIndicator.value,
+            "location": scan.ServerLocation,
+            "scanned_at": scan.ScannedAt.isoformat() if scan.ScannedAt else None,
+        }
+        for scan in scans
+    ]
+
 
 #########################################################
 # READ function for ScanHistory table (Get by ID)
@@ -126,6 +186,7 @@ def list_scans(
             "ServerLocation": scan.ServerLocation,
             "ScreenshotURL": scan.ScreenshotURL,
             "ScriptAnalysis": scan.ScriptAnalysis,
+            "HomographAnalysis": scan.HomographAnalysis,
             "ScannedAt": scan.ScannedAt,
         }
         for scan in results
