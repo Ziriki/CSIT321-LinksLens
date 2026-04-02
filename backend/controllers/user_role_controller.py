@@ -7,6 +7,7 @@ import models
 import schemas
 from database import get_db
 from dependencies import require_role
+from utils import get_or_404, apply_updates
 
 # Create a router for this controller
 router = APIRouter(
@@ -40,10 +41,7 @@ def create_role(role: schemas.UserRoleCreate, db: Session = Depends(get_db), _: 
 #########################################################
 @router.get("/{role_id}", response_model=schemas.UserRoleResponse)
 def read_role(role_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    # Look up a specific role by ID (FastAPI guarantees role_id is a valid integer)
-    role = db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first()
-    if not role:
-        raise HTTPException(status_code=404, detail="Role not found")
+    role = get_or_404(db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first(), "Role not found")
     return role
 
 #########################################################
@@ -51,24 +49,15 @@ def read_role(role_id: int, db: Session = Depends(get_db), _: dict = Depends(req
 #########################################################
 @router.put("/{role_id}", response_model=schemas.UserRoleResponse)
 def update_role(role_id: int, role_update: schemas.UserRoleUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    # Find the existing role
-    db_role = db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first()
-    if not db_role:
-        raise HTTPException(status_code=404, detail="Role not found")
-    
+    db_role = get_or_404(db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first(), "Role not found")
+
     # Ensure the new RoleName is not the same as existing role
     if role_update.RoleName:
         name_check = db.query(models.UserRole).filter(models.UserRole.RoleName == role_update.RoleName).first()
         if name_check and name_check.RoleID != role_id:
             raise HTTPException(status_code=400, detail="Name already in use by another role")
     
-    # Update only the provided fields (exclude_unset=True ignores fields that were not sent in the request)
-    update_data = role_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_role, key, value)
-        
-    db.commit()
-    db.refresh(db_role)
+    apply_updates(db, db_role, role_update)
     return db_role
 
 #########################################################
@@ -76,11 +65,8 @@ def update_role(role_id: int, role_update: schemas.UserRoleUpdate, db: Session =
 #########################################################
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_role(role_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    # Find the existing role
-    db_role = db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first()
-    if not db_role:
-        raise HTTPException(status_code=404, detail="Role not found")
-    
+    db_role = get_or_404(db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first(), "Role not found")
+
     # Soft Delete
     db_role.IsActive = False
     db.commit()

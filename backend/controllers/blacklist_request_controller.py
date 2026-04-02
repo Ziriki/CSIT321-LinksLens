@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, timezone
 
-from utils import get_fullname
+from utils import get_fullname, get_or_404
 
 # Import custom files
 import models
@@ -49,9 +49,7 @@ def create_request(request: schemas.BlacklistRequestCreate, db: Session = Depend
 #########################################################
 @router.get("/{request_id}", response_model=schemas.BlacklistRequestResponse)
 def read_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    req = db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first()
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
+    req = get_or_404(db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first(), "Request not found")
     return req
 
 #########################################################
@@ -59,14 +57,10 @@ def read_request(request_id: int, db: Session = Depends(get_db), _: dict = Depen
 #########################################################
 @router.put("/{request_id}", response_model=schemas.BlacklistRequestResponse)
 def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    db_request = db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first()
-    if not db_request:
-        raise HTTPException(status_code=404, detail="Request not found")
+    db_request = get_or_404(db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first(), "Request not found")
 
     # Verify the moderator exists
-    moderator = db.query(models.UserAccount).filter(models.UserAccount.UserID == review_data.ReviewedBy).first()
-    if not moderator:
-        raise HTTPException(status_code=404, detail="Moderator Account not found")
+    get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == review_data.ReviewedBy).first(), "Moderator Account not found")
 
     # Update the status and reviewer info
     db_request.Status = review_data.Status
@@ -95,10 +89,8 @@ def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate,
 #########################################################
 @router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    db_request = db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first()
-    if not db_request:
-        raise HTTPException(status_code=404, detail="Request not found")
-    
+    db_request = get_or_404(db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first(), "Request not found")
+
     db.delete(db_request)
     db.commit()
     return None

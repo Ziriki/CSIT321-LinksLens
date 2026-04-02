@@ -7,7 +7,7 @@ import {
   InputField,
   TextLink,
 } from "../components/ui-components"
-import { login } from "../lib/api"
+import { login, decodeToken, fetchPreferences, PREF_HAS_SEEN_ONBOARDING } from "../lib/api"
 
 export default function LoginScreen() {
   //TODO: Change back after Demo!
@@ -22,7 +22,15 @@ export default function LoginScreen() {
     }
     setLoading(true)
     try {
-      await login(email, password)
+      const data = await login(email, password)
+      const userId = decodeToken(data.access_token)?.user_id
+      if (userId) {
+        const prefs = await fetchPreferences(userId).catch(() => ({}))
+        if (!prefs[PREF_HAS_SEEN_ONBOARDING]) {
+          router.replace("/onboarding")
+          return
+        }
+      }
       router.replace("/home")
     } catch (err: any) {
       Alert.alert("Login Failed", err.message ?? "Invalid email or password.")

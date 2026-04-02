@@ -1,14 +1,34 @@
-import { View, Text } from "react-native"
+import { useEffect, useRef, useState } from "react"
+import { View, Text, Alert } from "react-native"
 import { Check } from "lucide-react-native"
 import { ScreenHeader, ListItem } from "../components/ui-components"
+import { fetchPreferences, updatePreferences, getCurrentUserId } from "../lib/api"
+import { BROWSERS, type BrowserId } from "../lib/browsers"
 
-export default function browserSettings() {
-  const browsers = [
-    { id: "system", name: "System Default", selected: false },
-    { id: "chrome", name: "Google Chrome", subtitle: "Detected", selected: false },
-    { id: "firefox", name: "Firefox", subtitle: "Detected", selected: false },
-    { id: "edge", name: "Microsoft Edge", subtitle: "Not installed", selected: false },
-  ]
+export default function BrowserSettings() {
+  const [selected, setSelected] = useState<BrowserId>("system")
+  const userIdRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    getCurrentUserId().then((id) => {
+      userIdRef.current = id
+      if (id) {
+        fetchPreferences(id)
+          .then((prefs) => { if (prefs.browser) setSelected(prefs.browser as BrowserId) })
+          .catch(() => {})
+      }
+    })
+  }, [])
+
+  async function handleSelect(browserId: BrowserId) {
+    setSelected(browserId)
+    if (!userIdRef.current) return
+    try {
+      await updatePreferences(userIdRef.current, { browser: browserId })
+    } catch {
+      Alert.alert("Error", "Could not save browser preference.")
+    }
+  }
 
   return (
     <View className="flex-1 bg-background">
@@ -20,13 +40,15 @@ export default function browserSettings() {
         </Text>
 
         <View className="flex-col gap-2">
-          {browsers.map((browser) => (
+          {BROWSERS.map((browser) => (
             <ListItem
               key={browser.id}
               title={browser.name}
-              subtitle={browser.subtitle}
+              onPress={() => handleSelect(browser.id)}
               rightElement={
-                browser.selected ? <Check size={20} color="#2563eb" /> : undefined
+                selected === browser.id
+                  ? <Check size={20} color="#2563eb" />
+                  : undefined
               }
             />
           ))}
