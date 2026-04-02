@@ -97,7 +97,9 @@ def login(credentials: schemas.UserLogin, response: Response, db: Session = Depe
             samesite="lax",
             max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
         )
-        return {"message": "Web login successful"}
+        # Also return the token in the body so server-side clients (e.g. the Streamlit admin
+        # portal) can read it directly — browsers will use the HttpOnly cookie instead.
+        return {"access_token": token, "token_type": "bearer", "message": "Web login successful"}
         
     elif credentials.ClientType == schemas.ClientTypeEnum.MOBILE:
         # For Mobile: Return the token directly so React Native can save it

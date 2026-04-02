@@ -70,6 +70,7 @@ def get_current_user():
 
 def render_sidebar():
     """Show role label and logout button in the sidebar."""
+    _hide_pages_for_moderator()
     user = _decode_token()
     if user:
         role_label = ROLE_LABELS.get(user["role_id"], "Unknown")
@@ -88,6 +89,8 @@ def handle_login(email, password):
     if not email or not password:
         st.error("Please fill in both fields.")
         return
+    # Clear any stale decoded-user cache so the new token is always decoded fresh
+    st.session_state.pop("_decoded_user", None)
     with st.spinner("Authenticating..."):
         response = api_client.authenticate_user(email, password)
         if response.status_code == 200:
