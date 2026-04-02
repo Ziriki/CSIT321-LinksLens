@@ -6,7 +6,7 @@ import secrets
 import os
 from dotenv import load_dotenv
 
-from utils import get_fullname, get_password_hash, hash_token, normalize_expiry, send_email
+from utils import get_fullname, get_or_404, get_password_hash, hash_token, normalize_expiry, send_email
 
 load_dotenv()
 
@@ -56,9 +56,7 @@ def read_account(account_id: int, db: Session = Depends(get_db), current_user: d
     # Regular users can only view their own account; admins can view any
     if current_user["role_id"] not in (1, 2) and account_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own account")
-    account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
+    account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
     return account
 
 #########################################################
@@ -76,9 +74,7 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
         if "RoleID" in update_data or "IsActive" in update_data:
             raise HTTPException(status_code=403, detail="Only administrators can change roles or account status")
 
-    db_account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
-    if not db_account:
-        raise HTTPException(status_code=404, detail="Account not found")
+    db_account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
 
     # If updating email, check if the new email is taken by someone else
     if account_update.EmailAddress:
@@ -91,9 +87,7 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
         if not db.query(models.UserRole).filter(models.UserRole.RoleID == account_update.RoleID).first():
             raise HTTPException(status_code=400, detail="Invalid RoleID provided")
 
-    # Extract update data, handle password hashing separately if provided
-    update_data = account_update.model_dump(exclude_unset=True)
-    
+    # Handle password hashing separately if provided
     if "Password" in update_data:
         db_account.PasswordHash = get_password_hash(update_data.pop("Password"))
 
@@ -109,10 +103,8 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
 #########################################################
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    db_account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
-    if not db_account:
-        raise HTTPException(status_code=404, detail="Account not found")
-    
+    db_account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
+
     db_account.IsActive = False
     db.commit()
     return None

@@ -13,6 +13,18 @@ LinksLens is a mobile-first weblink security scanner. Users submit URLs (via cam
   - `admin.linkslens.com` — Moderator/Admin web portal (Streamlit on port 8501)
   - `api.linkslens.com` — Backend API (FastAPI on port 8000)
 
+## Project Spec Requirements
+
+The official project spec (CSIT-26-S1-05) lists these key functionalities. All must be fulfilled:
+
+| Requirement | Status | Implementation |
+|---|---|---|
+| URL observation from browser or camera captures | ✅ Done | ML Kit OCR (`scan-image.tsx`), manual input (`scan-link.tsx`), Android share intent (pending) |
+| Link security analysis against common security risks | ✅ Done | Google Safe Browsing v4 + urlscan.io in `/scan` pipeline |
+| Security notification | ✅ Done | `expo-notifications` local push on scan complete (`lib/notifications.ts`) |
+| Comprehensive security analysis based on script level inspection | ✅ Done | `analyze_scripts()` in `url_scan_controller.py` — classifies scripts from urlscan.io result |
+| Potentially reduce Ad intensive websites | ✅ Done | `ad_heavy` flag + `ad_count` in `ScriptAnalysis` — surfaced in scan response |
+
 ## Architecture
 
 - **Mobile App:** React Native + Expo (`linkslens-frontend/`) — NativeWind (Tailwind CSS), Expo Router, on-device ML Kit OCR. Scan pipeline wired to backend; auth and most other screens still UI-only stubs.
@@ -94,29 +106,42 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 **`/scan` pipeline (`url_scan_controller.py`):**
 `POST /scan` accepts `{ "urls": str | list[str] }` — single string or list, always normalised to a list. Returns an array of results (one per URL).
 
-1. **Google Safe Browsing v4** — batch `POST` to `safebrowsing.googleapis.com/v4/threatMatches:find` with all URLs in one round-trip; exponential backoff on 429/5xx; non-blocking (failures return SUSPICIOUS defaults so urlscan.io still runs)
-2. **urlscan.io submission** — each URL submitted separately to `POST urlscan.io/api/v1/scan/` with `visibility: public`
+**Parallelism:** GSB runs first (single batch round-trip). Then all URLs are processed in parallel via `ThreadPoolExecutor` — each URL runs urlscan.io + WHOIS concurrently inside its own inner executor. DB operations are always in the main thread (SQLAlchemy sessions are not thread-safe). Total scan time is ~18–22s regardless of URL count.
+
+1. **Google Safe Browsing v4** — batch `POST` to `safebrowsing.googleapis.com/v4/threatMatches:find`; exponential backoff on 429/5xx; non-blocking
+2. **urlscan.io submission** — each URL submitted to `POST urlscan.io/api/v1/scan/` with `visibility: public`; runs concurrently with WHOIS per URL
 3. **Poll for result** — waits 10s, then polls every 5s up to 12 attempts (70s total timeout)
-4. **Merge verdicts** — most severe status wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; otherwise SAFE. If urlscan.io could not reach the domain at all (submission failed or poll timed out) **and** GSB has no signal → UNAVAILABLE
-5. **WHOIS domain age** — `get_domain_age_days(domain)` does a WHOIS lookup and computes the domain's age in days; saved to `ScanHistory.DomainAgeDays`; non-blocking (failures return `None`)
-6. **Check internal URLRules** — if the domain is in the `URLRules` table, BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (admin/moderator rules have final say)
-7. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`
+4. **WHOIS domain age** — `get_domain_age_days(domain)` runs concurrently with urlscan.io polling; non-blocking (failures return `None`)
+5. **Script-level analysis** — `analyze_scripts(raw_result)` parses urlscan.io result for: ad networks, crypto miners, known malicious script domains, IP-hosted scripts, mixed content (HTTP on HTTPS), free-hosting abuse, obfuscated filenames, trusted CDN recognition, technology stack (Wappalyzer), and a composite `script_risk_score` (0–100). Crypto miners on an otherwise-SAFE page → escalated to SUSPICIOUS.
+6. **Merge verdicts** — most severe wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; crypto miners found → at least SUSPICIOUS; otherwise SAFE. If urlscan.io failed entirely AND GSB has no signal → UNAVAILABLE
+7. **Check internal URLRules** — BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (final say)
+8. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `RedirectChain`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`, `ScriptAnalysis`
 
 **Response shape per URL:**
 ```json
 {
-  "scan_id", "user_id", "uuid", "initial_url", "redirect_url",
+  "scan_id", "user_id", "uuid", "initial_url", "redirect_url", "redirect_chain",
   "status_indicator", "score", "domain_age_days", "server_location", "ip_address",
-  "screenshot_url", "brands", "tags", "result_url",
-  "scanned_at", "gsb_flagged", "gsb_threat_types"
+  "screenshot_url", "brands", "tags", "result_url", "scanned_at",
+  "gsb_flagged", "gsb_threat_types",
+  "script_analysis": {
+    "total", "trusted_count", "ad_count", "ad_heavy",
+    "crypto_miners", "malicious_scripts", "suspicious_patterns",
+    "tech_stack", "script_risk_score"
+  }
 }
 ```
 
 ## Auth Flow
 
 **Login:** `POST /api/auth/login` with `{ EmailAddress, Password, ClientType: "web"|"mobile" }`.
-- Web → HttpOnly cookie (`access_token`)
-- Mobile → JWT returned in response body (`access_token` field)
+- Web → HttpOnly cookie (`access_token`) **+ token in response body** (so Streamlit portal can read it)
+- Mobile → JWT returned in response body only
+
+**Client type enforcement (login):**
+- Admin (RoleID 1) and Moderator (RoleID 2) → must use `ClientType: "web"` — rejected with 403 if mobile
+- User (RoleID 3) → must use `ClientType: "mobile"` — rejected with 403 if web
+- Admin portal (`admin/models/api_client.py`) sends `ClientType: "web"` and reads token from response body
 
 **JWT payload:** `{ sub: UserID (string), role: RoleID, exp }`
 
@@ -133,9 +158,28 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 1. `POST /api/accounts/forgot-password` → generates token, saves `PasswordResetToken` row (15-min expiry), sends link via Resend from `noreply@linkslens.com`
 2. `POST /api/accounts/reset-password` → validates token is unused/unexpired, updates `PasswordHash`, marks token used
 
-**Token security:** Both `EmailVerificationToken` and `PasswordResetToken` store only the SHA-256 hash of the raw token in the database. The raw token is sent to the user; the hash is stored. `hash_token()`, `normalize_expiry()`, and `send_email()` in `utils.py` are shared across all token endpoints.
+**Token security:** Both `EmailVerificationToken` and `PasswordResetToken` store only the SHA-256 hash of the raw token in the database. `hash_token()`, `normalize_expiry()`, and `send_email()` in `utils.py` are shared across all token endpoints.
 
 **Design decision:** Password reset is web-only. The mobile "Forgot Password?" button opens `https://linkslens.com/reset-password` in the device browser via `Linking.openURL`. No in-app reset screen.
+
+## Admin Portal (`admin/`)
+
+**Pages and role access:**
+
+| Page | Admin | Moderator |
+|---|:---:|:---:|
+| `1_Dashboard.py` — System health | ✅ | ❌ hidden |
+| `2_Blacklist_Requests.py` — Review blacklist requests | ✅ | ✅ |
+| `3_User_Management.py` — Manage user accounts | ✅ | ❌ hidden |
+| `4_App_Feedback.py` — View app feedback | ✅ | ❌ hidden |
+| `5_Action_History_Log.py` — Audit log | ✅ | ❌ hidden |
+| `6_URL_Registry.py` — Blacklist/whitelist domains | ✅ | ✅ |
+| `7_Scan_History.py` — All scan records | ✅ | ✅ |
+| `8_Scan_Feedback.py` — Resolve scan disputes | ✅ | ✅ |
+
+**Sidebar hiding:** `_hide_pages_for_moderator()` in `admin/controllers/auth_controller.py` injects CSS to hide admin-only pages. Called from both `require_role()` and `render_sidebar()` so it applies on every page including the home page. Selectors match on filename substrings (`1_Dashboard`, `3_User_Management`, etc.) — list stored in `_MODERATOR_HIDDEN_PAGES` module-level constant.
+
+**Session state:** Auth stores `"_decoded_user"` dict (not `"user_id"`). `require_role()` return value must be captured as `current_user`. `_decoded_user` is cleared at the start of every `handle_login()` call to prevent stale cache from previous sessions.
 
 ## Mobile App (`linkslens-frontend/`)
 
@@ -153,14 +197,21 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `scan.tsx` → user picks OCR image or manual entry
 - `scan-image.tsx` → ML Kit OCR extracts text, editable `TextInput` lets user correct it, navigates to `scan-processing` with `url` param
 - `scan-link.tsx` → manual URL entry, navigates to `scan-processing`
-- `scan-processing.tsx` → calls `scanUrl(url)` from `lib/api.ts` → `POST /scan` (with JWT) → navigates to `scan-results`
+- `scan-processing.tsx` → shows simulated progress messages timed to backend pipeline steps (7 stages, 0–21s) → calls `scanUrl(url)` → on result fires local push notification via `lib/notifications.ts` → navigates to `scan-results`
 - `scan-results.tsx` → displays `status_indicator`, `score`, `gsb_threat_types`, `initial_url`
 
-**Shared frontend utilities:**
-- `lib/types.ts` — `statusToRisk()`, `countScansThisMonth()`, shared TypeScript types
-- `lib/navigation.tsx` — `bottomNavItems` shared across all screens with the bottom nav bar
+**Notifications (`lib/notifications.ts`):**
+- `initNotificationHandler()` — called in `_layout.tsx` on startup; sets foreground banner behaviour
+- `requestNotificationPermission()` — called in `_layout.tsx`; prompts OS permission dialog on first launch
+- `notifyScanComplete(status, url)` — fires immediate local notification; fails silently
+- `expo-notifications ~0.31.2` registered as Expo plugin in `app.json`; requires rebuild after adding
 
-**Not yet implemented (UI stubs):** Scan history loading, profile, feedback submission, all settings screens.
+**Types (`lib/types.ts`):**
+- `ScanStatus` — `'SAFE' | 'SUSPICIOUS' | 'MALICIOUS' | 'UNAVAILABLE'` (backend status values)
+- `RiskLevel` — `'safe' | 'suspicious' | 'malicious'` (frontend display values)
+- `statusToRisk()`, `countScansThisMonth()`, shared interfaces
+
+**Not yet implemented (UI stubs):** Scan history loading, profile, feedback submission, all settings screens. `script_analysis` data from scan response not yet displayed.
 
 **MLKit note:** `@infinitered/react-native-mlkit-text-recognition` is a native module — requires `expo run:android` (custom dev client), not Expo Go.
 
@@ -183,6 +234,26 @@ RESEND_KEY
 ```
 
 **Tables (12):** `UserRole`, `UserAccount`, `UserDetails`, `UserPreferences`, `AppFeedback`, `ActionHistory`, `URLRules`, `BlacklistRequest`, `ScanHistory`, `ScanFeedback`, `PasswordResetToken`, `EmailVerificationToken`
+
+**`ScanHistory` columns (current):** `ScanID`, `UserID`, `InitialURL`, `RedirectURL`, `RedirectChain` (JSON), `StatusIndicator` (ENUM incl. UNAVAILABLE), `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`, `ScriptAnalysis` (JSON), `ScannedAt`
+
+**Pending DB migrations (must be run on server if not yet applied):**
+```sql
+ALTER TABLE `ScanHistory`
+  ADD COLUMN `RedirectChain` JSON NULL AFTER `RedirectURL`;
+
+ALTER TABLE `ScanHistory`
+  MODIFY COLUMN `StatusIndicator`
+  ENUM('SAFE','SUSPICIOUS','MALICIOUS','UNAVAILABLE','PENDING') NOT NULL DEFAULT 'PENDING';
+
+ALTER TABLE `ScanHistory`
+  ADD COLUMN `ScriptAnalysis` JSON NULL AFTER `ScreenshotURL`;
+
+-- Run only if columns still exist (were removed from model):
+ALTER TABLE `ScanHistory`
+  DROP COLUMN `RawText`,
+  DROP COLUMN `AssociatedPerson`;
+```
 
 **Connection pool:** `pool_pre_ping=True, pool_recycle=3600` on the SQLAlchemy engine — prevents "MySQL server has gone away" errors on long-idle connections.
 
@@ -208,12 +279,12 @@ RESEND_KEY
 
 - Single EC2 instance — no horizontal scaling.
 - Most mobile screens (history, profile, feedback, settings) are UI-only stubs with no backend calls.
-- `ScanHistory.RedirectURL` stores only one redirect, not the full chain.
 - `UserPreferences.Preferences` is a JSON blob — not queryable field-by-field.
 - `ScanFeedback` has no `CreatedAt` timestamp.
 - `BlacklistRequest` has no rejection reason field.
 - No Redis caching — repeated scans re-run the full pipeline.
 - WHOIS lookups in the scan pipeline may time out on some domains; `DomainAgeDays` will be `null` in those cases.
+- Script analysis `_MALICIOUS_SCRIPT_DOMAINS` list is manually maintained — not fetched from a live threat feed.
 
 ## User Stories
 
