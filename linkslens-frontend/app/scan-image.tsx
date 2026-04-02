@@ -8,20 +8,12 @@ import {
   AppButton,
   ScreenHeader,
 } from "../components/ui-components";
+import { URL_PATTERN } from "../lib/url-validation";
 
 const isValidUrl = (urlString: string) => {
   // Remove whitespace/newlines that OCR often adds
   const cleaned = urlString.trim().replace(/\s/g, '');
-  
-  const urlPattern = new RegExp(
-    '^(https?:\\/\\/)?' + // protocol
-    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain name
-    '((\\d{1,3}\\.){3}\\d{1,3}))' + // OR ip (v4) address
-    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port and path
-    '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
-    '(\\#[-a-z\\d%_.~+=-]*)?$', 'i' // fragment locator
-  );
-  return !!urlPattern.test(cleaned);
+  return !!URL_PATTERN.test(cleaned);
 };
 
 export default function scanImage() {
