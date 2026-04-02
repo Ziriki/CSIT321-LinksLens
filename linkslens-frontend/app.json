@@ -12,7 +12,10 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      ["expo-camera", {
+        "cameraPermission": "Allow LinksLens to scan QR codes using your camera."
+      }]
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
