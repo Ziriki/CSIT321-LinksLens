@@ -8,6 +8,12 @@ import { URL_PATTERN } from "../lib/url-validation";
 
 type QRScanState = "idle" | "found" | "invalid";
 
+const STATUS_CONFIG: Record<QRScanState, { text: string; textColor: string; frameColor: string }> = {
+  idle:    { text: "Point camera at a QR code",    textColor: "text-white",     frameColor: "#ffffff" },
+  found:   { text: "URL found — scanning…",        textColor: "text-green-400", frameColor: "#4ade80" },
+  invalid: { text: "Not a URL — try another code", textColor: "text-red-400",   frameColor: "#f87171" },
+};
+
 export default function ScanQR() {
   const [permission, requestPermission] = useCameraPermissions();
   const [status, setStatus] = useState<QRScanState>("idle");
@@ -32,9 +38,8 @@ export default function ScanQR() {
       );
     } else {
       setStatus("invalid");
-      timersRef.current.push(
-        setTimeout(() => setStatus("idle"), 2000)
-      );
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [setTimeout(() => setStatus("idle"), 2000)];
     }
   };
 
@@ -64,20 +69,7 @@ export default function ScanQR() {
     );
   }
 
-  const statusText =
-    status === "found" ? "URL found — scanning…" :
-    status === "invalid" ? "Not a URL — try another code" :
-    "Point camera at a QR code";
-
-  const statusColor =
-    status === "found" ? "text-green-400" :
-    status === "invalid" ? "text-red-400" :
-    "text-white";
-
-  const frameColor =
-    status === "found" ? "#4ade80" :
-    status === "invalid" ? "#f87171" :
-    "#ffffff";
+  const { text: statusText, textColor: statusColor, frameColor } = STATUS_CONFIG[status];
 
   return (
     <View className="flex-1 bg-black">
@@ -88,16 +80,12 @@ export default function ScanQR() {
         barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
         onBarcodeScanned={handleBarcodeScanned}
       >
-        {/* Overlay */}
         <View className="absolute inset-0">
-          {/* Top dark region */}
           <View className="flex-1 bg-black/60" />
 
-          {/* Middle row: dark | finder frame | dark */}
           <View className="flex-row" style={{ height: 256 }}>
             <View className="flex-1 bg-black/60" />
 
-            {/* Finder frame — transparent with corner accents */}
             <View style={{ width: 256, height: 256 }}>
               {/* Top-left */}
               <View
@@ -124,7 +112,6 @@ export default function ScanQR() {
             <View className="flex-1 bg-black/60" />
           </View>
 
-          {/* Bottom dark region + status text */}
           <View className="flex-[1.5] items-center bg-black/60 pt-8">
             <Text className={`text-base font-medium ${statusColor}`}>
               {statusText}
