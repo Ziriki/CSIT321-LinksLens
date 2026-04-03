@@ -13,14 +13,23 @@ import { URL_PATTERN } from "../lib/url-validation";
 const isValidUrl = (urlString: string) => {
   // Remove whitespace/newlines that OCR often adds
   const cleaned = urlString.trim().replace(/\s/g, '');
-  return !!URL_PATTERN.test(cleaned);
+
+  const urlPattern = new RegExp(
+    '^(https?:\\/\\/)?' + // protocol
+    '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain name
+    '((\\d{1,3}\\.){3}\\d{1,3}))' + // OR ip (v4) address
+    '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port and path
+    '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
+    '(\\#[-a-z\\d%_.~+=-]*)?$', 'i' // fragment locator
+  );
+  return !!urlPattern.test(cleaned);
 };
 
 export default function scanImage() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isUrl, setIsUrl] = useState(false); // New state
+  const [isUrl, setIsUrl] = useState(false);
 
   const handlePickImage = async () => {
     try {
@@ -36,13 +45,13 @@ export default function scanImage() {
         setLoading(true);
 
         const response = await recognizeText(uri);
-        
+
         // 1. Clean the text (ML Kit sometimes adds extra spaces)
         const cleanedText = response.text.trim().replace(/\s/g, '');
-        
+
         // 2. Validate
         const valid = isValidUrl(cleanedText);
-        
+
         setText(cleanedText);
         setIsUrl(valid);
         setLoading(false);
@@ -60,7 +69,7 @@ export default function scanImage() {
       <ScreenHeader title="Upload Photo" />
 
       <View className="flex-1 px-4 py-6">
-        <Pressable 
+        <Pressable
           className="h-64 items-center justify-center rounded-2xl border-2 border-dashed border-border overflow-hidden"
           onPress={handlePickImage}
         >
@@ -90,7 +99,7 @@ export default function scanImage() {
               autoCorrect={false}
               keyboardType="url"
             />
-            
+
             {/* Feedback for the user */}
             <Text className="mt-1 text-sm">
               {isUrl ? "✅ Valid URL found" : "❌ No valid URL detected"}
@@ -102,8 +111,11 @@ export default function scanImage() {
           <AppButton
             fullWidth
             size="lg"
-            disabled={!isUrl || loading} // Disable button if not a URL
-            onPress={() => router.push({ pathname: "/scan-processing", params: { url: text } })}
+            disabled={!isUrl || loading}
+            onPress={() => {
+              const normalized = /^https?:\/\//i.test(text) ? text : `http://${text}`
+              router.push({ pathname: "/scan-processing", params: { url: normalized } })
+            }}
           >
             {loading ? "Processing..." : "Scan URL"}
           </AppButton>
