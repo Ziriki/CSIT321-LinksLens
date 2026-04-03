@@ -33,7 +33,7 @@ The official project spec (CSIT-26-S1-05) lists these key functionalities. All m
 - **Admin Portal:** Streamlit (`admin/`) — fully wired to backend via `admin/models/api_client.py`
 - **Backend API:** FastAPI (`backend/`) — real scan pipeline using Google Safe Browsing v4 + urlscan.io
 - **Database:** MySQL 8.0 (port 3306)
-- **Server:** AWS EC2 t2.medium, Ubuntu 24.04 LTS
+- **Server:** AWS EC2 t3.medium, Ubuntu 24.04 LTS
 - **Reverse Proxy:** Nginx with Certbot SSL
 - **Containerization:** Docker Compose (FastAPI + Streamlit + MySQL on `fyp_net` bridge network)
 - **CI/CD:** GitHub Actions → SSH into EC2 → sync code, rebuild Docker, copy static HTML
@@ -284,6 +284,14 @@ ALTER TABLE `PasswordResetToken`
 -- Speed up admin Threat Intelligence queries (full-table-scan risk without these)
 CREATE INDEX idx_scan_status ON ScanHistory(StatusIndicator);
 CREATE INDEX idx_scan_location_status ON ScanHistory(ServerLocation, StatusIndicator);
+
+-- Login rate limiting (10 failures per IP per 15 min → 429)
+CREATE TABLE FailedLoginAttempt (
+    AttemptID INT AUTO_INCREMENT PRIMARY KEY,
+    IPAddress VARCHAR(45) NOT NULL,
+    AttemptedAt DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    INDEX idx_failed_login_ip (IPAddress)
+);
 ```
 
 **Connection pool:** `pool_pre_ping=True, pool_recycle=3600` on the SQLAlchemy engine — prevents "MySQL server has gone away" errors on long-idle connections.
@@ -305,6 +313,22 @@ CREATE INDEX idx_scan_location_status ON ScanHistory(ServerLocation, StatusIndic
 | Administrator | 1      | Web portal | Manage users, system health, URL rules, oversee mods     |
 | Moderator     | 2      | Web portal | Review blacklist requests, resolve scan feedback         |
 | User          | 3      | Mobile app | Scan URLs, view own history, submit feedback             |
+
+## Security Hardening (Implemented)
+
+| Concern | Fix | Location |
+|---|---|---|
+| JWT auth bypass if `SECRET_KEY` missing | `ValueError` raised at startup | `dependencies.py` |
+| Login brute-force | DB-based rate limit: 10 failures per IP per 15 min → 429; resets on success | `auth_controller.py`, `FailedLoginAttempt` table |
+| Scan ID enumeration (403 vs 404) | Unauthorised scan access returns 404, not 403 | `scan_history_controller.py` |
+| Feedback UserID spoofing / impersonation | `UserID` overridden from JWT; scan ownership checked | `scan_feedback_controller.py` |
+| Scan endpoint DoS (unbounded URL list) | Max 10 URLs per scan request (422 if exceeded) | `models.py` `ScanRequest` |
+| Email enumeration on registration | Duplicate email returns generic 400 ("Registration failed. Please check your details.") | `user_account_controller.py` |
+| Blacklist request spam | Max 5 submissions per user per day → 429 | `blacklist_request_controller.py` |
+| Password reset: rate limiting + token sweep | Per-email (3/hr) + per-IP (10/hr) limits; sweep-invalidate on success | `user_account_controller.py` |
+| Password reset: token in Referer header | `<meta name="referrer" content="no-referrer">` on static pages | `website/` |
+
+**`FailedLoginAttempt` table:** `AttemptID`, `IPAddress` (VARCHAR 45), `AttemptedAt` (indexed on `IPAddress`)
 
 ## Known Limitations (FYP Scope)
 
