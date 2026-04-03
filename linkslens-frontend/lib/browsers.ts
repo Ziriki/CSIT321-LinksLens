@@ -9,7 +9,7 @@ export type BrowserId = (typeof BROWSERS)[number]["id"]
 
 // "system" is intentionally absent — callers use undefined as the signal to open the URL directly
 export const BROWSER_SCHEMES: Record<string, string> = {
-  chrome:  "googlechrome://",
+  chrome:  "googlechrome://navigate?url=",
   firefox: "firefox://open-url?url=",
-  edge:    "microsoft-edge://",
+  edge:    "microsoft-edge://navigate?url=",
 }

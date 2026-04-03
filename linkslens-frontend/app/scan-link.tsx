@@ -32,12 +32,11 @@ export default function ScanLink() {
             fullWidth
             size="lg"
             disabled={!url.trim()}
-            onPress={() =>
-              router.push({
-                pathname: "/scan-processing",
-                params: { url: url.trim() },
-              })
-            }
+            onPress={() => {
+              const raw = url.trim()
+              const normalized = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`
+              router.push({ pathname: "/scan-processing", params: { url: normalized } })
+            }}
           >
             Scan URL
           </AppButton>
