@@ -162,12 +162,19 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 3. Login on an unverified account returns HTTP 403 "Please verify your email address before logging in."
 
 **Password reset flow (`user_account_controller.py`):**
-1. `POST /api/accounts/forgot-password` → generates token, saves `PasswordResetToken` row (15-min expiry), sends link via Resend from `noreply@linkslens.com`
-2. `POST /api/accounts/reset-password` → validates token is unused/unexpired, updates `PasswordHash`, marks token used
+1. `POST /api/accounts/forgot-password` → checks rate limits (max 3 requests per email per hour; max 10 per IP per hour using `PasswordResetToken.RequestIP`), invalidates any existing unused tokens for the user, generates new `PasswordResetToken` row (15-min expiry, stores `RequestIP`), sends reset link via Resend from `noreply@linkslens.com`. Always returns the same generic 200 message regardless of outcome (user not found, rate limited, or success) to prevent account enumeration.
+2. `POST /api/accounts/reset-password` → validates token is unused/unexpired, updates `PasswordHash`, marks submitted token used, then sweep-invalidates all remaining unused tokens for that user.
 
-**Token security:** Both `EmailVerificationToken` and `PasswordResetToken` store only the SHA-256 hash of the raw token in the database. `hash_token()`, `normalize_expiry()`, and `send_email()` in `utils.py` are shared across all token endpoints.
+**Token security:** Both `EmailVerificationToken` and `PasswordResetToken` store only the SHA-256 hash of the raw token in the database. `hash_token()`, `normalize_expiry()`, and `send_email()` in `utils.py` are shared across all token endpoints. `get_client_ip()` in `utils.py` reads `X-Forwarded-For` (Nginx proxy header) to get the real client IP.
 
-**Design decision:** Password reset is web-only. The mobile "Forgot Password?" button opens `https://linkslens.com/reset-password` in the device browser via `Linking.openURL`. No in-app reset screen.
+**Design decision:** Password reset is web-only. The mobile "Forgot Password?" button opens `https://linkslens.com/forgot-password` (the email entry page) in the device browser via `Linking.openURL`. No in-app reset screen.
+
+**Static reset pages (`website/`):**
+- `forgot-password.html` — email entry form; always shows generic success message (swallows errors); calls `POST /api/accounts/forgot-password`
+- `reset-password.html` — reads `?token=` from URL query string; shows error immediately if token absent; validates password length ≥ 8 and match client-side before submitting; calls `POST /api/accounts/reset-password`; shows API error messages verbatim (expired, already used); disables form on success (token is consumed)
+- Both pages include `<meta name="referrer" content="no-referrer">` to prevent the token leaking via the HTTP Referer header
+
+**CORS (`main.py`):** `CORSMiddleware` allows `https://linkslens.com` to make `POST` requests with `Content-Type` header — required because the static pages (browser context) call `api.linkslens.com` (different origin). Mobile (React Native fetch) and Streamlit (server-side Python requests) are unaffected by CORS.
 
 ## Admin Portal (`admin/`)
 
@@ -246,6 +253,8 @@ RESEND_KEY
 
 **Tables (12):** `UserRole`, `UserAccount`, `UserDetails`, `UserPreferences`, `AppFeedback`, `ActionHistory`, `URLRules`, `BlacklistRequest`, `ScanHistory`, `ScanFeedback`, `PasswordResetToken`, `EmailVerificationToken`
 
+**`PasswordResetToken` columns:** `TokenID`, `Token` (SHA-256 hash), `UserID`, `ExpiresAt`, `IsUsed`, `CreatedAt`, `RequestIP` (VARCHAR 45, nullable — stores real client IP for rate limiting; covers full IPv6)
+
 **`ScanHistory` columns (current):** `ScanID`, `UserID`, `InitialURL`, `RedirectURL`, `RedirectChain` (JSON), `StatusIndicator` (ENUM incl. UNAVAILABLE), `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`, `ScriptAnalysis` (JSON), `HomographAnalysis` (JSON), `ScannedAt`
 
 **Pending DB migrations (must be run on server if not yet applied):**
@@ -267,6 +276,14 @@ ALTER TABLE `ScanHistory`
 
 ALTER TABLE `ScanHistory`
   ADD COLUMN `HomographAnalysis` JSON NULL AFTER `ScriptAnalysis`;
+
+-- Password reset IP rate limiting (VARCHAR 45 covers full IPv6)
+ALTER TABLE `PasswordResetToken`
+  ADD COLUMN `RequestIP` VARCHAR(45) NULL AFTER `CreatedAt`;
+
+-- Speed up admin Threat Intelligence queries (full-table-scan risk without these)
+CREATE INDEX idx_scan_status ON ScanHistory(StatusIndicator);
+CREATE INDEX idx_scan_location_status ON ScanHistory(ServerLocation, StatusIndicator);
 ```
 
 **Connection pool:** `pool_pre_ping=True, pool_recycle=3600` on the SQLAlchemy engine — prevents "MySQL server has gone away" errors on long-idle connections.

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
@@ -6,7 +6,7 @@ import secrets
 import os
 from dotenv import load_dotenv
 
-from utils import get_fullname, get_or_404, get_password_hash, hash_token, normalize_expiry, send_email
+from utils import get_client_ip, get_fullname, get_or_404, get_password_hash, hash_token, normalize_expiry, send_email
 
 load_dotenv()
 
@@ -210,7 +210,10 @@ def verify_email(request: schemas.VerifyEmailRequest, db: Session = Depends(get_
     if datetime.now(timezone.utc) > normalize_expiry(token_record.ExpiresAt):
         raise HTTPException(status_code=400, detail="Verification link has expired. Please register again.")
 
-    token_record.user.IsActive = True
+    user = token_record.user
+    if not user:
+        raise HTTPException(status_code=404, detail="User account no longer exists.")
+    user.IsActive = True
     token_record.IsUsed = True
     db.commit()
 
@@ -221,17 +224,32 @@ def verify_email(request: schemas.VerifyEmailRequest, db: Session = Depends(get_
 # FORGOT PASSWORD - Create Token Record & Send Email
 #########################################################
 @router.post("/forgot-password")
-def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Request, db: Session = Depends(get_db)):
     generic_message = {"message": "If that email exists in our system, a password reset link has been sent."}
     user = db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == request.EmailAddress).first()
 
     if not user:
         return generic_message
 
-    # Invalidate any existing unused tokens for this user
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    email_recent = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.UserID == user.UserID,
+        models.PasswordResetToken.CreatedAt >= one_hour_ago,
+    ).count()
+    if email_recent >= 3:
+        return generic_message
+
+    client_ip = get_client_ip(http_request)
+    ip_recent = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.RequestIP == client_ip,
+        models.PasswordResetToken.CreatedAt >= one_hour_ago,
+    ).count()
+    if ip_recent >= 10:
+        return generic_message
+
     db.query(models.PasswordResetToken).filter(
         models.PasswordResetToken.UserID == user.UserID,
-        models.PasswordResetToken.IsUsed == False
+        models.PasswordResetToken.IsUsed == False,
     ).update({"IsUsed": True})
 
     raw_token = secrets.token_urlsafe(32)
@@ -240,14 +258,21 @@ def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depend
         UserID=user.UserID,
         ExpiresAt=datetime.now(timezone.utc) + timedelta(minutes=15),
         IsUsed=False,
+        RequestIP=client_ip,
     ))
     db.flush()
 
     reset_link = f"https://linkslens.com/reset-password?token={raw_token}"
     email_html = f"""
     <h2>LinksLens Password Reset</h2>
-    <p>You requested a password reset. Click the link below to choose a new password. This link expires in 15 minutes.</p>
-    <a href="{reset_link}" style="display:inline-block; padding:10px 20px; background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">Reset Password</a>
+    <p>You requested a password reset. Click the link below to choose a new password.
+    This link expires in 15 minutes.</p>
+    <a href="{reset_link}" style="display:inline-block; padding:10px 20px;
+    background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">
+    Reset Password</a>
+    <p style="margin-top:16px; font-size:13px; color:#555;">
+    If you did not request this, your password has not been changed. You can safely
+    ignore this email.</p>
     """
 
     try:
@@ -283,6 +308,11 @@ def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(
 
     user.PasswordHash = get_password_hash(request.NewPassword)
     token_record.IsUsed = True
+
+    db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.UserID == token_record.UserID,
+        models.PasswordResetToken.IsUsed == False,
+    ).update({"IsUsed": True})
 
     db.commit()
 
