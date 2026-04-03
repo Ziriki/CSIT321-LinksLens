@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 
@@ -42,6 +43,14 @@ if retries == 0:
     print("FATAL ERROR: Could not connect to the database after 5 attempts.")
 
 app = FastAPI(title="LinksLens API")
+
+# Allow the static marketing site to call the password reset endpoints from the browser
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://linkslens.com"],
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
 
 # Connect the UserRole Controller to the main app
 app.include_router(user_role_router)

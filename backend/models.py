@@ -184,6 +184,7 @@ class PasswordResetToken(Base):
     ExpiresAt = Column(DateTime(timezone=True), nullable=False)
     IsUsed = Column(Boolean, default=False)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+    RequestIP = Column(String(45), nullable=True)
 
     user = relationship("UserAccount", back_populates="reset_tokens")
 
