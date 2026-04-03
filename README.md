@@ -41,7 +41,7 @@
 - Submit **scan feedback** to flag incorrect results
 - Submit **blacklist requests** for suspicious domains
 - Dark / Light theme toggle
-- Account registration, login, and password reset via email
+- Account registration, login, and **password reset via email** — `forgot-password.html` (email entry) and `reset-password.html` (token-based new password form) served from the static site; rate-limited to 3 requests per email and 10 per IP per hour
 
 ### Admin Portal (Moderators & Administrators)
 - **Dashboard** — system health overview (user counts, scan stats, service status)
@@ -130,6 +130,8 @@ CSIT321-LinksLens/
 │
 ├── website/                   # Static marketing site (served by Nginx)
 │   ├── index.html
+│   ├── forgot-password.html   # Email entry form for password reset
+│   ├── reset-password.html    # Token-based new password form
 │   └── style.css
 │
 ├── docker-compose.yml         # Orchestrates backend + db + admin
@@ -277,7 +279,7 @@ python backend/seed_data.py
 
 | URL | Service | Description |
 |---|---|---|
-| `linkslens.com` | Static site | Marketing landing page (Nginx, `/var/www/linkslens`) |
+| `linkslens.com` | Static site | Marketing landing page + `forgot-password` and `reset-password` pages (Nginx, `/var/www/linkslens`) |
 | `api.linkslens.com` | FastAPI | REST API backend (port 8000) |
 | `admin.linkslens.com` | Streamlit | Moderator and Administrator web portal (port 8501) |
 

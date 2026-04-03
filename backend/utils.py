@@ -2,7 +2,7 @@ import hashlib
 import os
 from datetime import datetime, timezone
 from passlib.context import CryptContext
-from fastapi import HTTPException
+from fastapi import HTTPException, Request as FastAPIRequest
 from sqlalchemy.orm import Session
 import resend as resend_lib
 
@@ -41,6 +41,13 @@ def apply_updates(db: Session, obj, update_schema) -> None:
         setattr(obj, key, value)
     db.commit()
     db.refresh(obj)
+
+def get_client_ip(request: FastAPIRequest) -> str:
+    """Extract real client IP, handling Nginx X-Forwarded-For proxy header."""
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 def send_email(to: str, subject: str, html: str, from_name: str = "LinksLens") -> None:
     """Send an email via Resend. Raises Exception on failure."""
