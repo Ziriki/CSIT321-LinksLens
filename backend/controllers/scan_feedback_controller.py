@@ -19,19 +19,20 @@ router = APIRouter(
 # CREATE function for ScanFeedback table
 #########################################################
 @router.post("/", response_model=schemas.ScanFeedbackResponse, status_code=status.HTTP_201_CREATED)
-def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
-    get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == feedback.UserID).first(), "User Account not found")
-    get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == feedback.ScanID).first(), "Scan History record not found")
+def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == feedback.ScanID).first(), "Scan not found")
 
-    # Optional: Prevent duplicate feedback from the same user on the same scan
+    if scan.UserID != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only submit feedback for your own scans.")
+
     existing_feedback = db.query(models.ScanFeedback).filter(
         models.ScanFeedback.ScanID == feedback.ScanID,
-        models.ScanFeedback.UserID == feedback.UserID
+        models.ScanFeedback.UserID == current_user["user_id"],
     ).first()
     if existing_feedback:
         raise HTTPException(status_code=400, detail="You have already submitted feedback for this scan.")
 
-    db_feedback = models.ScanFeedback(**feedback.model_dump())
+    db_feedback = models.ScanFeedback(**{**feedback.model_dump(), "UserID": current_user["user_id"]})
     db.add(db_feedback)
     db.commit()
     db.refresh(db_feedback)

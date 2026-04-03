@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Response
 from sqlalchemy.orm import Session
 import jwt
 from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
 
-from utils import verify_password
+from utils import get_client_ip, verify_password
 
 # Import custom files
 import models
@@ -49,8 +49,21 @@ def create_access_token(data: dict):
 #########################################################
 # Login function for both Web and Mobile clients
 #########################################################
+_LOGIN_MAX_FAILURES = 10
+_LOGIN_WINDOW_MINUTES = 15
+
 @router.post("/login", response_model=schemas.TokenResponse)
-def login(credentials: schemas.UserLogin, response: Response, db: Session = Depends(get_db)):
+def login(credentials: schemas.UserLogin, http_request: Request, response: Response, db: Session = Depends(get_db)):
+    client_ip = get_client_ip(http_request)
+    window_start = datetime.now(timezone.utc) - timedelta(minutes=_LOGIN_WINDOW_MINUTES)
+
+    recent_failures = db.query(models.FailedLoginAttempt).filter(
+        models.FailedLoginAttempt.IPAddress == client_ip,
+        models.FailedLoginAttempt.AttemptedAt >= window_start,
+    ).count()
+    if recent_failures >= _LOGIN_MAX_FAILURES:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again later.")
+
     # 1. Find the user by email
     user = db.query(models.UserAccount).filter(
         models.UserAccount.EmailAddress == credentials.EmailAddress
@@ -58,10 +71,17 @@ def login(credentials: schemas.UserLogin, response: Response, db: Session = Depe
 
     # 2. Verify user exists and password matches
     if not user or not verify_password(credentials.Password, user.PasswordHash):
+        db.add(models.FailedLoginAttempt(IPAddress=client_ip))
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
+
+    if recent_failures > 0:
+        db.query(models.FailedLoginAttempt).filter(
+            models.FailedLoginAttempt.IPAddress == client_ip,
+        ).delete()
 
     # 3. Check if account is active (covers both unverified and admin-deactivated accounts)
     if not user.IsActive:

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from utils import get_fullname, get_or_404
 
@@ -16,6 +16,8 @@ router = APIRouter(
     prefix="/api/blacklist-requests",
     tags=["Blacklist Requests"]
 )
+
+_BLACKLIST_DAILY_LIMIT = 5
 
 #########################################################
 # CREATE function for BlacklistRequest table
@@ -34,6 +36,14 @@ def create_request(request: schemas.BlacklistRequestCreate, db: Session = Depend
     ).first()
     if existing_req:
         raise HTTPException(status_code=400, detail="This domain is already pending review.")
+
+    one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
+    user_recent = db.query(models.BlacklistRequest).filter(
+        models.BlacklistRequest.UserID == request.UserID,
+        models.BlacklistRequest.CreatedAt >= one_day_ago,
+    ).count()
+    if user_recent >= _BLACKLIST_DAILY_LIMIT:
+        raise HTTPException(status_code=429, detail="You can submit a maximum of 5 blacklist requests per day.")
 
     db_request = models.BlacklistRequest(
         UserID=request.UserID,

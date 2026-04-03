@@ -155,7 +155,7 @@ CSIT321-LinksLens/
 | Email | Resend (`noreply@linkslens.com`) |
 | OCR | ML Kit Text Recognition (on-device, Android) |
 | Containerisation | Docker, Docker Compose |
-| Server | AWS EC2 t2.medium, Ubuntu 24.04 LTS |
+| Server | AWS EC2 t3.medium, Ubuntu 24.04 LTS |
 | Reverse Proxy | Nginx + Certbot (SSL) |
 | CI/CD | GitHub Actions |
 
