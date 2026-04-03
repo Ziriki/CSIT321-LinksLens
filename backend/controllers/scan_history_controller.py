@@ -100,7 +100,7 @@ def read_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = 
     scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
     # Regular users can only view their own scans
     if current_user["role_id"] not in (1, 2) and scan.UserID != current_user["user_id"]:
-        raise HTTPException(status_code=403, detail="You can only view your own scans")
+        raise HTTPException(status_code=404, detail="Scan not found")
     return scan
 
 #########################################################

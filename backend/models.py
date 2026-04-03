@@ -173,6 +173,8 @@ class ScanRequest(BaseModel):
         """Accept a single URL string or a list; always normalise to a list internally."""
         if isinstance(v, str):
             return [v]
+        if len(v) > 10:
+            raise ValueError("Maximum 10 URLs per scan request.")
         return v
     
 class PasswordResetToken(Base):
@@ -199,3 +201,11 @@ class EmailVerificationToken(Base):
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("UserAccount", back_populates="verification_tokens")
+
+
+class FailedLoginAttempt(Base):
+    __tablename__ = "FailedLoginAttempt"
+
+    AttemptID = Column(Integer, primary_key=True, autoincrement=True)
+    IPAddress = Column(String(45), nullable=False, index=True)
+    AttemptedAt = Column(DateTime(timezone=True), server_default=func.now())
