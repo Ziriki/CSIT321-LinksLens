@@ -155,7 +155,7 @@ def list_accounts(
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get_db)):
     if db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == request.EmailAddress).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Registration failed. Please check your details.")
 
     hashed_pwd = get_password_hash(request.Password)
     db_account = models.UserAccount(
