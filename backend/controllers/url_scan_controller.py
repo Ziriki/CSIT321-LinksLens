@@ -1,11 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
+from collections import Counter
+from datetime import datetime, timezone
 import requests
 import time
 import os
+import re
+import math
 from dotenv import load_dotenv
 from urllib.parse import quote, urlparse
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 import models
 from models import ScanRequest
@@ -306,9 +311,92 @@ def check_blacklist_db(url: str) -> dict:
 
 
 #########################################################
+# Helper: Query rdap.org for domain registration info
+#########################################################
+def check_domain_rdap(url: str) -> dict:
+    """
+    Query rdap.org for the registration details of the URL's domain.
+
+    Returns:
+        domain        — bare hostname (port stripped)
+        registration  — ISO-8601 registration date or None
+        expiration    — ISO-8601 expiration date or None
+        last_changed  — ISO-8601 last-changed date or None
+        age           — { years, months, days } since registration, or None
+        error         — human-readable reason when the lookup could not complete
+    """
+    domain = urlparse(url).netloc.split(":")[0]
+    # RDAP operates on registrable domains — strip the leading www. if present
+    if domain.startswith("www."):
+        domain = domain[4:]
+
+    def _fail(reason: str) -> dict:
+        return {
+            "domain": domain,
+            "registration": None,
+            "expiration": None,
+            "last_changed": None,
+            "age": None,
+            "error": reason,
+        }
+
+    try:
+        response = requests.get(
+            f"https://rdap.org/domain/{domain}",
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
+    except requests.RequestException as e:
+        return _fail(f"RDAP request failed: {str(e)}")
+
+    if response.status_code == 404:
+        return _fail(f"Domain not found in RDAP registry: {domain}")
+    if response.status_code != 200:
+        return _fail(f"RDAP registry returned HTTP {response.status_code}")
+
+    try:
+        data = response.json()
+    except Exception:
+        return _fail("RDAP response was not valid JSON")
+
+    dates: dict[str, str | None] = {"registration": None, "expiration": None, "last_changed": None}
+    for event in data.get("events", []):
+        action = event.get("eventAction", "").lower().strip()
+        date_str = event.get("eventDate")
+        if action == "registration":
+            dates["registration"] = date_str
+        elif action == "expiration":
+            dates["expiration"] = date_str
+        elif action == "last changed":
+            dates["last_changed"] = date_str
+
+    age = None
+    if dates["registration"]:
+        try:
+            reg_dt     = datetime.fromisoformat(dates["registration"].replace("Z", "+00:00"))
+            delta      = datetime.now(timezone.utc) - reg_dt
+            total_days = delta.days
+            years      = total_days // 365
+            months     = (total_days % 365) // 30
+            days       = (total_days % 365) % 30
+            age = {"years": years, "months": months, "days": days}
+        except Exception:
+            age = None
+
+    return {
+        "domain": domain,
+        "registration": dates["registration"],
+        "expiration": dates["expiration"],
+        "last_changed": dates["last_changed"],
+        "age": age,
+        "error": None,
+    }
+
+
+#########################################################
 # Helper: Compare GSB, urlscan and DB results
 #########################################################
-def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict) -> dict:
+def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict) -> str:
     """
     Derive a final_status by weighing all three verdict sources.
 
@@ -324,9 +412,9 @@ def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict
       weighted_score = (gsb_score × 0.55) + (urlscan_score × 0.45)
 
     Step 3 — Map to api_status:
-      weighted_score ≥ 70 → MALICIOUS
-      weighted_score ≥ 40 → SUSPICIOUS
-      weighted_score < 40 → SAFE
+      weighted_score ≥ 50 → MALICIOUS
+      weighted_score ≥ 30 → SUSPICIOUS
+      weighted_score < 30 → SAFE
 
     Step 4 — DB rule override (authoritative — admin/moderator has final say):
       URLRules BLACKLIST or approved BlacklistRequest → MALICIOUS
@@ -369,11 +457,292 @@ def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict
 
 
 #########################################################
-# Placeholder: Perform task based on comparison result
+# Helper: Merge async API verdict with JS analysis result
 #########################################################
-def perform_task(final_status: str) -> dict:
-    # TODO: implement task logic
-    pass
+
+# Status → numeric score for weighted merge
+_ASYNC_STATUS_SCORE = {"SAFE": 0, "SUSPICIOUS": 50, "MALICIOUS": 100}
+
+# JS is weighted slightly more than the async verdict
+_MERGE_JS_WEIGHT    = 0.55
+_MERGE_ASYNC_WEIGHT = 0.45
+
+def merge_final_verdict(async_status: str, js_result: dict | None) -> str:
+    """
+    Combine the async API verdict (GSB + urlscan + DB rule) with the JS
+    analysis result to produce the definitive final_status.
+
+    JS analysis is weighted slightly more (0.55) because it performs live
+    behavioural inspection of the actual page content.
+
+    Return values:
+        SAFE        — no signals from either source
+        SUSPICIOUS  — moderate risk detected
+        MALICIOUS   — high-confidence threat detected
+        UNAVAILABLE — JS browser launch failed AND async verdict is not
+                      conclusive enough to confirm safety; caller should
+                      treat the URL as unverified
+    """
+    # JS was not run because the URL was already confirmed MALICIOUS — trust it
+    if js_result is None:
+        return async_status
+
+    # Detect browser launch failure
+    browser_failed = any(
+        f.get("pattern") == "browser_error"
+        for f in js_result.get("findings", [])
+    )
+
+    if browser_failed:
+        # Can't do live JS analysis — escalate async verdict or flag UNAVAILABLE
+        if async_status == "MALICIOUS":
+            return "MALICIOUS"
+        if async_status == "SAFE":
+            return "UNAVAILABLE"
+        return async_status  # SUSPICIOUS stays SUSPICIOUS
+
+    # Both sources are available — perform weighted merge
+    async_score = _ASYNC_STATUS_SCORE.get(async_status, 0)
+    js_score    = js_result.get("js_score", 0)          # already 0-100
+
+    weighted = (js_score * _MERGE_JS_WEIGHT) + (async_score * _MERGE_ASYNC_WEIGHT)
+
+    if weighted >= _MALICIOUS_THRESHOLD:
+        return "MALICIOUS"
+    if weighted >= _SUSPICIOUS_THRESHOLD:
+        return "SUSPICIOUS"
+    return "SAFE"
+
+
+#########################################################
+# Suspicious JS patterns checked during page analysis
+#########################################################
+_JS_PATTERNS = [
+    # --- MALICIOUS ---
+    {
+        "name": "eval_obfuscation",
+        "pattern": re.compile(r'\beval\s*\(\s*(?:unescape|decodeURIComponent|atob)\s*\(', re.IGNORECASE),
+        "severity": "MALICIOUS",
+        "description": "eval() wrapping a decoder — classic obfuscation used to hide malicious payloads",
+    },
+    {
+        "name": "fromCharCode_chain",
+        "pattern": re.compile(r'String\.fromCharCode\s*\((?:\s*\d+\s*,){4,}', re.IGNORECASE),
+        "severity": "MALICIOUS",
+        "description": "Long String.fromCharCode() chain — common technique to obscure shellcode or injected scripts",
+    },
+    {
+        "name": "crypto_miner",
+        "pattern": re.compile(r'(coinhive|cryptonight|minero|webminepool|coin-hive|miner\.start)', re.IGNORECASE),
+        "severity": "MALICIOUS",
+        "description": "Known crypto-mining library reference detected",
+    },
+    {
+        # Tightened: network call must appear within ~300 chars of the key listener
+        # (no DOTALL) to avoid false positives where keyboard shortcuts and fetch
+        # calls are unrelated functions in the same file (e.g. media players).
+        "name": "keylogger",
+        "pattern": re.compile(r'addEventListener\s*\(\s*["\']key(?:down|up|press)["\'].{0,300}(?:fetch|XMLHttpRequest|\.open\s*\()', re.IGNORECASE),
+        "severity": "SUSPICIOUS",
+        "description": "Keyboard event listener close to a network call — possible keylogger pattern",
+    },
+    {
+        "name": "form_hijack",
+        "pattern": re.compile(r'(?:document\.querySelector|getElementById)\s*\([^)]*form[^)]*\).*?addEventListener\s*\(\s*["\']submit', re.IGNORECASE | re.DOTALL),
+        "severity": "MALICIOUS",
+        "description": "Form submit listener patched dynamically — potential credential harvesting",
+    },
+    # --- SUSPICIOUS ---
+    {
+        "name": "eval_dynamic",
+        "pattern": re.compile(r'\beval\s*\([^)]{20,}\)', re.IGNORECASE),
+        "severity": "SUSPICIOUS",
+        "description": "eval() with a non-trivial argument — may execute dynamically constructed code",
+    },
+    {
+        "name": "document_write_encoded",
+        "pattern": re.compile(r'document\.write\s*\(\s*(?:unescape|decodeURIComponent|atob)\s*\(', re.IGNORECASE),
+        "severity": "SUSPICIOUS",
+        "description": "document.write() with encoded content — often used to inject hidden iframes or scripts",
+    },
+    {
+        "name": "base64_decode",
+        "pattern": re.compile(r'\batob\s*\(', re.IGNORECASE),
+        "severity": "SUSPICIOUS",
+        "description": "Base64 decode (atob) call — frequently used to conceal payload strings",
+    },
+    {
+        "name": "forced_redirect",
+        "pattern": re.compile(r'window\.location\s*(?:\.\s*(?:href|replace|assign)\s*=|=)\s*["\']https?://', re.IGNORECASE),
+        "severity": "SUSPICIOUS",
+        "description": "Hard-coded external redirect via window.location — may redirect users to malicious sites",
+    },
+    {
+        "name": "high_hex_density",
+        "pattern": re.compile(r'(?:\\x[0-9a-f]{2}){12,}', re.IGNORECASE),
+        "severity": "SUSPICIOUS",
+        "description": "Dense hex-escape sequence — indicates obfuscated string content",
+    },
+    {
+        "name": "high_unicode_density",
+        "pattern": re.compile(r'(?:\\u[0-9a-f]{4}){8,}', re.IGNORECASE),
+        "severity": "SUSPICIOUS",
+        "description": "Dense unicode-escape sequence — indicates obfuscated string content",
+    },
+]
+
+_JS_MALICIOUS_SCORE  = 35   # added per MALICIOUS finding
+_JS_SUSPICIOUS_SCORE = 15   # added per SUSPICIOUS finding
+_JS_MALICIOUS_THRESHOLD  = 70
+_JS_SUSPICIOUS_THRESHOLD = 55  # raised from 40 — minor accumulation no longer flips SAFE
+
+def calc_entropy(text: str) -> float:
+    """
+    Shannon entropy of a string — measures character distribution randomness.
+    High entropy (> 5.2) suggests the content is encoded, compressed, or obfuscated.
+
+    Formula: H = -Σ p(c) * log2(p(c))
+      where p(c) is the probability of each character c appearing in the string.
+    The more evenly characters are distributed, the higher the entropy.
+    """
+    if not text:
+        return 0.0
+
+    # Count how many times each character appears
+    freq = Counter(text)
+    length = len(text)
+    entropy = 0.0
+    for count in freq.values():
+        probability = count / length                        # p(c)
+        entropy    += probability * math.log2(probability) # p(c) * log2(p(c))
+
+    return -entropy  # negate to get a positive value
+
+
+def analyse_javascript(source: str, location: str) -> list[dict]:
+    """Run all pattern checks against a single JS source string. Returns a list of findings."""
+    findings = []
+    for rule in _JS_PATTERNS:
+        if rule["pattern"].search(source):
+            findings.append({
+                "pattern": rule["name"],
+                "severity": rule["severity"],
+                "description": rule["description"],
+                "location": location,
+            })
+
+    # Entropy check — raised from 5.2 to 5.7 to avoid flagging legitimately minified JS
+    entropy = calc_entropy(source)
+    if entropy > 5.7 and len(source) > 300:
+        findings.append({
+            "pattern": "high_entropy",
+            "severity": "SUSPICIOUS",
+            "description": f"Script has unusually high entropy ({entropy:.2f}) — likely obfuscated or minified malicious code",
+            "location": location,
+        })
+
+    return findings
+
+
+#########################################################
+# Helper: Launch headless browser, extract and analyse JS
+#########################################################
+def analyse_script(url: str) -> dict:
+    """
+    Launch a headless Chromium browser, navigate to the URL, intercept all JS
+    responses, and analyse each script for malicious or suspicious patterns.
+
+    Returns:
+        js_status        — SAFE | SUSPICIOUS | MALICIOUS
+        js_score         — 0-100 weighted score
+        findings         — list of { pattern, severity, description, location }
+        scripts_analysed — total JS sources checked
+        inline_count     — number of inline <script> blocks
+        external_count   — number of external .js files intercepted
+    """
+    collected_scripts: list[tuple[str, str]] = []   # (source, location)
+    js_response_bodies: dict[str, str] = {}
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+                java_script_enabled=True,
+            )
+            page = context.new_page()
+
+            # Intercept JS responses to capture external script bodies
+            def handle_response(response):
+                content_type = response.headers.get("content-type", "")
+                if "javascript" in content_type or response.url.split("?")[0].endswith(".js"):
+                    try:
+                        body = response.body().decode("utf-8", errors="ignore")
+                        js_response_bodies[response.url] = body
+                    except Exception:
+                        pass
+
+            page.on("response", handle_response)
+
+            try:
+                page.goto(url, wait_until="networkidle", timeout=20_000)
+            except PlaywrightTimeoutError:
+                pass
+
+            inline_sources = page.eval_on_selector_all(
+                "script:not([src])",
+                "els => els.map(el => el.textContent)"
+            )
+            for idx, src in enumerate(inline_sources):
+                if src and src.strip():
+                    collected_scripts.append((src, f"inline[{idx}]"))
+
+            browser.close()
+
+    except Exception as e:
+        return {
+            "js_status": "SUSPICIOUS",
+            "js_score": 0,
+            "findings": [{"pattern": "browser_error", "severity": "SUSPICIOUS",
+                          "description": f"Headless browser failed: {str(e)}", "location": url}],
+            "scripts_analysed": 0,
+            "inline_count": 0,
+            "external_count": 0,
+        }
+
+    # Add captured external JS bodies
+    for script_url, body in js_response_bodies.items():
+        collected_scripts.append((body, script_url))
+
+    inline_count   = len(inline_sources)
+    external_count = len(js_response_bodies)
+
+    # Analyse every collected script
+    all_findings: list[dict] = []
+    for source, location in collected_scripts:
+        all_findings.extend(analyse_javascript(source, location))
+
+    # Score: accumulate per finding, cap at 100
+    score = 0
+    for finding in all_findings:
+        score += _JS_MALICIOUS_SCORE if finding["severity"] == "MALICIOUS" else _JS_SUSPICIOUS_SCORE
+    score = min(score, 100)
+
+    if score >= _JS_MALICIOUS_THRESHOLD:
+        js_status = "MALICIOUS"
+    elif score >= _JS_SUSPICIOUS_THRESHOLD:
+        js_status = "SUSPICIOUS"
+    else:
+        js_status = "SAFE"
+
+    return {
+        "js_status": js_status,
+        "js_score": score,
+        "findings": all_findings,
+        "scripts_analysed": len(collected_scripts),
+        "inline_count": inline_count,
+        "external_count": external_count,
+    }
 
 
 #########################################################
@@ -383,43 +752,52 @@ def perform_task(final_status: str) -> dict:
 def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """
     For each URL:
-      1. Fire GSB, urlscan.io and DB blacklist check concurrently
-      2. Wait for all three results
-      3. compare_results() — placeholder
-      4. perform_task()    — placeholder
-      5. Merge verdicts, save to ScanHistory, return response
+      1. Fire GSB, urlscan.io, DB blacklist check and RDAP concurrently
+      2. Wait for all four results
+      3. compare_async_results()  — weighted GSB + urlscan + DB rule → async_status
+      4. analyse_script()         — headless JS analysis (skipped if already MALICIOUS)
+      5. merge_final_verdict()    — combine async_status + JS result → final_status
+      6. Save to ScanHistory, return response
     """
     scan_results = []
     try:
         urls = request.urls
 
         if not urls:
-            #Will change error message
             raise HTTPException(status_code=400, detail="At least one URL is required.")
 
         for url in urls:
             parsed = urlparse(url)
-            #Will change error message
             if parsed.scheme not in ("http", "https") or not parsed.netloc:
                 raise HTTPException(status_code=400, detail=f"Invalid URL: {url}")
 
         for url in urls:
-            # Step 1: Fire GSB, urlscan.io and DB blacklist check concurrently
-            # Step 2: Collect results — .result() blocks until each future completes
-            with ThreadPoolExecutor(max_workers=3) as executor:
+            # Step 1 & 2: Fire GSB, urlscan.io, DB blacklist check and RDAP concurrently
+            # and collect results — .result() blocks until each future completes
+            with ThreadPoolExecutor(max_workers=4) as executor:
                 gsb_future       = executor.submit(check_google_safe_browsing, [url])
                 urlscan_future   = executor.submit(run_urlscan, url)
                 blacklist_future = executor.submit(check_blacklist_db, url)
+                rdap_future      = executor.submit(check_domain_rdap, url)
 
                 gsb             = gsb_future.result()[url]
                 urlscan_result  = urlscan_future.result()
                 blacklist_check = blacklist_future.result()
+                domain_info     = rdap_future.result()
 
-            # Step 3: Compare results — weighted scoring + DB rule override
-            final_status = compare_async_results(gsb, urlscan_result, blacklist_check)
+            # Step 3: Compare async results — weighted scoring + DB rule override
+            async_status = compare_async_results(gsb, urlscan_result, blacklist_check)
 
-            # Step 4: Perform task based on comparison (placeholder)
-            # process_result(comparison)
+            # Step 4: JS analysis — only run if not already confirmed MALICIOUS
+            js_result = None
+            if async_status in ("SAFE", "SUSPICIOUS"):
+                js_result = analyse_script(url)
+
+            # Step 5: Merge async verdict with JS analysis to get final_status
+            final_status = merge_final_verdict(async_status, js_result)
+
+            # UNAVAILABLE cannot be stored as a ScanStatusEnum — save as SUSPICIOUS
+            db_status = "SUSPICIOUS" if final_status == "UNAVAILABLE" else final_status
 
             # Step 6: Save to ScanHistory
             initial_url = urlscan_result["initial_url"] or url
@@ -427,7 +805,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 UserID=current_user["user_id"],
                 InitialURL=initial_url,
                 RedirectURL=urlscan_result["redirect_url"],
-                StatusIndicator=models.ScanStatusEnum(final_status),
+                StatusIndicator=models.ScanStatusEnum(db_status),
                 ServerLocation=urlscan_result["server_location"],
                 ScreenshotURL=urlscan_result["screenshot_url"],
             )
@@ -441,7 +819,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 "uuid": urlscan_result["uuid"],
                 "initial_url": scan_record.InitialURL,
                 "redirect_url": scan_record.RedirectURL,
-                "status_indicator": scan_record.StatusIndicator.value,
+                "status_indicator": final_status,
                 "score": urlscan_result["score"],
                 "server_location": scan_record.ServerLocation,
                 "ip_address": urlscan_result["ip_address"],
@@ -452,6 +830,8 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 "scanned_at": scan_record.ScannedAt.isoformat() if scan_record.ScannedAt else None,
                 "gsb_flagged": gsb["flagged"],
                 "gsb_threat_types": gsb["threat_types"],
+                "js_analysis": js_result,
+                "domain_info": domain_info,
             })
     
     except HTTPException:
