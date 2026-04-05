@@ -1,6 +1,8 @@
 
 export type RiskLevel = 'safe' | 'suspicious' | 'malicious'
 
+export type ScanStatus = 'SAFE' | 'SUSPICIOUS' | 'MALICIOUS' | 'UNAVAILABLE'
+
 export function statusToRisk(status: string | null): RiskLevel {
   if (status === "SAFE") return "safe"
   if (status === "SUSPICIOUS") return "suspicious"
