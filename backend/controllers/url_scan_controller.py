@@ -60,26 +60,211 @@ _MALICIOUS_THRESHOLD  = 50   # weighted score ≥ 50 → MALICIOUS
 _SUSPICIOUS_THRESHOLD = 30   # weighted score ≥ 30 → SUSPICIOUS
 
 #########################################################
-# Helper: Get domain age in days via WHOIS
+# Script analysis: domain classification lists
 #########################################################
-def get_domain_age_days(domain: str) -> int | None:
+_AD_DOMAINS = {
+    "doubleclick.net", "googlesyndication.com", "amazon-adsystem.com",
+    "adnxs.com", "advertising.com", "taboola.com", "outbrain.com",
+    "criteo.com", "rubiconproject.com", "pubmatic.com", "openx.net",
+    "moatads.com", "scorecardresearch.com", "adsafeprotected.com",
+    "sharethrough.com", "33across.com", "appnexus.com", "smartadserver.com",
+}
+_CRYPTO_MINER_DOMAINS = {
+    "coinhive.com", "coin-hive.com", "cryptoloot.pro", "webmine.pro",
+    "minero.cc", "jsecoin.com", "monerominer.rocks", "coinimp.com",
+    "papoto.com", "authedmine.com",
+}
+_MALICIOUS_SCRIPT_DOMAINS = {
+    "greatbigstuff.net", "trackyoudown.net", "blackhatseo.tech",
+}
+_TRUSTED_CDN_DOMAINS = {
+    "cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com",
+    "ajax.googleapis.com", "code.jquery.com", "stackpath.bootstrapcdn.com",
+    "maxcdn.bootstrapcdn.com", "cdn.tailwindcss.com", "cdn.ampproject.org",
+}
+_FREE_HOSTING_DOMAINS = {
+    "pastebin.com", "paste.ee", "hastebin.com", "ghostbin.com",
+    "raw.githubusercontent.com", "gist.githubusercontent.com",
+}
+_AD_HEAVY_THRESHOLD = 5
+_OBFUSCATED_NAME_RE = re.compile(r"/[a-z0-9]{8,}\.js$", re.IGNORECASE)
+_IP_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+_CONFUSABLE_SCRIPTS = {"CYRILLIC", "GREEK", "ARMENIAN", "CHEROKEE", "GEORGIAN"}
+
+
+def _reg_domain(netloc: str) -> str:
+    """Return the registrable domain (last two labels) from a netloc string."""
+    parts = netloc.removeprefix("www.").split(".")
+    return ".".join(parts[-2:]) if len(parts) >= 2 else netloc
+
+
+#########################################################
+# Helper: Analyse scripts using urlscan.io result data
+#########################################################
+def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict:
     """
-    Look up the domain creation date via WHOIS and return its age in days.
-    Returns None if the lookup fails or the creation date is unavailable.
-    Non-blocking — failures must never abort the scan pipeline.
+    Parse urlscan.io result data to classify scripts loaded by the page.
+
+    Uses data.lists.scripts (pre-extracted by urlscan.io) — same sandboxed
+    browser visit urlscan already performed, no second visit needed.
+    Tech stack is sourced from meta.processors.wappa (Wappalyzer).
     """
+    if not raw_result:
+        return {
+            "total": 0, "trusted_count": 0, "ad_count": 0, "ad_heavy": False,
+            "crypto_miners": [], "malicious_scripts": [],
+            "suspicious_patterns": [], "tech_stack": [], "script_risk_score": 0,
+        }
+
+    data = raw_result.get("data", {})
+    page_url = raw_result.get("page", {}).get("url", "") or initial_url
+    page_scheme = urlparse(page_url).scheme.lower()
+    scripts: list[str] = data.get("lists", {}).get("scripts", [])
+
+    ad_scripts: list[str] = []
+    crypto_miners: list[str] = []
+    malicious_scripts: list[str] = []
+    trusted_scripts: list[str] = []
+    suspicious_patterns: list[dict] = []
+
+    for script_url in scripts:
+        parsed = urlparse(script_url)
+        netloc = parsed.netloc.lower()
+
+        if _IP_RE.match(netloc):
+            suspicious_patterns.append({"url": script_url, "reason": "IP-hosted script"})
+            continue
+        if page_scheme == "https" and parsed.scheme == "http":
+            suspicious_patterns.append({"url": script_url, "reason": "HTTP script on HTTPS page"})
+            continue
+        reg = _reg_domain(netloc)
+        if reg in _FREE_HOSTING_DOMAINS:
+            suspicious_patterns.append({"url": script_url, "reason": "Script from free hosting service"})
+            continue
+
+        if reg in _CRYPTO_MINER_DOMAINS:
+            crypto_miners.append(script_url)
+        elif reg in _MALICIOUS_SCRIPT_DOMAINS:
+            malicious_scripts.append(script_url)
+        elif reg in _AD_DOMAINS:
+            ad_scripts.append(script_url)
+        elif netloc in _TRUSTED_CDN_DOMAINS:
+            trusted_scripts.append(script_url)
+        elif _OBFUSCATED_NAME_RE.search(parsed.path):
+            suspicious_patterns.append({"url": script_url, "reason": "Obfuscated script filename"})
+
+    wappa_data = data.get("meta", {}).get("processors", {}).get("wappa", {}).get("data", [])
+    tech_stack = [
+        {"name": t.get("app", ""), "categories": [c.get("name", "") for c in t.get("categories", [])]}
+        for t in wappa_data if t.get("app")
+    ]
+
+    ad_heavy = len(ad_scripts) >= _AD_HEAVY_THRESHOLD
+    score = 0
+    score += min(len(crypto_miners) * 35, 70)
+    score += min(len(malicious_scripts) * 25, 50)
+    score += min(len(suspicious_patterns) * 10, 30)
+    score += min(len(ad_scripts) * 2, 15)
+    score += 10 if ad_heavy else 0
+    score -= min(len(trusted_scripts) * 3, 15)
+    score = max(0, min(score, 100))
+
+    return {
+        "total": len(scripts),
+        "trusted_count": len(trusted_scripts),
+        "ad_count": len(ad_scripts),
+        "ad_heavy": ad_heavy,
+        "crypto_miners": crypto_miners[:20],
+        "malicious_scripts": malicious_scripts[:20],
+        "suspicious_patterns": suspicious_patterns[:20],
+        "tech_stack": tech_stack,
+        "script_risk_score": score,
+    }
+
+
+#########################################################
+# Helper: Detect IDN homograph attacks (stdlib only)
+#########################################################
+def detect_homograph_risk(url: str) -> dict:
+    """
+    Detect IDN homograph attacks using only Python stdlib unicodedata.
+    Flags domains that mix Latin with visually confusable scripts (Cyrillic,
+    Greek, Armenian, Cherokee, Georgian). Never raises — failures return safe
+    defaults so the scan pipeline is never aborted.
+    """
+    result: dict = {
+        "is_homograph": False, "risk_score": 0, "punycode": None,
+        "mixed_scripts": [], "confusable_chars": [], "details": None,
+    }
     try:
-        info = whois.whois(domain)
-        creation_date = info.creation_date
-        if isinstance(creation_date, list):
-            creation_date = creation_date[0]
-        if not isinstance(creation_date, datetime):
-            return None
-        if creation_date.tzinfo is None:
-            creation_date = creation_date.replace(tzinfo=timezone.utc)
-        return (datetime.now(timezone.utc) - creation_date).days
+        domain = urlparse(url).hostname or ""
+        if not domain:
+            return result
+
+        try:
+            domain.encode("ascii")
+            if "xn--" not in domain.lower():
+                return result
+            labels = domain.lower().split(".")
+            decoded_labels = []
+            for label in labels:
+                if label.startswith("xn--"):
+                    try:
+                        decoded_labels.append(label.encode("ascii").decode("idna"))
+                    except Exception:
+                        decoded_labels.append(label)
+                else:
+                    decoded_labels.append(label)
+            result["punycode"] = domain
+            domain = ".".join(decoded_labels)
+        except UnicodeEncodeError:
+            try:
+                labels = domain.lower().split(".")
+                punycode_parts = []
+                for label in labels:
+                    try:
+                        punycode_parts.append(label.encode("idna").decode("ascii"))
+                    except Exception:
+                        punycode_parts.append(label)
+                result["punycode"] = ".".join(punycode_parts)
+            except Exception:
+                pass
+
+        scripts_found: set[str] = set()
+        confusable_chars: list[str] = []
+        for char in domain:
+            if char in ".-":
+                continue
+            char_name = unicodedata.name(char, "")
+            script = char_name.split(" ")[0] if char_name else "UNKNOWN"
+            scripts_found.add(script)
+            if script in _CONFUSABLE_SCRIPTS and len(confusable_chars) < 10:
+                confusable_chars.append(f"'{char}' ({char_name})")
+
+        latin_present = "LATIN" in scripts_found
+        non_latin = scripts_found - {"LATIN", "DIGIT", "UNKNOWN"}
+
+        if confusable_chars:
+            result["is_homograph"] = True
+            result["mixed_scripts"] = sorted(scripts_found - {"UNKNOWN"})
+            result["confusable_chars"] = confusable_chars
+            if latin_present and non_latin:
+                result["risk_score"] = min(90, 50 + len(confusable_chars) * 8)
+                result["details"] = (
+                    f"Domain mixes scripts ({', '.join(sorted(non_latin))} + Latin) "
+                    f"with {len(confusable_chars)} visually confusable character(s)."
+                )
+            else:
+                result["risk_score"] = min(80, 40 + len(confusable_chars) * 8)
+                result["details"] = (
+                    f"Domain contains {len(confusable_chars)} character(s) from "
+                    f"{', '.join(sorted(non_latin or {'unknown script'}))} "
+                    f"that visually resemble ASCII letters."
+                )
     except Exception:
-        return None
+        pass
+    return result
 
 
 #########################################################
