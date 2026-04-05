@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. Your Backend (FastAPI + Playwright)
+  # 1. Your Backend (FastAPI)
   backend:
     build: ./backend
     container_name: fyp_backend
