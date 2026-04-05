@@ -8,22 +8,25 @@ import {
   MessageSquare,
   ChevronRight,
 } from "lucide-react-native"
-
+import { useColorScheme } from "nativewind"
+import * as SecureStore from "expo-secure-store"
 import {
-  Card,
-  RiskBadge,
-  AppButton,
-  InputField,
   ListItem,
-  SectionHeader,
   ScreenHeader,
-  BottomNav,
-  ConfidenceIndicator,
-  TextLink,
 } from "../components/ui-components"
+import { THEME_KEY, useIconColor } from "../lib/theme"
 
+export default function Settings() {
+  const { colorScheme, setColorScheme } = useColorScheme()
+  const isDark = colorScheme === "dark"
+  const mutedColor = useIconColor("muted")
 
-export default function settings() {
+  const toggleTheme = async () => {
+    const next = isDark ? "light" : "dark"
+    setColorScheme(next)
+    await SecureStore.setItemAsync(THEME_KEY, next)
+  }
+
   return (
     <View className="flex-1 bg-background">
       <ScreenHeader title="Settings" />
@@ -36,7 +39,7 @@ export default function settings() {
             title="Language"
             subtitle="English"
             leftIcon={<Globe size={20} />}
-            rightElement={<ChevronRight size={20} color="#6b7280" />}
+            rightElement={<ChevronRight size={20} color={mutedColor} />}
             onPress={() => router.push("/language-settings")}
           />
 
@@ -44,7 +47,7 @@ export default function settings() {
             title="Default Browser"
             subtitle="In-App Browser"
             leftIcon={<ExternalLink size={20} />}
-            rightElement={<ChevronRight size={20} color="#6b7280" />}
+            rightElement={<ChevronRight size={20} color={mutedColor} />}
             onPress={() => router.push("/browser-settings")}
           />
 
@@ -61,9 +64,12 @@ export default function settings() {
           <ListItem
             title="Dark Mode"
             leftIcon={<Moon size={20} />}
+            onPress={toggleTheme}
             rightElement={
-              <View className="h-6 w-11 rounded-full bg-secondary">
-                <View className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white" />
+              <View className={`h-6 w-11 rounded-full ${isDark ? "bg-primary" : "bg-secondary"}`}>
+                <View
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white ${isDark ? "right-0.5" : "left-0.5"}`}
+                />
               </View>
             }
           />
@@ -71,7 +77,7 @@ export default function settings() {
           <ListItem
             title="App Feedback"
             leftIcon={<MessageSquare size={20} />}
-            rightElement={<ChevronRight size={20} color="#6b7280" />}
+            rightElement={<ChevronRight size={20} color={mutedColor} />}
             onPress={() => router.push("/app-feedback")}
           />
 

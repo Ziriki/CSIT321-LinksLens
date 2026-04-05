@@ -1,6 +1,6 @@
 import { View, Text } from "react-native"
 import { router } from "expo-router"
-import { Image as ImageIcon, Link2 } from "lucide-react-native"
+import { Image as ImageIcon, Link2, QrCode } from "lucide-react-native"
 import {
   Card,
   ScreenHeader,
@@ -37,6 +37,26 @@ export default function scan() {
 
               <Text className="text-sm text-muted-foreground">
                 Upload an image with a link
+              </Text>
+            </View>
+          </Card>
+
+          {/* QR Code Scanner */}
+          <Card
+            className="flex-row items-center"
+            onPress={() => router.push("/scan-qr")}
+          >
+            <View className="mr-4 h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
+              <QrCode size={28} color="#2563eb" />
+            </View>
+
+            <View className="flex-1">
+              <Text className="font-semibold text-foreground">
+                Scan QR code
+              </Text>
+
+              <Text className="text-sm text-muted-foreground">
+                Detect phishing links hidden in QR codes
               </Text>
             </View>
           </Card>

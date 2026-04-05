@@ -2,12 +2,12 @@ import streamlit as st
 from controllers import auth_controller, moderation_controller
 from config import LOGO_PATH, PAGE_LAYOUT
 
-st.set_page_config(page_title="Moderation Queue", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
+st.set_page_config(page_title="Blacklist Requests", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 # Admin + Moderator (RoleID 1, 2)
 user = auth_controller.require_role(1, 2)
 auth_controller.render_sidebar()
 
-st.title("Moderation Queue")
+st.title("Blacklist Requests")
 df = moderation_controller.get_pending_requests_dataframe()
 
 if df.empty:

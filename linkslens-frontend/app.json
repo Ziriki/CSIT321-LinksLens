@@ -11,7 +11,11 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-notifications",
+      ["expo-camera", {
+        "cameraPermission": "Allow LinksLens to scan QR codes using your camera."
+      }]
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -32,7 +36,14 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.linkslensfrontend"
+      "package": "com.anonymous.linkslensfrontend",
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "data": [{ "mimeType": "text/plain" }],
+          "category": ["DEFAULT"]
+        }
+      ]
     }
   }
 }

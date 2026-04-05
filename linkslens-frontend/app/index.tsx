@@ -1,4 +1,4 @@
-import { View, Text, Pressable, Image, Alert } from "react-native"
+import { View, Text, Pressable, Image, Alert, Linking } from "react-native"
 import { Eye } from "lucide-react-native"
 import { router } from "expo-router"
 import { useState } from "react"
@@ -7,9 +7,9 @@ import {
   InputField,
   TextLink,
 } from "../components/ui-components"
-import { login } from "../lib/api"
+import { login, decodeToken, fetchPreferences, PREF_HAS_SEEN_ONBOARDING } from "../lib/api"
 
-export default function loginScreen() {
+export default function LoginScreen() {
   //TODO: Change back after Demo!
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -22,7 +22,15 @@ export default function loginScreen() {
     }
     setLoading(true)
     try {
-      await login(email, password)
+      const data = await login(email, password)
+      const userId = decodeToken(data.access_token)?.user_id
+      if (userId) {
+        const prefs = await fetchPreferences(userId).catch(() => ({}))
+        if (!prefs[PREF_HAS_SEEN_ONBOARDING]) {
+          router.replace("/onboarding")
+          return
+        }
+      }
       router.replace("/home")
     } catch (err: any) {
       Alert.alert("Login Failed", err.message ?? "Invalid email or password.")
@@ -65,7 +73,7 @@ export default function loginScreen() {
             </View>
           </View>
 
-          <Pressable className="self-end">
+          <Pressable className="self-end" onPress={() => Linking.openURL("https://linkslens.com/forgot-password")}>
             <Text className="text-sm font-medium text-primary">Forgot Password?</Text>
           </Pressable>
 

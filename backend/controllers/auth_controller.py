@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Response
 from sqlalchemy.orm import Session
 import jwt
 from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
 
-from utils import verify_password
+from utils import get_client_ip, verify_password
 
 # Import custom files
 import models
@@ -49,27 +49,64 @@ def create_access_token(data: dict):
 #########################################################
 # Login function for both Web and Mobile clients
 #########################################################
+_LOGIN_MAX_FAILURES = 10
+_LOGIN_WINDOW_MINUTES = 15
+
 @router.post("/login", response_model=schemas.TokenResponse)
-def login(credentials: schemas.UserLogin, response: Response, db: Session = Depends(get_db)):
+def login(credentials: schemas.UserLogin, http_request: Request, response: Response, db: Session = Depends(get_db)):
+    client_ip = get_client_ip(http_request)
+    window_start = datetime.now(timezone.utc) - timedelta(minutes=_LOGIN_WINDOW_MINUTES)
+
+    recent_failures = db.query(models.FailedLoginAttempt).filter(
+        models.FailedLoginAttempt.IPAddress == client_ip,
+        models.FailedLoginAttempt.AttemptedAt >= window_start,
+    ).count()
+    if recent_failures >= _LOGIN_MAX_FAILURES:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again later.")
+
     # 1. Find the user by email
-    user = db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == credentials.EmailAddress).first()
-    
+    user = db.query(models.UserAccount).filter(
+        models.UserAccount.EmailAddress == credentials.EmailAddress
+    ).first()
+
     # 2. Verify user exists and password matches
     if not user or not verify_password(credentials.Password, user.PasswordHash):
+        db.add(models.FailedLoginAttempt(IPAddress=client_ip))
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
-    
-    # 3. Check if account is active
-    if not user.IsActive:
-        raise HTTPException(status_code=403, detail="Account is deactivated")
 
-    # 4. Generate the JWT Token payload
+    if recent_failures > 0:
+        db.query(models.FailedLoginAttempt).filter(
+            models.FailedLoginAttempt.IPAddress == client_ip,
+        ).delete()
+
+    # 3. Check if account is active (covers both unverified and admin-deactivated accounts)
+    if not user.IsActive:
+        # Only query verification tokens when needed (inactive accounts are rare)
+        has_pending_verification = db.query(models.EmailVerificationToken).filter(
+            models.EmailVerificationToken.UserID == user.UserID,
+            models.EmailVerificationToken.IsUsed == False,
+        ).first() is not None
+        if has_pending_verification:
+            raise HTTPException(status_code=403, detail="Please verify your email address before logging in.")
+        raise HTTPException(status_code=403, detail="This account has been deactivated. Please contact support.")
+
+    # 4. Enforce client type restrictions by role
+    is_staff = user.RoleID in (1, 2)
+    is_web   = credentials.ClientType == schemas.ClientTypeEnum.WEB
+    if is_staff and not is_web:
+        raise HTTPException(status_code=403, detail="Staff accounts must log in via the web portal.")
+    if not is_staff and is_web:
+        raise HTTPException(status_code=403, detail="User accounts must log in via the mobile app.")
+
+    # 5. Generate the JWT Token payload
     token_data = {"sub": str(user.UserID), "role": user.RoleID}
     token = create_access_token(token_data)
 
-    # 5. Route the response based on the platform!
+    # 6. Route the response based on the platform
     if credentials.ClientType == schemas.ClientTypeEnum.WEB:
         # For Web: Set an HttpOnly cookie. The browser handles it automatically.
         response.set_cookie(
@@ -80,7 +117,9 @@ def login(credentials: schemas.UserLogin, response: Response, db: Session = Depe
             samesite="lax",
             max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
         )
-        return {"message": "Web login successful"}
+        # Also return the token in the body so server-side clients (e.g. the Streamlit admin
+        # portal) can read it directly — browsers will use the HttpOnly cookie instead.
+        return {"access_token": token, "token_type": "bearer", "message": "Web login successful"}
         
     elif credentials.ClientType == schemas.ClientTypeEnum.MOBILE:
         # For Mobile: Return the token directly so React Native can save it

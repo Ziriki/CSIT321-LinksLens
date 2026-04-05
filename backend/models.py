@@ -32,6 +32,7 @@ class UserAccount(Base):
     role = relationship("UserRole")
     details = relationship("UserDetails", uselist=False, back_populates="account")
     reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
+    verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
 
 class UserDetails(Base):
     __tablename__ = "UserDetails"
@@ -120,6 +121,7 @@ class ScanStatusEnum(str, enum.Enum):
     SAFE = "SAFE"
     SUSPICIOUS = "SUSPICIOUS"
     MALICIOUS = "MALICIOUS"
+    UNAVAILABLE = "UNAVAILABLE"  # Domain could not be reached by the backend
     PENDING = "PENDING"
 
 class ScanHistory(Base):
@@ -128,13 +130,14 @@ class ScanHistory(Base):
     ScanID = Column(Integer, primary_key=True, index=True, autoincrement=True)
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=True) 
     InitialURL = Column(String(2048), nullable=False)
-    RedirectURL = Column(String(2048), nullable=True) 
+    RedirectURL = Column(String(2048), nullable=True)
+    RedirectChain = Column(JSON, nullable=True)  # Ordered list of all redirect URLs
     StatusIndicator = Column(Enum(ScanStatusEnum), default=ScanStatusEnum.PENDING, nullable=False)
     DomainAgeDays = Column(Integer, nullable=True)
     ServerLocation = Column(String(100), nullable=True)
     ScreenshotURL = Column(String(2048), nullable=True)
-    RawText = Column(LONGTEXT, nullable=True)
-    AssociatedPerson = Column(String(255), nullable=True)
+    ScriptAnalysis = Column(JSON, nullable=True)
+    HomographAnalysis = Column(JSON, nullable=True)
     ScannedAt = Column(DateTime(timezone=True), server_default=func.now())
 
     # Set up relationship for easier access to the user account details
@@ -170,6 +173,8 @@ class ScanRequest(BaseModel):
         """Accept a single URL string or a list; always normalise to a list internally."""
         if isinstance(v, str):
             return [v]
+        if len(v) > 10:
+            raise ValueError("Maximum 10 URLs per scan request.")
         return v
     
 class PasswordResetToken(Base):
@@ -181,5 +186,26 @@ class PasswordResetToken(Base):
     ExpiresAt = Column(DateTime(timezone=True), nullable=False)
     IsUsed = Column(Boolean, default=False)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+    RequestIP = Column(String(45), nullable=True)
 
     user = relationship("UserAccount", back_populates="reset_tokens")
+
+class EmailVerificationToken(Base):
+    __tablename__ = "EmailVerificationToken"
+
+    TokenID = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    Token = Column(String(255), unique=True, nullable=False, index=True)
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
+    ExpiresAt = Column(DateTime(timezone=True), nullable=False)
+    IsUsed = Column(Boolean, default=False)
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("UserAccount", back_populates="verification_tokens")
+
+
+class FailedLoginAttempt(Base):
+    __tablename__ = "FailedLoginAttempt"
+
+    AttemptID = Column(Integer, primary_key=True, autoincrement=True)
+    IPAddress = Column(String(45), nullable=False, index=True)
+    AttemptedAt = Column(DateTime(timezone=True), server_default=func.now())

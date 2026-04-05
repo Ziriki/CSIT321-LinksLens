@@ -2,6 +2,8 @@ import jwt
 import streamlit as st
 from models import api_client
 
+ROLE_LABELS = {1: "Administrator", 2: "Moderator", 3: "User"}
+
 
 def _decode_token():
     """Decode the stored JWT to extract user_id and role_id (cached per rerun)."""
@@ -26,15 +28,17 @@ def require_auth():
         st.stop()
 
 
+# Streamlit uses the page filename as the sidebar link href — match on filename substrings.
+_MODERATOR_HIDDEN_PAGES = ["1_Dashboard", "3_User_Management", "4_App_Feedback", "5_Action_History_Log"]
+
+
 def _hide_pages_for_moderator():
     """Inject CSS to hide admin-only pages from the moderator sidebar."""
     user = _decode_token()
     if user and user["role_id"] == 2:
-        # Admin-only pages to hide: Dashboard, User_Management, App_Feedback, Action_History_Log
-        hidden_pages = ["Dashboard", "User Management", "App Feedback", "Action History Log"]
         css_selectors = ", ".join(
-            f'[data-testid="stSidebarNav"] a[href*="{name.replace(" ", "_")}"]'
-            for name in hidden_pages
+            f'[data-testid="stSidebarNav"] a[href*="{name}"]'
+            for name in _MODERATOR_HIDDEN_PAGES
         )
         st.markdown(
             f"""
@@ -66,9 +70,10 @@ def get_current_user():
 
 def render_sidebar():
     """Show role label and logout button in the sidebar."""
+    _hide_pages_for_moderator()
     user = _decode_token()
     if user:
-        role_label = {1: "Administrator", 2: "Moderator", 3: "User"}.get(user["role_id"], "Unknown")
+        role_label = ROLE_LABELS.get(user["role_id"], "Unknown")
         st.sidebar.write(f"Logged in as **{role_label}**")
 
     st.sidebar.markdown("---")
@@ -84,6 +89,8 @@ def handle_login(email, password):
     if not email or not password:
         st.error("Please fill in both fields.")
         return
+    # Clear any stale decoded-user cache so the new token is always decoded fresh
+    st.session_state.pop("_decoded_user", None)
     with st.spinner("Authenticating..."):
         response = api_client.authenticate_user(email, password)
         if response.status_code == 200:

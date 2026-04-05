@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
-from utils import get_fullname
+from utils import get_fullname, get_or_404
 # Import custom files
 import models
 import schemas
@@ -19,26 +19,20 @@ router = APIRouter(
 # CREATE function for ScanFeedback table
 #########################################################
 @router.post("/", response_model=schemas.ScanFeedbackResponse, status_code=status.HTTP_201_CREATED)
-def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
-    # Verify the user exists
-    account = db.query(models.UserAccount).filter(models.UserAccount.UserID == feedback.UserID).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="User Account not found")
+def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == feedback.ScanID).first(), "Scan not found")
 
-    # Verify the scan exists
-    scan = db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == feedback.ScanID).first()
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan History record not found")
+    if scan.UserID != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only submit feedback for your own scans.")
 
-    # Optional: Prevent duplicate feedback from the same user on the same scan
     existing_feedback = db.query(models.ScanFeedback).filter(
         models.ScanFeedback.ScanID == feedback.ScanID,
-        models.ScanFeedback.UserID == feedback.UserID
+        models.ScanFeedback.UserID == current_user["user_id"],
     ).first()
     if existing_feedback:
         raise HTTPException(status_code=400, detail="You have already submitted feedback for this scan.")
 
-    db_feedback = models.ScanFeedback(**feedback.model_dump())
+    db_feedback = models.ScanFeedback(**{**feedback.model_dump(), "UserID": current_user["user_id"]})
     db.add(db_feedback)
     db.commit()
     db.refresh(db_feedback)
@@ -49,9 +43,7 @@ def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(
 #########################################################
 @router.get("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
 def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
-    if not feedback:
-        raise HTTPException(status_code=404, detail="Feedback not found")
+    feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
     return feedback
 
 #########################################################
@@ -59,9 +51,7 @@ def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Dep
 #########################################################
 @router.put("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
 def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    db_feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
-    if not db_feedback:
-        raise HTTPException(status_code=404, detail="Feedback not found")
+    db_feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
 
     # Generally, we only update the 'IsResolved' status here.
     if feedback_update.IsResolved is not None:
@@ -76,10 +66,8 @@ def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdat
 #########################################################
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    db_feedback = db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first()
-    if not db_feedback:
-        raise HTTPException(status_code=404, detail="Feedback not found")
-    
+    db_feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
+
     db.delete(db_feedback)
     db.commit()
     return None
