@@ -1,5 +1,4 @@
-# Use this specific image because it has the Browsers (Chrome) pre-installed for our scanner
-FROM mcr.microsoft.com/playwright/python:v1.41.0-jammy
+FROM python:3.11-slim
 
 WORKDIR /app
 
