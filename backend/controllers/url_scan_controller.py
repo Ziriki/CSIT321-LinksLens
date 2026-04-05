@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
-<<<<<<< Updated upstream
 import re
 import requests
 import time
@@ -9,14 +8,6 @@ import os
 import unicodedata
 import whois
 from datetime import datetime, timezone
-=======
-from datetime import datetime, timezone
-import requests
-import time
-import os
-import re
-import unicodedata
->>>>>>> Stashed changes
 from dotenv import load_dotenv
 from urllib.parse import quote, urlparse
 
