@@ -108,17 +108,18 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 **`/scan` pipeline (`url_scan_controller.py`):**
 `POST /scan` accepts `{ "urls": str | list[str] }` — single string or list, always normalised to a list. Returns an array of results (one per URL).
 
-**Parallelism:** GSB runs first (single batch round-trip). Then all URLs are processed in parallel via `ThreadPoolExecutor` — each URL runs urlscan.io + WHOIS concurrently inside its own inner executor. DB operations are always in the main thread (SQLAlchemy sessions are not thread-safe). Total scan time is ~18–22s regardless of URL count.
+**Parallelism:** For each URL, four checks run concurrently via `ThreadPoolExecutor`: GSB, urlscan.io, DB blacklist, and RDAP. DB operations are always in the main thread (SQLAlchemy sessions are not thread-safe). Total scan time is ~22s regardless of URL count.
 
 1. **Google Safe Browsing v4** — batch `POST` to `safebrowsing.googleapis.com/v4/threatMatches:find`; exponential backoff on 429/5xx; non-blocking
-2. **urlscan.io submission** — each URL submitted to `POST urlscan.io/api/v1/scan/` with `visibility: public`; runs concurrently with WHOIS per URL
-3. **Poll for result** — waits 10s, then polls every 5s up to 12 attempts (70s total timeout)
-4. **WHOIS domain age** — `get_domain_age_days(domain)` runs concurrently with urlscan.io polling; non-blocking (failures return `None`)
-5. **Script-level analysis** — `analyze_scripts(raw_result)` parses urlscan.io result for: ad networks, crypto miners, known malicious script domains, IP-hosted scripts, mixed content (HTTP on HTTPS), free-hosting abuse, obfuscated filenames, trusted CDN recognition, technology stack (Wappalyzer), and a composite `script_risk_score` (0–100). Crypto miners on an otherwise-SAFE page → escalated to SUSPICIOUS.
-5b. **Homograph detection** — `detect_homograph_risk(url)` uses `unicodedata` (stdlib) to classify each domain character by Unicode script. Flags domains that mix Latin with confusable scripts (Cyrillic, Greek, Armenian, Cherokee, Georgian). Returns `is_homograph`, `risk_score`, `punycode`, `mixed_scripts`, `confusable_chars`, `details`. IDN homograph on an otherwise-SAFE page → escalated to SUSPICIOUS.
-6. **Merge verdicts** — most severe wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; crypto miners found → at least SUSPICIOUS; IDN homograph found → at least SUSPICIOUS; otherwise SAFE. If urlscan.io failed entirely AND GSB has no signal → UNAVAILABLE
-7. **Check internal URLRules** — BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (final say)
-8. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `RedirectChain`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`, `ScriptAnalysis`
+2. **urlscan.io submission** — each URL submitted to `POST urlscan.io/api/v1/scan/` with `visibility: public`; runs concurrently with RDAP per URL
+3. **Poll for result** — waits 10s, then polls every 5s up to 12 attempts (70s total timeout); raw result preserved for downstream analysis
+4. **RDAP domain age** — `check_domain_rdap(url)` queries `rdap.org` for domain registration info; runs concurrently with urlscan.io; non-blocking (failures return `error` key); `DomainAgeDays` derived from `age.years/months/days` breakdown
+5. **Redirect chain** — `extract_redirect_chain(initial_url, raw_result)` builds ordered list of 3xx hops from `data.requests` in the urlscan.io raw result; ~0ms
+6. **Script-level analysis** — `analyze_scripts(raw_result)` parses `data.lists.scripts` from urlscan.io result for: ad networks, crypto miners, known malicious script domains, IP-hosted scripts, mixed content (HTTP on HTTPS), free-hosting abuse, obfuscated filenames, trusted CDN recognition, technology stack (Wappalyzer via `meta.processors.wappa`), and a composite `script_risk_score` (0–100); ~0ms. Crypto miners or high `script_risk_score` on an otherwise-SAFE page → escalated to SUSPICIOUS.
+7. **Homograph detection** — `detect_homograph_risk(url)` uses `unicodedata` (stdlib) to classify each domain character by Unicode script. Flags domains that mix Latin with confusable scripts (Cyrillic, Greek, Armenian, Cherokee, Georgian). Returns `is_homograph`, `risk_score`, `punycode`, `mixed_scripts`, `confusable_chars`, `details`; ~0ms. IDN homograph on an otherwise-SAFE page → escalated to SUSPICIOUS.
+8. **Merge verdicts** — most severe wins: GSB `MALWARE/SOCIAL_ENGINEERING` → MALICIOUS; GSB `UNWANTED_SOFTWARE/POTENTIALLY_HARMFUL_APPLICATION` → SUSPICIOUS; urlscan.io `malicious: true` → MALICIOUS; urlscan.io `score ≥ 50` → SUSPICIOUS; `malicious_scripts` found → MALICIOUS; crypto miners or IDN homograph found → at least SUSPICIOUS; otherwise SAFE.
+9. **Check internal URLRules** — BLACKLIST overrides to MALICIOUS, WHITELIST overrides to SAFE (final say)
+10. **Save to `ScanHistory`** — stores `InitialURL`, `RedirectURL`, `RedirectChain`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `ScreenshotURL`, `ScriptAnalysis`, `HomographAnalysis`
 
 **Response shape per URL:**
 ```json
