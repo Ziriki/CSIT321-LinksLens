@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
-from utils import get_fullname
+from utils import get_fullname, get_or_404
 # Import custom files
 import models
 import schemas
@@ -40,20 +40,8 @@ def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), 
 #########################################################
 @router.get("/{log_id}", response_model=schemas.ActionHistoryResponse)
 def read_log(log_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    log = db.query(models.ActionHistory).filter(models.ActionHistory.LogID == log_id).first()
-    if not log:
-        raise HTTPException(status_code=404, detail="Log entry not found")
+    log = get_or_404(db.query(models.ActionHistory).filter(models.ActionHistory.LogID == log_id).first(), "Log entry not found")
     return log
-
-#########################################################
-# UPDATE function for ActionHistory table
-#########################################################
-# NO UPDATE FUNCTION! Audit logs must remain immutable.
-
-#########################################################
-# DELETE function for ActionHistory table
-#########################################################
-# NO DELETE FUNCTION! Audit logs must remain their availability.
 
 #########################################################
 # LIST function for ActionHistory table

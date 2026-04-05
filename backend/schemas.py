@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 import enum
 from models import RequestStatus, ListTypeEnum, ScanStatusEnum, SuggestedStatusEnum
@@ -209,12 +209,13 @@ class URLRulesResponse(URLRulesBase):
 class ScanHistoryBase(BaseModel):
     InitialURL: str
     RedirectURL: Optional[str] = None
+    RedirectChain: Optional[List[str]] = None
     StatusIndicator: Optional[ScanStatusEnum] = ScanStatusEnum.PENDING
     DomainAgeDays: Optional[int] = None
     ServerLocation: Optional[str] = None
     ScreenshotURL: Optional[str] = None
-    RawText: Optional[str] = None
-    AssociatedPerson: Optional[str] = None
+    ScriptAnalysis: Optional[dict] = None
+    HomographAnalysis: Optional[dict] = None
 
 # Used when initiating a new scan
 class ScanHistoryCreate(ScanHistoryBase):
@@ -223,12 +224,11 @@ class ScanHistoryCreate(ScanHistoryBase):
 # Used when the scanning engine finishes and updates the record
 class ScanHistoryUpdate(BaseModel):
     RedirectURL: Optional[str] = None
+    RedirectChain: Optional[List[str]] = None
     StatusIndicator: Optional[ScanStatusEnum] = None
     DomainAgeDays: Optional[int] = None
     ServerLocation: Optional[str] = None
     ScreenshotURL: Optional[str] = None
-    RawText: Optional[str] = None
-    AssociatedPerson: Optional[str] = None
 
 # Used for Responses
 class ScanHistoryResponse(ScanHistoryBase):
@@ -291,3 +291,11 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     Token: str
     NewPassword: str = Field(..., min_length=8)
+
+class UserRegistrationRequest(BaseModel):
+    EmailAddress: EmailStr
+    Password: str = Field(..., min_length=8)
+    FullName: str
+
+class VerifyEmailRequest(BaseModel):
+    Token: str

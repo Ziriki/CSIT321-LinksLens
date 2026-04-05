@@ -1,7 +1,11 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable
 
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
+import requests
 import uvicorn
 import os
 import time
@@ -40,6 +44,14 @@ if retries == 0:
 
 app = FastAPI(title="LinksLens API")
 
+# Allow the static marketing site to call the password reset endpoints from the browser
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://linkslens.com"],
+    allow_methods=["POST"],
+    allow_headers=["Content-Type"],
+)
+
 # Connect the UserRole Controller to the main app
 app.include_router(user_role_router)
 app.include_router(user_account_router)
@@ -62,37 +74,108 @@ def read_root():
         "documentation": "/docs"  # FastAPI automatically generates this
     }
 
+def _check_component(name: str, check_fn: Callable[[], None]) -> dict:
+    try:
+        check_fn()
+        return {"name": name, "status": "operational"}
+    except Exception as e:
+        return {"name": name, "status": "outage", "detail": str(e)}
+
+
 @app.get("/api/health")
 def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    """System health dashboard data — Admin only."""
-    # Database connectivity check
-    try:
-        db.execute(text("SELECT 1"))
-        db_status = "Connected"
-    except Exception:
-        db_status = "Disconnected"
+    """System health dashboard — Admin only."""
 
-    total_users = db.query(models.UserAccount).count()
-    active_users = db.query(models.UserAccount).filter(models.UserAccount.IsActive == True).count()
-    total_scans = db.query(models.ScanHistory).count()
-    pending_blacklist = db.query(models.BlacklistRequest).filter(
+    # --- Component checks (run in parallel to minimise latency) ---
+
+    def check_database():
+        db.execute(text("SELECT 1"))
+
+    def check_gsb():
+        gsb_key = os.getenv("GOOGLE_SAFE_BROWSING_API_KEY")
+        if not gsb_key:
+            raise ValueError("API key not configured")
+        resp = requests.post(
+            "https://safebrowsing.googleapis.com/v4/threatMatches:find",
+            params={"key": gsb_key},
+            json={
+                "client": {"clientId": "linkslens-health", "clientVersion": "1.0"},
+                "threatInfo": {
+                    "threatTypes": ["MALWARE"],
+                    "platformTypes": ["ANY_PLATFORM"],
+                    "threatEntryTypes": ["URL"],
+                    "threatEntries": [{"url": "https://example.com"}],
+                },
+            },
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            raise ValueError(f"HTTP {resp.status_code}")
+
+    def check_urlscan():
+        urlscan_key = os.getenv("URLSCAN_API_KEY")
+        if not urlscan_key:
+            raise ValueError("API key not configured")
+        resp = requests.get(
+            "https://urlscan.io/api/v1/search/?q=domain:example.com&size=1",
+            headers={"API-Key": urlscan_key},
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            raise ValueError(f"HTTP {resp.status_code}")
+
+    def check_resend():
+        if not os.getenv("RESEND_KEY"):
+            raise ValueError("API key not configured")
+
+    checks = [
+        ("Database",             check_database),
+        ("Google Safe Browsing", check_gsb),
+        ("urlscan.io",           check_urlscan),
+        ("Email (Resend)",       check_resend),
+    ]
+    with ThreadPoolExecutor() as executor:
+        components = list(executor.map(lambda c: _check_component(c[0], c[1]), checks))
+
+    overall = "outage" if any(c["status"] == "outage" for c in components) else "operational"
+
+    # --- Operational metrics (work queues) ---
+
+    pending_blacklist_requests = db.query(models.BlacklistRequest).filter(
         models.BlacklistRequest.Status == models.RequestStatus.PENDING
     ).count()
+
     unresolved_scan_feedback = db.query(models.ScanFeedback).filter(
         models.ScanFeedback.IsResolved == False
     ).count()
-    total_url_rules = db.query(models.URLRules).count()
-    total_app_feedback = db.query(models.AppFeedback).count()
+
+    unread_app_feedback = db.query(models.AppFeedback).count()
+
+    scans_today = db.query(models.ScanHistory).filter(
+        func.date(models.ScanHistory.ScannedAt) == func.current_date()
+    ).count()
+
+    url_rule_counts = dict(
+        db.query(models.URLRules.ListType, func.count(models.URLRules.RuleID))
+        .group_by(models.URLRules.ListType)
+        .all()
+    )
 
     return {
-        "database": db_status,
-        "total_users": total_users,
-        "active_users": active_users,
-        "total_scans": total_scans,
-        "pending_blacklist_requests": pending_blacklist,
-        "unresolved_scan_feedback": unresolved_scan_feedback,
-        "total_url_rules": total_url_rules,
-        "total_app_feedback": total_app_feedback,
+        "overall_status": overall,
+        "components": components,
+        "pending_work": {
+            "blacklist_requests_pending_review": pending_blacklist_requests,
+            "scan_feedback_pending_review": unresolved_scan_feedback,
+            "app_feedback_unreviewed": unread_app_feedback,
+        },
+        "activity": {
+            "scans_today": scans_today,
+        },
+        "url_rules": {
+            "blacklisted_domains": url_rule_counts.get(models.ListTypeEnum.BLACKLIST, 0),
+            "whitelisted_domains": url_rule_counts.get(models.ListTypeEnum.WHITELIST, 0),
+        },
     }
 
 if __name__ == "__main__":

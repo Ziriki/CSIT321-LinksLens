@@ -3,6 +3,7 @@ import { router } from "expo-router"
 import { View, Text, Pressable, TextInput } from "react-native"
 import type { RiskLevel } from "../lib/types"
 import { ChevronLeft } from "lucide-react-native"
+import { useIconColor } from "../lib/theme"
 
 function cx(...classes: (string | boolean | undefined | null)[]) {
   return classes.filter(Boolean).join(" ")
@@ -250,13 +251,14 @@ export function ScreenHeader({
   showBack?: boolean
   rightAction?: React.ReactNode
 }) {
+  const color = useIconColor()
 
   return (
     <View className="flex-row items-center justify-between border-b border-border bg-background px-4 py-3">
       <View className="w-10">
         {showBack ? (
           <Pressable onPress={() => router.back()} className="items-start">
-            <ChevronLeft size={24} color="black" />
+            <ChevronLeft size={24} color={color} />
           </Pressable>
         ) : null}
       </View>

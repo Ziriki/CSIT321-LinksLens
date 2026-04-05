@@ -60,6 +60,29 @@ _MALICIOUS_THRESHOLD  = 50   # weighted score ≥ 50 → MALICIOUS
 _SUSPICIOUS_THRESHOLD = 30   # weighted score ≥ 30 → SUSPICIOUS
 
 #########################################################
+# Helper: Get domain age in days via WHOIS
+#########################################################
+def get_domain_age_days(domain: str) -> int | None:
+    """
+    Look up the domain creation date via WHOIS and return its age in days.
+    Returns None if the lookup fails or the creation date is unavailable.
+    Non-blocking — failures must never abort the scan pipeline.
+    """
+    try:
+        info = whois.whois(domain)
+        creation_date = info.creation_date
+        if isinstance(creation_date, list):
+            creation_date = creation_date[0]
+        if not isinstance(creation_date, datetime):
+            return None
+        if creation_date.tzinfo is None:
+            creation_date = creation_date.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - creation_date).days
+    except Exception:
+        return None
+
+
+#########################################################
 # Helper: Check URLs against Google Safe Browsing v4
 #########################################################
 def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
@@ -214,6 +237,43 @@ def poll_result(uuid: str) -> dict | None:
 
     # All attempts exhausted
     return None
+
+
+#########################################################
+# Helper: Extract the full redirect chain from urlscan.io result
+#########################################################
+def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
+    """
+    Build an ordered list of redirect URLs from urlscan.io result data.
+    Parses data.requests for 3xx responses to reconstruct the chain.
+    Returns an empty list if there were no redirects or the data is unavailable.
+    Non-blocking — failures must never abort the scan pipeline.
+    """
+    if not raw_result:
+        return []
+
+    final_url = raw_result.get("page", {}).get("url", "")
+    if not final_url or final_url == initial_url:
+        return []
+
+    try:
+        requests_data = raw_result.get("data", {}).get("requests", [])
+        chain = []
+        for req in requests_data:
+            response_obj = req.get("response", {}).get("response", {})
+            status = response_obj.get("status", 0)
+            if 300 <= status < 400:
+                url = response_obj.get("url", "")
+                if url and url not in chain:
+                    chain.append(url)
+
+        if chain and final_url not in chain:
+            chain.append(final_url)
+
+        return chain if chain else [final_url]
+    except Exception:
+        # Fallback: just the final URL so we always return something useful
+        return [final_url]
 
 
 #########################################################

@@ -1,13 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import secrets
 import os
-import resend
 from dotenv import load_dotenv
 
-from utils import get_fullname, get_password_hash
+from utils import get_client_ip, get_fullname, get_or_404, get_password_hash, hash_token, normalize_expiry, send_email
 
 load_dotenv()
 
@@ -57,9 +56,7 @@ def read_account(account_id: int, db: Session = Depends(get_db), current_user: d
     # Regular users can only view their own account; admins can view any
     if current_user["role_id"] not in (1, 2) and account_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own account")
-    account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
+    account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
     return account
 
 #########################################################
@@ -77,9 +74,7 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
         if "RoleID" in update_data or "IsActive" in update_data:
             raise HTTPException(status_code=403, detail="Only administrators can change roles or account status")
 
-    db_account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
-    if not db_account:
-        raise HTTPException(status_code=404, detail="Account not found")
+    db_account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
 
     # If updating email, check if the new email is taken by someone else
     if account_update.EmailAddress:
@@ -92,9 +87,7 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
         if not db.query(models.UserRole).filter(models.UserRole.RoleID == account_update.RoleID).first():
             raise HTTPException(status_code=400, detail="Invalid RoleID provided")
 
-    # Extract update data, handle password hashing separately if provided
-    update_data = account_update.model_dump(exclude_unset=True)
-    
+    # Handle password hashing separately if provided
     if "Password" in update_data:
         db_account.PasswordHash = get_password_hash(update_data.pop("Password"))
 
@@ -110,10 +103,8 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
 #########################################################
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    db_account = db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first()
-    if not db_account:
-        raise HTTPException(status_code=404, detail="Account not found")
-    
+    db_account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
+
     db_account.IsActive = False
     db.commit()
     return None
@@ -159,49 +150,133 @@ def list_accounts(
     ]
 
 #########################################################
+# REGISTER - Create Account + Send Verification Email
+#########################################################
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get_db)):
+    if db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == request.EmailAddress).first():
+        raise HTTPException(status_code=400, detail="Registration failed. Please check your details.")
+
+    hashed_pwd = get_password_hash(request.Password)
+    db_account = models.UserAccount(
+        EmailAddress=request.EmailAddress,
+        PasswordHash=hashed_pwd,
+        RoleID=3,
+        IsActive=False,
+    )
+    db.add(db_account)
+    db.flush()  # needed to get auto-generated UserID
+
+    db.add(models.UserDetails(UserID=db_account.UserID, FullName=request.FullName))
+
+    raw_token = secrets.token_urlsafe(32)
+    db.add(models.EmailVerificationToken(
+        Token=hash_token(raw_token),
+        UserID=db_account.UserID,
+        ExpiresAt=datetime.now(timezone.utc) + timedelta(hours=24),
+        IsUsed=False,
+    ))
+
+    verify_link = f"https://linkslens.com/verify-email?token={raw_token}"
+    email_html = f"""
+    <h2>Welcome to LinksLens!</h2>
+    <p>Hi {request.FullName}, thanks for signing up. Please verify your email address to activate your account.</p>
+    <p>This link expires in 24 hours.</p>
+    <a href="{verify_link}" style="display:inline-block; padding:10px 20px; background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">Verify Email Address</a>
+    """
+
+    try:
+        send_email(request.EmailAddress, "Verify your LinksLens account", email_html)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to send verification email. Please try again.")
+
+    db.commit()
+    return {"message": "Account created. Please check your email to verify your account."}
+
+
+#########################################################
+# VERIFY EMAIL - Activate Account
+#########################################################
+@router.post("/verify-email")
+def verify_email(request: schemas.VerifyEmailRequest, db: Session = Depends(get_db)):
+    token_record = db.query(models.EmailVerificationToken).filter(
+        models.EmailVerificationToken.Token == hash_token(request.Token)
+    ).first()
+
+    if not token_record or token_record.IsUsed:
+        raise HTTPException(status_code=400, detail="Invalid or already used verification link.")
+
+    if datetime.now(timezone.utc) > normalize_expiry(token_record.ExpiresAt):
+        raise HTTPException(status_code=400, detail="Verification link has expired. Please register again.")
+
+    user = token_record.user
+    if not user:
+        raise HTTPException(status_code=404, detail="User account no longer exists.")
+    user.IsActive = True
+    token_record.IsUsed = True
+    db.commit()
+
+    return {"message": "Email verified successfully. You can now log in."}
+
+
+#########################################################
 # FORGOT PASSWORD - Create Token Record & Send Email
 #########################################################
 @router.post("/forgot-password")
-def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Request, db: Session = Depends(get_db)):
     generic_message = {"message": "If that email exists in our system, a password reset link has been sent."}
     user = db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == request.EmailAddress).first()
 
     if not user:
         return generic_message
 
-    # Invalidate any existing unused tokens for this user
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+    email_recent = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.UserID == user.UserID,
+        models.PasswordResetToken.CreatedAt >= one_hour_ago,
+    ).count()
+    if email_recent >= 3:
+        return generic_message
+
+    client_ip = get_client_ip(http_request)
+    ip_recent = db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.RequestIP == client_ip,
+        models.PasswordResetToken.CreatedAt >= one_hour_ago,
+    ).count()
+    if ip_recent >= 10:
+        return generic_message
+
     db.query(models.PasswordResetToken).filter(
         models.PasswordResetToken.UserID == user.UserID,
-        models.PasswordResetToken.IsUsed == False
+        models.PasswordResetToken.IsUsed == False,
     ).update({"IsUsed": True})
 
-    token = secrets.token_urlsafe(32)
-    expiry_time = datetime.now(timezone.utc) + timedelta(minutes=15)
-
-    db_token = models.PasswordResetToken(
-        Token=token,
+    raw_token = secrets.token_urlsafe(32)
+    db.add(models.PasswordResetToken(
+        Token=hash_token(raw_token),
         UserID=user.UserID,
-        ExpiresAt=expiry_time,
-        IsUsed=False
-    )
-    db.add(db_token)
+        ExpiresAt=datetime.now(timezone.utc) + timedelta(minutes=15),
+        IsUsed=False,
+        RequestIP=client_ip,
+    ))
     db.flush()
 
-    reset_link = f"https://linkslens.com/reset-password?token={token}"
+    reset_link = f"https://linkslens.com/reset-password?token={raw_token}"
     email_html = f"""
     <h2>LinksLens Password Reset</h2>
-    <p>You requested a password reset. Click the link below to choose a new password. This link expires in 15 minutes.</p>
-    <a href="{reset_link}" style="display:inline-block; padding:10px 20px; background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">Reset Password</a>
+    <p>You requested a password reset. Click the link below to choose a new password.
+    This link expires in 15 minutes.</p>
+    <a href="{reset_link}" style="display:inline-block; padding:10px 20px;
+    background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">
+    Reset Password</a>
+    <p style="margin-top:16px; font-size:13px; color:#555;">
+    If you did not request this, your password has not been changed. You can safely
+    ignore this email.</p>
     """
 
-    resend.api_key = os.getenv("RESEND_KEY")
     try:
-        resend.Emails.send({
-            "from": "LinksLens Security <noreply@linkslens.com>",
-            "to": [user.EmailAddress],
-            "subject": "Reset your LinksLens Password",
-            "html": email_html
-        })
+        send_email(user.EmailAddress, "Reset your LinksLens Password", email_html, from_name="LinksLens Security")
     except Exception:
         db.rollback()
         return generic_message
@@ -215,7 +290,7 @@ def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depend
 @router.post("/reset-password")
 def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
     token_record = db.query(models.PasswordResetToken).filter(
-        models.PasswordResetToken.Token == request.Token
+        models.PasswordResetToken.Token == hash_token(request.Token)
     ).first()
 
     if not token_record:
@@ -224,12 +299,7 @@ def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(
     if token_record.IsUsed:
         raise HTTPException(status_code=400, detail="This token has already been used.")
 
-    current_time = datetime.now(timezone.utc)
-    expiry_time = token_record.ExpiresAt
-    if expiry_time.tzinfo is None:
-        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
-
-    if current_time > expiry_time:
+    if datetime.now(timezone.utc) > normalize_expiry(token_record.ExpiresAt):
         raise HTTPException(status_code=400, detail="Reset token has expired. Please request a new one.")
 
     user = token_record.user
@@ -238,6 +308,11 @@ def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(
 
     user.PasswordHash = get_password_hash(request.NewPassword)
     token_record.IsUsed = True
+
+    db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.UserID == token_record.UserID,
+        models.PasswordResetToken.IsUsed == False,
+    ).update({"IsUsed": True})
 
     db.commit()
 

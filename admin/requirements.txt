@@ -4,3 +4,5 @@ pandas
 sqlalchemy
 pymysql
 pyjwt
+folium
+streamlit-folium
