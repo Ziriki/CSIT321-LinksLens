@@ -1,9 +1,5 @@
 fastapi
-<<<<<<< Updated upstream
 uvicorn[standard]
-=======
-passlib[bcrypt]
->>>>>>> Stashed changes
 pydantic
 pydantic[email]
 requests

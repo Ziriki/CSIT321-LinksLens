@@ -519,7 +519,6 @@ def process_result(uuid: str | None, raw_result: dict | None) -> dict:
 #########################################################
 # Helper: Return the more severe of two status strings
 #########################################################
-<<<<<<< Updated upstream
 def merge_status(gsb_status: str, urlscan_status: str) -> str:
     if _STATUS_SEVERITY.get(gsb_status, 0) >= _STATUS_SEVERITY.get(urlscan_status, 0):
         return gsb_status
@@ -778,17 +777,6 @@ def _run_urlscan(url: str) -> tuple[str | None, dict | None]:
     uuid = submission.get("uuid") if submission else None
     raw_result = poll_result(uuid) if uuid else None
     return uuid, raw_result
-=======
-def run_urlscan(url: str) -> dict:
-    """Submit, poll and process a single URL through urlscan.io. Returns fallback on any failure.
-    Includes a '_raw' key with the full urlscan.io JSON for downstream analysis."""
-    submission = submit_scan(url)
-    uuid = submission.get("uuid") if submission else None
-    raw_result = poll_result(uuid) if uuid else None
-    result = process_result(uuid, raw_result)
-    result["_raw"] = raw_result  # preserved for analyze_scripts / extract_redirect_chain
-    return result
->>>>>>> Stashed changes
 
 
 #########################################################
@@ -802,180 +790,12 @@ def _fetch_external_data(url: str) -> tuple[str | None, dict | None, int | None]
     Returns (uuid, raw_result, domain_age_days).
     """
     domain = urlparse(url).netloc
-<<<<<<< Updated upstream
     with ThreadPoolExecutor(max_workers=2) as executor:
         urlscan_future = executor.submit(_run_urlscan, url)
         whois_future = executor.submit(get_domain_age_days, domain)
         uuid, raw_result = urlscan_future.result()
         domain_age_days = whois_future.result()
     return uuid, raw_result, domain_age_days
-=======
-    db_gen = get_db()
-    db = next(db_gen)
-    try:
-        url_rule = db.query(models.URLRules).filter(
-            models.URLRules.URLDomain == domain
-        ).first()
-
-        approved_blacklist = db.query(models.BlacklistRequest).filter(
-            models.BlacklistRequest.URLDomain == domain,
-            models.BlacklistRequest.Status == models.RequestStatus.APPROVED
-        ).first()
-
-        return {
-            "domain": domain,
-            "url_rule_type": url_rule.ListType.value if url_rule else None,
-            "is_approved_blacklist": approved_blacklist is not None,
-        }
-    finally:
-        next(db_gen, None)
-
-
-#########################################################
-# Helper: Query rdap.org for domain registration info
-#########################################################
-def check_domain_rdap(url: str) -> dict:
-    """
-    Query rdap.org for the registration details of the URL's domain.
-
-    Returns:
-        domain        — bare hostname (port stripped)
-        registration  — ISO-8601 registration date or None
-        expiration    — ISO-8601 expiration date or None
-        last_changed  — ISO-8601 last-changed date or None
-        age           — { years, months, days } since registration, or None
-        error         — human-readable reason when the lookup could not complete
-    """
-    domain = urlparse(url).netloc.split(":")[0]
-    # RDAP operates on registrable domains — strip the leading www. if present
-    if domain.startswith("www."):
-        domain = domain[4:]
-
-    def _fail(reason: str) -> dict:
-        return {
-            "domain": domain,
-            "registration": None,
-            "expiration": None,
-            "last_changed": None,
-            "age": None,
-            "error": reason,
-        }
-
-    try:
-        response = requests.get(
-            f"https://rdap.org/domain/{domain}",
-            headers={"Accept": "application/json"},
-            timeout=15,
-        )
-    except requests.RequestException as e:
-        return _fail(f"RDAP request failed: {str(e)}")
-
-    if response.status_code == 404:
-        return _fail(f"Domain not found in RDAP registry: {domain}")
-    if response.status_code != 200:
-        return _fail(f"RDAP registry returned HTTP {response.status_code}")
-
-    try:
-        data = response.json()
-    except Exception:
-        return _fail("RDAP response was not valid JSON")
-
-    dates: dict[str, str | None] = {"registration": None, "expiration": None, "last_changed": None}
-    for event in data.get("events", []):
-        action = event.get("eventAction", "").lower().strip()
-        date_str = event.get("eventDate")
-        if action == "registration":
-            dates["registration"] = date_str
-        elif action == "expiration":
-            dates["expiration"] = date_str
-        elif action == "last changed":
-            dates["last_changed"] = date_str
-
-    age = None
-    if dates["registration"]:
-        try:
-            reg_dt     = datetime.fromisoformat(dates["registration"].replace("Z", "+00:00"))
-            delta      = datetime.now(timezone.utc) - reg_dt
-            total_days = delta.days
-            years      = total_days // 365
-            months     = (total_days % 365) // 30
-            days       = (total_days % 365) % 30
-            age = {"years": years, "months": months, "days": days}
-        except Exception:
-            age = None
-
-    return {
-        "domain": domain,
-        "registration": dates["registration"],
-        "expiration": dates["expiration"],
-        "last_changed": dates["last_changed"],
-        "age": age,
-        "error": None,
-    }
-
-
-#########################################################
-# Helper: Compare GSB, urlscan and DB results
-#########################################################
-def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict) -> str:
-    """
-    Derive a final_status by weighing all three verdict sources.
-
-    Step 1 — Convert raw signals to 0-100 scores:
-      GSB score:
-        Any MALWARE / SOCIAL_ENGINEERING threat type  → 100
-        Any UNWANTED_SOFTWARE / POTENTIALLY_HARMFUL   → 60
-        No threats flagged                            → 0
-
-      urlscan score: numeric field from result (0-100)
-
-    Step 2 — Weighted combination:
-      weighted_score = (gsb_score × 0.55) + (urlscan_score × 0.45)
-
-    Step 3 — Map to api_status:
-      weighted_score ≥ 50 → MALICIOUS
-      weighted_score ≥ 30 → SUSPICIOUS
-      weighted_score < 30 → SAFE
-
-    Step 4 — DB rule override (authoritative — admin/moderator has final say):
-      URLRules BLACKLIST or approved BlacklistRequest → MALICIOUS
-      URLRules WHITELIST                              → SAFE
-    """
-    # Step 1: derive scores
-    threat_types = gsb.get("threat_types", [])
-    if any(t in _MALICIOUS_THREATS for t in threat_types):
-        gsb_score = 100
-    elif any(t in _SUSPICIOUS_THREATS for t in threat_types):
-        gsb_score = 60
-    else:
-        gsb_score = 0
-
-    urlscan_score = urlscan_result.get("score") or 0
-
-    # Step 2: weighted combination
-    weighted_score = (gsb_score * _GSB_WEIGHT) + (urlscan_score * _URLSCAN_WEIGHT)
-
-    # Step 3: map to api_status
-    if weighted_score >= _MALICIOUS_THRESHOLD:
-        api_status = "MALICIOUS"
-    elif weighted_score >= _SUSPICIOUS_THRESHOLD:
-        api_status = "SUSPICIOUS"
-    else:
-        api_status = "SAFE"
-
-    # Step 4: DB rule override
-    url_rule = blacklist_check.get("url_rule_type")
-    is_approved_blacklist = blacklist_check.get("is_approved_blacklist", False)
-
-    if url_rule == "BLACKLIST" or is_approved_blacklist:
-        final_status = "MALICIOUS"
-    elif url_rule == "WHITELIST":
-        final_status = "SAFE"
-    else:
-        final_status = api_status
-
-    return final_status
->>>>>>> Stashed changes
 
 
 #########################################################
@@ -984,23 +804,10 @@ def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict
 @router.post("")
 def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """
-<<<<<<< Updated upstream
     Accept a single URL string or a list of URL strings.
     Each URL is checked via Google Safe Browsing v4 first, then submitted to urlscan.io.
     Results are merged (most severe verdict wins) and saved to ScanHistory.
     Always returns a list — one entry per URL submitted.
-=======
-    For each URL:
-      1. GSB, urlscan.io (with raw result), DB blacklist, RDAP — concurrent
-      2. extract_redirect_chain()    — from urlscan.io raw result, ~0ms
-      3. analyze_scripts()           — urlscan.io-based script classification, ~0ms
-      4. detect_homograph_risk()     — stdlib unicodedata IDN analysis, ~0ms
-      5. compare_async_results()     — weighted GSB + urlscan + DB rule override
-      6. Escalation rules            — crypto miners / homograph / malicious scripts
-      7. domain_age_days             — derived from RDAP result, no extra network call
-      8. Save all fields to DB       — RedirectChain, DomainAgeDays, ScriptAnalysis, HomographAnalysis
-      9. Return response matching CLAUDE.md spec shape
->>>>>>> Stashed changes
     """
     urls = request.urls
 
@@ -1035,27 +842,16 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         else:
             final_status = merge_status(gsb["gsb_status"], urlscan_result["urlscan_status"])
 
-<<<<<<< Updated upstream
         initial_url_resolved = urlscan_result["initial_url"] or url
         domain = urlparse(initial_url_resolved).netloc
         redirect_chain = extract_redirect_chain(initial_url_resolved, raw_result)
         script_analysis = analyze_scripts(raw_result)
         homograph_analysis = detect_homograph_risk(initial_url_resolved)
-=======
-        for url in urls:
-            # Step 1: Fire all four checks concurrently
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                gsb_future       = executor.submit(check_google_safe_browsing, [url])
-                urlscan_future   = executor.submit(run_urlscan, url)
-                blacklist_future = executor.submit(check_blacklist_db, url)
-                rdap_future      = executor.submit(check_domain_rdap, url)
->>>>>>> Stashed changes
 
         # Crypto-mining scripts on the page → escalate to at least SUSPICIOUS
         if script_analysis["crypto_miners"] and final_status == "SAFE":
             final_status = "SUSPICIOUS"
 
-<<<<<<< Updated upstream
         # IDN homograph detected on an otherwise-safe page → escalate to SUSPICIOUS
         if homograph_analysis["is_homograph"] and final_status == "SAFE":
             final_status = "SUSPICIOUS"
@@ -1106,89 +902,5 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             "script_analysis": script_analysis,
             "homograph_analysis": homograph_analysis,
         })
-=======
-            # Pop the internal transport key before passing urlscan_result downstream
-            raw_result  = urlscan_result.pop("_raw", None)
-            initial_url = urlscan_result["initial_url"] or url
-
-            # Steps 2-4: Post-process using data already in memory (~0ms each, no network)
-            redirect_chain     = extract_redirect_chain(initial_url, raw_result)
-            script_analysis    = analyze_scripts(raw_result, initial_url)
-            homograph_analysis = detect_homograph_risk(initial_url)
-
-            # Step 5: Weighted verdict from GSB + urlscan scores + DB rule override
-            final_status = compare_async_results(gsb, urlscan_result, blacklist_check)
-
-            # Step 6: Escalation — only when DB rules haven't already set MALICIOUS
-            if final_status != "MALICIOUS":
-                if script_analysis["malicious_scripts"]:
-                    final_status = "MALICIOUS"
-                elif (
-                    script_analysis["crypto_miners"]
-                    or homograph_analysis["is_homograph"]
-                    or script_analysis["script_risk_score"] >= 70
-                ) and final_status == "SAFE":
-                    final_status = "SUSPICIOUS"
-
-            # Step 7: Compute domain age from RDAP breakdown (years/months/days already parsed)
-            rdap_age = domain_info.get("age")
-            domain_age_days = None
-            if rdap_age:
-                domain_age_days = (
-                    rdap_age.get("years", 0) * 365
-                    + rdap_age.get("months", 0) * 30
-                    + rdap_age.get("days", 0)
-                )
-
-            # Step 8: Save to ScanHistory with all available fields
-            scan_record = models.ScanHistory(
-                UserID=current_user["user_id"],
-                InitialURL=initial_url,
-                RedirectURL=urlscan_result["redirect_url"],
-                RedirectChain=redirect_chain if redirect_chain else None,
-                StatusIndicator=models.ScanStatusEnum(final_status),
-                DomainAgeDays=domain_age_days,
-                ServerLocation=urlscan_result["server_location"],
-                ScreenshotURL=urlscan_result["screenshot_url"],
-                ScriptAnalysis=script_analysis,
-                HomographAnalysis=homograph_analysis,
-            )
-            db.add(scan_record)
-            db.commit()
-            db.refresh(scan_record)
-
-            # Step 9: Return response matching CLAUDE.md spec shape
-            scan_results.append({
-                "scan_id": scan_record.ScanID,
-                "user_id": scan_record.UserID,
-                "uuid": urlscan_result["uuid"],
-                "initial_url": scan_record.InitialURL,
-                "redirect_url": scan_record.RedirectURL,
-                "redirect_chain": scan_record.RedirectChain or [],
-                "status_indicator": scan_record.StatusIndicator.value,
-                "score": urlscan_result["score"],
-                "domain_age_days": scan_record.DomainAgeDays,
-                "server_location": scan_record.ServerLocation,
-                "ip_address": urlscan_result["ip_address"],
-                "screenshot_url": scan_record.ScreenshotURL,
-                "brands": urlscan_result["brands"],
-                "tags": urlscan_result["tags"],
-                "result_url": urlscan_result["result_url"],
-                "scanned_at": scan_record.ScannedAt.isoformat() if scan_record.ScannedAt else None,
-                "gsb_flagged": gsb["flagged"],
-                "gsb_threat_types": gsb["threat_types"],
-                "script_analysis": script_analysis,
-                "homograph_analysis": homograph_analysis,
-            })
-
-    except HTTPException:
-        raise
-
-    except SyntaxError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid request syntax: {str(e)}")
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
->>>>>>> Stashed changes
 
     return scan_results
