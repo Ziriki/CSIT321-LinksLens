@@ -3,6 +3,10 @@ import { useColorScheme } from "nativewind"
 
 export const THEME_KEY = "app_theme"
 
+export function getBackgroundColor(scheme: string | undefined | null): string {
+  return scheme === "dark" ? "#0f172a" : "#ffffff"
+}
+
 export const lightVars = vars({
   "--background": "#ffffff",
   "--foreground": "#171717",

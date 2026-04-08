@@ -99,7 +99,7 @@ export default function ReportScan() {
       <View className="border-t border-border px-4 py-4">
         <AppButton fullWidth disabled={loading} onPress={handleSubmit}>
           <View className="flex-row items-center justify-center">
-            <Flag size={16} />
+            <Flag size={16} color="#ffffff" />
             <Text className="ml-2">{loading ? "Submitting..." : "Submit Report"}</Text>
           </View>
         </AppButton>
