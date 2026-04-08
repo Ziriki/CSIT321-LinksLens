@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { View, Text, ScrollView, Image, Linking, Pressable, Alert } from "react-native"
 import { captureRef } from "react-native-view-shot"
 import * as MediaLibrary from "expo-media-library"
@@ -24,8 +24,69 @@ import {
 } from "../components/ui-components"
 import type { ScanResponse } from "../lib/api"
 import { fetchPreferences, getCurrentUserId } from "../lib/api"
-import { BROWSER_SCHEMES } from "../lib/browsers"
+import { BROWSER_SCHEMES, type BrowserId } from "../lib/browsers"
 import { statusToRisk, type RiskLevel } from "../lib/types"
+import { useIconColor } from "../lib/theme"
+
+/**
+ * Derives a confidence percentage (15–97) from how many independent signals
+ * agree with the final verdict. Each signal is weighted by its authority:
+ *   GSB (40) > urlscan score (35) > script analysis (15) > homograph (10)
+ * Signals that contradict the verdict lower the score; missing signals
+ * (script analysis unavailable, homograph N/A) reduce the denominator.
+ */
+function computeConfidence(scan: ScanResponse): number {
+  if (scan.status_indicator === "UNAVAILABLE") return 15
+
+  const status = scan.status_indicator
+  let earned = 0
+  let total = 0
+
+  // GSB — most authoritative signal (weight 40)
+  total += 40
+  if (status === "SAFE" && !scan.gsb_flagged) earned += 40
+  else if (status !== "SAFE" && scan.gsb_flagged) earned += 40
+  else if (status !== "SAFE" && !scan.gsb_flagged) earned += 15
+
+  // urlscan.io score alignment (weight 35)
+  total += 35
+  const urlscanScore = scan.score ?? 0
+  if (status === "MALICIOUS") {
+    if (urlscanScore >= 70) earned += 35
+    else if (urlscanScore >= 50) earned += 25
+    else if (urlscanScore >= 30) earned += 15
+    else earned += 5
+  } else if (status === "SUSPICIOUS") {
+    if (urlscanScore >= 30 && urlscanScore < 70) earned += 30
+    else if (urlscanScore >= 15) earned += 20
+    else earned += 10
+  } else {
+    // SAFE
+    if (urlscanScore < 20) earned += 35
+    else if (urlscanScore < 40) earned += 20
+    else earned += 5
+  }
+
+  // Script analysis (weight 15, only if the scan returned data)
+  const sa = scan.script_analysis
+  if (sa !== null) {
+    total += 15
+    const hasThreats = sa.malicious_scripts.length > 0 || sa.crypto_miners.length > 0
+    if (status === "MALICIOUS" && hasThreats) earned += 15
+    else if (status === "SUSPICIOUS" && (hasThreats || sa.script_risk_score >= 30)) earned += 12
+    else if (status === "SAFE" && !hasThreats && sa.script_risk_score < 25) earned += 15
+    else earned += 5
+  }
+
+  // Homograph / IDN analysis (weight 10)
+  total += 10
+  const isHomograph = scan.homograph_analysis?.is_homograph ?? false
+  if (status === "SAFE" && !isHomograph) earned += 10
+  else if (status !== "SAFE" && isHomograph) earned += 10
+  else earned += 5
+
+  return Math.min(97, Math.max(15, Math.round((earned / total) * 100)))
+}
 
 function ThreatList({ title, items, color }: { title: string; items: string[]; color: string }) {
   if (items.length === 0) return null
@@ -41,8 +102,9 @@ function ThreatList({ title, items, color }: { title: string; items: string[]; c
 
 export default function ScanResults() {
   const { result, error } = useLocalSearchParams<{ result?: string; error?: string }>();
+  const iconColor = useIconColor();
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [browser, setBrowser] = useState("system");
+  const [browser, setBrowser] = useState<BrowserId>("system");
   const exportRef = useRef<View>(null);
 
   useEffect(() => {
@@ -75,9 +137,11 @@ export default function ScanResults() {
 
   let scanData: ScanResponse | null = null;
   try { if (result) scanData = JSON.parse(result); } catch { /* corrupted param */ }
+  const confidence = useMemo(() => scanData ? computeConfidence(scanData) : 15, [scanData]);
   const riskLevel: RiskLevel = scanData ? statusToRisk(scanData.status_indicator) : "safe";
   const isSafe = riskLevel === "safe";
   const isSuspicious = riskLevel === "suspicious";
+  const isUnavailable = riskLevel === "unavailable";
 
   if (error || !scanData) {
     return (
@@ -120,6 +184,8 @@ export default function ScanResults() {
             <CheckCircle size={64} color="#16a34a" />
           ) : isSuspicious ? (
             <AlertTriangle size={64} color="#d97706" />
+          ) : isUnavailable ? (
+            <Info size={64} color="#6b7280" />
           ) : (
             <XCircle size={64} color="#dc2626" />
           )}
@@ -131,7 +197,9 @@ export default function ScanResults() {
           <Text className="mt-4 px-4 text-center text-muted-foreground">
             {isSafe
               ? "This URL appears to be safe. No security threats detected."
-              : threatDescription}
+              : isUnavailable
+                ? "Scan analysis could not be completed for this URL."
+                : threatDescription}
           </Text>
         </View>
 
@@ -183,7 +251,7 @@ export default function ScanResults() {
               className="flex-row items-center gap-1"
               onPress={() => openURL(scanData!.initial_url)}
             >
-              <ExternalLink size={16} />
+              <ExternalLink size={16} color="#2563eb" />
               <Text className="text-sm font-medium text-primary">
                 Open URL
               </Text>
@@ -196,19 +264,19 @@ export default function ScanResults() {
           <Text className="mb-3 text-sm font-medium text-foreground">
             Analysis Confidence
           </Text>
-          <ConfidenceIndicator value={scanData.score} />
+          <ConfidenceIndicator value={confidence} />
         </Card>
 
         {/* Advanced Analysis toggle */}
         <Card className="mt-4" onPress={() => setShowAdvanced(!showAdvanced)}>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-3">
-              <Info size={20} />
+              <Info size={20} color={iconColor} />
               <Text className="text-sm font-medium text-foreground">
                 Advanced Analysis
               </Text>
             </View>
-            {showAdvanced ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+            {showAdvanced ? <ChevronDown size={20} color={iconColor} /> : <ChevronRight size={20} color={iconColor} />}
           </View>
           {!showAdvanced && (
             <Text className="mt-2 text-xs text-muted-foreground">
@@ -335,7 +403,7 @@ export default function ScanResults() {
         >
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-3">
-              <Flag size={20} />
+              <Flag size={20} color={iconColor} />
               <View>
                 <Text className="text-sm font-medium text-foreground">
                   Report Incorrect Result
@@ -345,7 +413,7 @@ export default function ScanResults() {
                 </Text>
               </View>
             </View>
-            <ChevronRight size={20} />
+            <ChevronRight size={20} color={iconColor} />
           </View>
         </Card>
 
@@ -355,7 +423,7 @@ export default function ScanResults() {
         <View className="mt-4">
           <AppButton variant="outline" fullWidth onPress={handleExport}>
             <View className="flex-row items-center justify-center gap-2">
-              <Camera size={16} />
+              <Camera size={16} color={iconColor} />
               <Text>Export Screenshot</Text>
             </View>
           </AppButton>

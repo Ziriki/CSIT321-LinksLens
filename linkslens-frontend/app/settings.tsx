@@ -19,6 +19,7 @@ import { THEME_KEY, useIconColor } from "../lib/theme"
 export default function Settings() {
   const { colorScheme, setColorScheme } = useColorScheme()
   const isDark = colorScheme === "dark"
+  const iconColor = useIconColor()
   const mutedColor = useIconColor("muted")
 
   const toggleTheme = async () => {
@@ -38,7 +39,7 @@ export default function Settings() {
           <ListItem
             title="Language"
             subtitle="English"
-            leftIcon={<Globe size={20} />}
+            leftIcon={<Globe size={20} color={iconColor} />}
             rightElement={<ChevronRight size={20} color={mutedColor} />}
             onPress={() => router.push("/language-settings")}
           />
@@ -46,14 +47,14 @@ export default function Settings() {
           <ListItem
             title="Default Browser"
             subtitle="In-App Browser"
-            leftIcon={<ExternalLink size={20} />}
+            leftIcon={<ExternalLink size={20} color={iconColor} />}
             rightElement={<ChevronRight size={20} color={mutedColor} />}
             onPress={() => router.push("/browser-settings")}
           />
 
           <ListItem
             title="Notifications"
-            leftIcon={<Bell size={20} />}
+            leftIcon={<Bell size={20} color={iconColor} />}
             rightElement={
               <View className="h-6 w-11 rounded-full bg-primary">
                 <View className="absolute right-0.5 top-0.5 h-5 w-5 rounded-full bg-white" />
@@ -63,7 +64,7 @@ export default function Settings() {
 
           <ListItem
             title="Dark Mode"
-            leftIcon={<Moon size={20} />}
+            leftIcon={<Moon size={20} color={iconColor} />}
             onPress={toggleTheme}
             rightElement={
               <View className={`h-6 w-11 rounded-full ${isDark ? "bg-primary" : "bg-secondary"}`}>
@@ -76,7 +77,7 @@ export default function Settings() {
 
           <ListItem
             title="App Feedback"
-            leftIcon={<MessageSquare size={20} />}
+            leftIcon={<MessageSquare size={20} color={iconColor} />}
             rightElement={<ChevronRight size={20} color={mutedColor} />}
             onPress={() => router.push("/app-feedback")}
           />

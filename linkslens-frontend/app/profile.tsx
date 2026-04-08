@@ -17,8 +17,10 @@ import {
 import { logout, fetchAccount, fetchDetails, fetchScanHistory, getCurrentUserId } from "../lib/api"
 import { countScansThisMonth } from "../lib/types"
 import { bottomNavItems } from "../lib/navigation"
+import { useIconColor } from "../lib/theme"
 
 export default function Profile() {
+  const iconColor = useIconColor()
   const [name, setName] = useState("Loading...")
   const [email, setEmail] = useState("")
   const [totalScans, setTotalScans] = useState(0)
@@ -79,21 +81,21 @@ export default function Profile() {
         <View className="gap-2">
           <ListItem
             title="Edit Profile"
-            leftIcon={<User size={20} />}
-            rightElement={<ChevronRight size={20} color="#6b7280" />}
+            leftIcon={<User size={20} color={iconColor} />}
+            rightElement={<ChevronRight size={20} color={iconColor} />}
             onPress={() => router.push("/edit-profile")}
           />
 
           <ListItem
             title="Settings"
-            leftIcon={<Settings size={20} />}
-            rightElement={<ChevronRight size={20} color="#6b7280" />}
+            leftIcon={<Settings size={20} color={iconColor} />}
+            rightElement={<ChevronRight size={20} color={iconColor} />}
             onPress={() => router.push("/settings")}
           />
 
           <ListItem
             title="Sign Out"
-            leftIcon={<LogOut size={20} />}
+            leftIcon={<LogOut size={20} color={iconColor} />}
             onPress={async () => {
               await logout()
               router.replace("/")

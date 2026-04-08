@@ -50,12 +50,14 @@ export function RiskBadge({
     safe: "bg-green-100 text-green-700",
     suspicious: "bg-amber-100 text-amber-700",
     malicious: "bg-red-100 text-red-700",
+    unavailable: "bg-gray-100 text-gray-500",
   }
 
   const labels = {
     safe: "Safe",
     suspicious: "Suspicious",
     malicious: "Malicious",
+    unavailable: "Unavailable",
   }
 
   const sizes = {
@@ -277,6 +279,7 @@ export function BottomNav({
   items: { icon: React.ReactNode; label: string; href: string }[]
   activeIndex?: number
 }) {
+  const iconColor = useIconColor()
   return (
     <View className="flex-row items-center justify-around border-t border-border bg-card px-4 py-2">
       {items.map((item, index) => (
@@ -285,7 +288,7 @@ export function BottomNav({
           onPress={() => router.push(item.href)}
           className="items-center gap-1 rounded-xl px-4 py-2"
         >
-          <View>{item.icon}</View>
+          {React.cloneElement(item.icon as React.ReactElement, { color: iconColor })}
           <Text
             className={cx(
               "text-xs font-medium",
