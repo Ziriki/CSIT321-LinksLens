@@ -137,7 +137,7 @@ export default function HomePage() {
               key={scan.ScanID}
               title={scan.InitialURL}
               subtitle={new Date(scan.ScannedAt).toLocaleDateString()}
-              leftIcon={<ScanLine size={20} />}
+              leftIcon={<ScanLine size={20} color={iconCol} />}
               rightElement={
                 <RiskBadge riskLevel={statusToRisk(scan.StatusIndicator)} size="sm" />
               }
@@ -152,16 +152,16 @@ export default function HomePage() {
           <ListItem
             title="View History"
             subtitle="Browse all previous scans"
-            leftIcon={<Clock size={20} />}
-            rightElement={<ChevronRight size={20} />}
+            leftIcon={<Clock size={20} color={iconCol} />}
+            rightElement={<ChevronRight size={20} color={iconCol} />}
             onPress={() => router.push("/scan-history")}
           />
 
           <ListItem
             title="Settings"
             subtitle="Configure app preferences"
-            leftIcon={<Settings size={20} />}
-            rightElement={<ChevronRight size={20} />}
+            leftIcon={<Settings size={20} color={iconCol} />}
+            rightElement={<ChevronRight size={20} color={iconCol} />}
             onPress={() => router.push("/settings")}
           />
         </View>

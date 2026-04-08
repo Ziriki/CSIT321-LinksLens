@@ -15,6 +15,7 @@ import { fetchScanHistory, clearScanHistory, getCurrentUserId } from "../lib/api
 import type { ScanHistoryItem, ScanResponse } from "../lib/api"
 import { statusToRisk } from "../lib/types"
 import { bottomNavItems } from "../lib/navigation"
+import { useIconColor } from "../lib/theme"
 
 const FILTER_OPTIONS = ["ALL", "SAFE", "SUSPICIOUS", "MALICIOUS"] as const
 type FilterOption = (typeof FILTER_OPTIONS)[number]
@@ -37,6 +38,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function ScanHistory() {
+  const iconColor = useIconColor()
   const [scans, setScans] = useState<ScanHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -106,7 +108,7 @@ export default function ScanHistory() {
       {/* Search */}
       <View className="px-4 pt-3">
         <View className="flex-row items-center gap-3 rounded-xl bg-secondary px-4 py-3">
-          <Search size={20} />
+          <Search size={20} color={iconColor} />
           <TextInput
             className="flex-1 text-foreground"
             placeholder="Search scans..."
@@ -124,12 +126,13 @@ export default function ScanHistory() {
         horizontal
         showsHorizontalScrollIndicator={false}
         className="px-4 pt-2"
+        style={{ flexGrow: 0 }}
         contentContainerStyle={{ paddingRight: 16 }}
       >
         {FILTER_OPTIONS.map((opt) => (
           <Pressable
             key={opt}
-            className={`mr-2 rounded-full px-4 py-1.5 ${
+            className={`mr-2 rounded-full px-4 py-1.5 h-10 flex items-center justify-center ${
               filterStatus === opt ? FILTER_COLORS[opt] : "bg-secondary"
             }`}
             onPress={() => setFilterStatus(opt)}
@@ -186,6 +189,7 @@ export default function ScanHistory() {
                     gsb_flagged: false,
                     gsb_threat_types: [],
                     script_analysis: scan.ScriptAnalysis ?? null,
+                    homograph_analysis: scan.HomographAnalysis ?? null,
                     scanned_at: scan.ScannedAt,
                   } satisfies ScanResponse),
                 },
@@ -193,7 +197,7 @@ export default function ScanHistory() {
             }
           >
             <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
-              <ScanLine size={20} />
+              <ScanLine size={20} color={iconColor} />
             </View>
 
             <View className="flex-1">

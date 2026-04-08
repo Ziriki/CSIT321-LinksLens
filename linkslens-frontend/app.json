@@ -9,13 +9,15 @@
     "experiments": {
       "tsconfigPaths": true
     },
+    "scheme": "linkslens",
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-notifications",
       ["expo-camera", {
         "cameraPermission": "Allow LinksLens to scan QR codes using your camera."
-      }]
+      }],
+      "./plugins/withAndroidShareIntent"
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
