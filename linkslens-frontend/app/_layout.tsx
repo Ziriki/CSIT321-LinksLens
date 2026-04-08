@@ -6,15 +6,16 @@ import { useColorScheme } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 import * as SecureStore from 'expo-secure-store';
-import { lightVars, darkVars, THEME_KEY } from '../lib/theme';
+import { lightVars, darkVars, THEME_KEY, getBackgroundColor } from '../lib/theme';
 import { initNotificationHandler, requestNotificationPermission } from '../lib/notifications';
 
 function extractSharedURL(raw: string): string | null {
   if (/^https?:\/\//i.test(raw)) return raw;
   try {
     const parsed = Linking.parse(raw);
-    const text = parsed.queryParams?.text;
-    if (typeof text === 'string' && /^https?:\/\//i.test(text)) return text;
+    // Plugin converts EXTRA_TEXT → linkslens://scan?url=<encoded>
+    const url = parsed.queryParams?.url;
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url;
   } catch { /* ignore */ }
   return null;
 }
@@ -38,12 +39,12 @@ export default function RootLayout() {
 
     Linking.getInitialURL().then((url) => {
       const target = url ? extractSharedURL(url) : null;
-      if (target) router.push({ pathname: '/scan-processing', params: { url: target } });
+      if (target) router.push({ pathname: '/scan-link', params: { url: target } });
     });
 
     const sub = Linking.addEventListener('url', ({ url }) => {
       const target = extractSharedURL(url);
-      if (target) router.push({ pathname: '/scan-processing', params: { url: target } });
+      if (target) router.push({ pathname: '/scan-link', params: { url: target } });
     });
     return () => sub.remove();
   }, [loaded]);
@@ -53,7 +54,7 @@ export default function RootLayout() {
   const themeVars = colorScheme === 'dark' ? darkVars : lightVars;
 
   return (
-    <View style={{ flex: 1, paddingTop: insets.top, ...themeVars }}>
+    <View style={[{ flex: 1, paddingTop: insets.top, backgroundColor: getBackgroundColor(colorScheme) }, themeVars]}>
       <Stack screenOptions={{ headerShown: false }} />
     </View>
   );

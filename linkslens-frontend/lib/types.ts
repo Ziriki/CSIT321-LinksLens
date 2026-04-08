@@ -1,12 +1,13 @@
 
-export type RiskLevel = 'safe' | 'suspicious' | 'malicious'
+export type RiskLevel = 'safe' | 'suspicious' | 'malicious' | 'unavailable'
 
 export type ScanStatus = 'SAFE' | 'SUSPICIOUS' | 'MALICIOUS' | 'UNAVAILABLE'
 
 export function statusToRisk(status: string | null): RiskLevel {
   if (status === "SAFE") return "safe"
   if (status === "SUSPICIOUS") return "suspicious"
-  return "malicious"
+  if (status === "MALICIOUS") return "malicious"
+  return "unavailable"
 }
 
 export function countScansThisMonth<T extends { ScannedAt: string }>(scans: T[]): number {

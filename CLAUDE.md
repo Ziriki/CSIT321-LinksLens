@@ -19,7 +19,7 @@ The official project spec (CSIT-26-S1-05) lists these key functionalities. All m
 
 | Requirement | Status | Implementation |
 |---|---|---|
-| URL observation from browser or camera captures | ✅ Done | ML Kit OCR (`scan-image.tsx`), manual input (`scan-link.tsx`), QR camera scanner (`scan-qr.tsx`), Android share intent (pending) |
+| URL observation from browser or camera captures | ✅ Done | ML Kit OCR (`scan-image.tsx`), manual input (`scan-link.tsx`), QR camera scanner (`scan-qr.tsx`), Android share intent (`_layout.tsx`) |
 | Link security analysis against common security risks | ✅ Done | Google Safe Browsing v4 + urlscan.io in `/scan` pipeline |
 | Security notification | ✅ Done | `expo-notifications` local push on scan complete (`lib/notifications.ts`) |
 | Comprehensive security analysis based on script level inspection | ✅ Done | `analyze_scripts()` in `url_scan_controller.py` — classifies scripts from urlscan.io result |
@@ -85,7 +85,14 @@ mysql -u root -p LinksLens-DB < DB_Creation_Script.sql   # Initialize schema
 
 ## Backend Code Architecture
 
-The backend is **flat** — all models are in `backend/models.py`, all Pydantic schemas in `backend/schemas.py` (exception: `ScanRequest` Pydantic model lives in `models.py`). Shared helpers are in `backend/utils.py` (`get_fullname`, `get_password_hash`, `verify_password`, `hash_token`, `normalize_expiry`, `send_email`).
+The backend is **flat** — all models are in `backend/models.py`, all Pydantic schemas in `backend/schemas.py` (exception: `ScanRequest` Pydantic model lives in `models.py`). Shared helpers are in `backend/utils.py`:
+- `get_fullname`, `get_password_hash`, `verify_password` — auth helpers
+- `hash_token`, `normalize_expiry`, `send_email` — token/email helpers
+- `get_client_ip(request)` — reads `X-Forwarded-For` (Nginx proxy)
+- `get_or_404(obj, detail)` — raises HTTP 404 if obj is None, otherwise returns it
+- `apply_updates(db, obj, update_schema)` — applies `model_dump(exclude_unset=True)` to a SQLAlchemy model, commits, and refreshes
+
+`backend/seed_data.py` — seeds the DB with fake data using Faker; run directly against a local DB for development.
 
 **Controller pattern:** Each controller in `backend/controllers/` defines a FastAPI `APIRouter` with `prefix="/api/<resource>"` and implements standard CRUDL endpoints. All routers are imported and registered in `main.py`.
 
@@ -197,9 +204,26 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 
 **Session state:** Auth stores `"_decoded_user"` dict (not `"user_id"`). `require_role()` return value must be captured as `current_user`. `_decoded_user` is cleared at the start of every `handle_login()` call to prevent stale cache from previous sessions.
 
+**Admin shared utilities (`admin/utils.py`):**
+- `render_pagination(state_key, total, page_size=20)` — renders Prev/Next controls using `st.session_state`; returns `(start, end)` tuple for DataFrame slicing
+- `search_dataframe(df, query, columns=None)` — case-insensitive search across DataFrame columns
+
+**Admin API client (`admin/models/api_client.py`):** All backend calls go through here; `BACKEND_URL` defaults to `http://backend:8000` (Docker service name); `_get_headers()` reads JWT from `st.session_state["access_token"]`.
+
 ## Mobile App (`linkslens-frontend/`)
 
-**Routing:** Expo Router (file-based). All screens live in `app/`. `_layout.tsx` is the root stack — `setColorScheme` must be inside `useEffect`, not called directly during render.
+**Routing:** Expo Router (file-based). All screens live in `app/`. `_layout.tsx` is the root stack — `setColorScheme` must be inside `useEffect`, not called directly during render. `_layout.tsx` also handles Android share intent: it listens to `Linking.getInitialURL()` (cold start) and `Linking.addEventListener('url', ...)` (hot), extracts the URL from the `text` query param if present, and navigates to `scan-processing`.
+
+**Shared frontend modules (`lib/`):**
+- `api.ts` — all backend calls; exports typed interfaces for every API response; `authHeaders()` attaches `Authorization: Bearer <token>`; `decodeToken()` decodes the JWT client-side to extract `user_id`/`role_id`
+- `types.ts` — `ScanStatus`, `RiskLevel`, `statusToRisk()`, `countScansThisMonth()`, shared interfaces
+- `theme.ts` — NativeWind CSS variable maps (`lightVars`/`darkVars`) applied to the root `View`; `THEME_KEY` SecureStore key; `useIconColor(variant)` hook returns correct hex for lucide icons in current scheme
+- `notifications.ts` — `initNotificationHandler`, `requestNotificationPermission`, `notifyScanComplete`
+- `url-validation.ts` — `URL_PATTERN` regex shared across all scan entry screens
+- `navigation.tsx` — `bottomNavItems` array (icon, label, href) used by `BottomNav` component
+- `browsers.ts` — `BROWSERS` list (id + name), `BrowserId` type, `BROWSER_SCHEMES` deep-link map for Chrome/Firefox/Edge; `"system"` ID is absent from `BROWSER_SCHEMES` — callers fall back to `Linking.openURL` directly
+
+**Shared UI components (`components/ui-components.tsx`):** `Card`, `RiskBadge` (safe/suspicious/malicious colour), `AppButton` (primary/secondary/outline/ghost variants), `BackButton`, `BottomNav`, plus a local `cx(...classes)` helper for conditional Tailwind class joining.
 
 **API client:** `lib/api.ts` — `API_BASE_URL` defaults to `https://api.linkslens.com` (override with `EXPO_PUBLIC_API_URL`).
 
@@ -228,7 +252,7 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `RiskLevel` — `'safe' | 'suspicious' | 'malicious'` (frontend display values)
 - `statusToRisk()`, `countScansThisMonth()`, shared interfaces
 
-**Not yet implemented (UI stubs):** Scan history loading, profile, feedback submission, all settings screens. `script_analysis` data from scan response not yet displayed.
+**Not yet implemented (UI stubs):** Profile editing, feedback submission, browser settings wiring, language settings, most settings screens. `script_analysis` data from scan response not yet displayed in `scan-results.tsx`.
 
 **MLKit note:** `@infinitered/react-native-mlkit-text-recognition` is a native module — requires `expo run:android` (custom dev client), not Expo Go.
 
