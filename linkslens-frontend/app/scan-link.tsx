@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { View, Text } from "react-native"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import {
   InputField,
   ScreenHeader,
@@ -8,7 +8,12 @@ import {
 } from "../components/ui-components"
 
 export default function ScanLink() {
-  const [url, setUrl] = useState("")
+  const { url: sharedUrl } = useLocalSearchParams<{ url?: string }>()
+  const [url, setUrl] = useState(sharedUrl ?? "")
+
+  useEffect(() => {
+    if (sharedUrl) setUrl(sharedUrl)
+  }, [sharedUrl])
 
   return (
     <View className="flex-1 bg-background">
