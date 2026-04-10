@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LinksLens is a mobile-first weblink security scanner. Users submit URLs (via camera OCR, gallery image, or manual input) and receive a safety assessment. Three user roles: **User** (mobile app), **Moderator** (web portal), **Administrator** (web portal).
 
-- **FYP Project ID:** CSIT-26-S1-05
+- **FYP Project ID:** FYP-26-S1-03P
 - **Domain:** linkslens.com
 - **Live Environments:**
   - `linkslens.com` — Static marketing website (Nginx serves from `/var/www/linkslens`)
