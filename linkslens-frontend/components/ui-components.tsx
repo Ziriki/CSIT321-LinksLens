@@ -1,6 +1,7 @@
 import React from "react"
 import { router } from "expo-router"
 import { View, Text, Pressable, TextInput } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { RiskLevel } from "../lib/types"
 import { ChevronLeft } from "lucide-react-native"
 import { useIconColor } from "../lib/theme"
@@ -280,8 +281,12 @@ export function BottomNav({
   activeIndex?: number
 }) {
   const iconColor = useIconColor()
+  const { bottom } = useSafeAreaInsets()
   return (
-    <View className="flex-row items-center justify-around border-t border-border bg-card px-4 py-2">
+    <View
+      className="flex-row items-center justify-around border-t border-border bg-card px-4 pt-2"
+      style={{ paddingBottom: bottom + 8 }}
+    >
       {items.map((item, index) => (
         <Pressable
           key={index}
