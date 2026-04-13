@@ -73,7 +73,7 @@ export default function HomePage() {
       </View>
 
       {/* Content */}
-      <ScrollView className="flex-1 px-4 pb-4">
+      <ScrollView className="flex-1 px-4" contentContainerStyle={{ paddingBottom: 16 }}>
         {/* Stats Card */}
         <Card className="mt-4 bg-primary p-6">
           <View className="flex-row items-center">

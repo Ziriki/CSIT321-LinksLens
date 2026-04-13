@@ -13,7 +13,8 @@ function extractSharedURL(raw: string): string | null {
   if (/^https?:\/\//i.test(raw)) return raw;
   try {
     const parsed = Linking.parse(raw);
-    // Plugin converts EXTRA_TEXT → linkslens://scan?url=<encoded>
+    // Ignore non-scan linkslens:// URLs (e.g., Expo dev-client launcher)
+    if (parsed.hostname !== 'scan') return null;
     const url = parsed.queryParams?.url;
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url;
   } catch { /* ignore */ }
