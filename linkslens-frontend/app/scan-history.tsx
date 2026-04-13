@@ -125,7 +125,7 @@ export default function ScanHistory() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        className="px-4 pt-2"
+        className="px-4 pt-2 pb-2"
         style={{ flexGrow: 0 }}
         contentContainerStyle={{ paddingRight: 16 }}
       >

@@ -25,7 +25,7 @@ export default function LoginScreen() {
       const data = await login(email, password)
       const userId = decodeToken(data.access_token)?.user_id
       if (userId) {
-        const prefs = await fetchPreferences(userId).catch(() => ({}))
+        const prefs = await fetchPreferences(userId).catch(() => ({} as Record<string, string>))
         if (!prefs[PREF_HAS_SEEN_ONBOARDING]) {
           router.replace("/onboarding")
           return
@@ -40,7 +40,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-background">
       <View className="flex-1 justify-center px-6">
         {/* Logo */}
         <View className="mb-10 items-center">
