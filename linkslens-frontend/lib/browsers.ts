@@ -7,9 +7,12 @@ export const BROWSERS = [
 
 export type BrowserId = (typeof BROWSERS)[number]["id"]
 
-// "system" is intentionally absent — callers use undefined as the signal to open the URL directly
-export const BROWSER_SCHEMES: Record<string, string> = {
-  chrome:  "googlechrome://navigate?url=",
-  firefox: "firefox://open-url?url=",
-  edge:    "microsoft-edge://navigate?url=",
+// Android package names for each browser.
+// "system" is absent — callers fall back to Linking.openURL(url) directly.
+// intent:// URIs (built in scan-results.tsx) target the package directly,
+// bypassing the Android 11+ <queries> manifest requirement for custom schemes.
+export const BROWSER_PACKAGES: Partial<Record<BrowserId, string>> = {
+  chrome:  "com.android.chrome",
+  firefox: "org.mozilla.firefox",
+  edge:    "com.microsoft.emmx",
 }
