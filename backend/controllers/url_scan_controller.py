@@ -37,6 +37,7 @@ URLSCAN_SCREENSHOT_URL = "https://urlscan.io/screenshots/{uuid}.png"
 
 # Google Safe Browsing v4 Lookup API endpoint
 GSB_LOOKUP_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
+_GSB_DEFAULT_PORTS: dict[str, int] = {"http": 80, "https": 443}
 
 # Polling configuration: wait 10s before first poll, then every 5s, up to 12 attempts (70s total)
 INITIAL_WAIT_SECONDS = 10
@@ -276,15 +277,7 @@ def _normalize_for_gsb(url: str) -> str:
         parsed = urlparse(url.strip())
         host = (parsed.hostname or "").lower()
         port = parsed.port
-        if port and (
-            (parsed.scheme == "http" and port == 80)
-            or (parsed.scheme == "https" and port == 443)
-        ):
-            netloc = host
-        elif port:
-            netloc = f"{host}:{port}"
-        else:
-            netloc = host
+        netloc = f"{host}:{port}" if port and port != _GSB_DEFAULT_PORTS.get(parsed.scheme) else host
         # Strip fragment — GSB ignores it; keep everything else intact
         return urlunparse((parsed.scheme, netloc, parsed.path or "/", parsed.params, parsed.query, ""))
     except Exception:
