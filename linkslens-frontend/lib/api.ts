@@ -261,6 +261,15 @@ export async function updatePreferences(userId: number, prefs: Record<string, st
     method: "PUT",
     body: JSON.stringify({ Preferences: prefs }),
   });
+  if (res.status === 404) {
+    // No preferences row exists yet — create it
+    const createRes = await apiFetch(`${API_BASE_URL}/api/preferences/`, {
+      method: "POST",
+      body: JSON.stringify({ UserID: userId, Preferences: prefs }),
+    });
+    if (!createRes.ok) throw new Error(`Failed to create preferences: ${createRes.status}`);
+    return;
+  }
   if (!res.ok) throw new Error(`Failed to update preferences: ${res.status}`);
 }
 
