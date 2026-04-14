@@ -1,7 +1,6 @@
 import { View, Text, ScrollView } from "react-native"
 import { router } from "expo-router"
 import {
-  Globe,
   ExternalLink,
   Bell,
   Moon,
@@ -35,14 +34,6 @@ export default function Settings() {
       <ScrollView className="flex-1 px-4 py-4">
 
         <View className="gap-2">
-
-          <ListItem
-            title="Language"
-            subtitle="English"
-            leftIcon={<Globe size={20} color={iconColor} />}
-            rightElement={<ChevronRight size={20} color={mutedColor} />}
-            onPress={() => router.push("/language-settings")}
-          />
 
           <ListItem
             title="Default Browser"

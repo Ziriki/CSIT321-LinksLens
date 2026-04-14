@@ -17,6 +17,11 @@
       ["expo-camera", {
         "cameraPermission": "Allow LinksLens to scan QR codes using your camera."
       }],
+      ["expo-media-library", {
+        "photosPermission": "Allow LinksLens to save scan reports to your gallery.",
+        "savePhotosPermission": "Allow LinksLens to save scan reports to your gallery.",
+        "isAccessMediaLocationEnabled": false
+      }],
       "./plugins/withAndroidShareIntent"
     ],
     "orientation": "portrait",
