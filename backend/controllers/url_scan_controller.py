@@ -8,7 +8,7 @@ import os
 import re
 import unicodedata
 from dotenv import load_dotenv
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse, urlunparse
 
 import models
 from models import ScanRequest
@@ -265,6 +265,32 @@ def detect_homograph_risk(url: str) -> dict:
     return result
 
 
+def _normalize_for_gsb(url: str) -> str:
+    """
+    Normalize a URL to match GSB's canonical form before lookup.
+    Mirrors the normalization Chrome applies: strip fragment, lowercase hostname,
+    remove default ports (80/443). Without this, GSB may return a match for the
+    normalized form that doesn't key back to the original URL in our results dict.
+    """
+    try:
+        parsed = urlparse(url.strip())
+        host = (parsed.hostname or "").lower()
+        port = parsed.port
+        if port and (
+            (parsed.scheme == "http" and port == 80)
+            or (parsed.scheme == "https" and port == 443)
+        ):
+            netloc = host
+        elif port:
+            netloc = f"{host}:{port}"
+        else:
+            netloc = host
+        # Strip fragment — GSB ignores it; keep everything else intact
+        return urlunparse((parsed.scheme, netloc, parsed.path or "/", parsed.params, parsed.query, ""))
+    except Exception:
+        return url
+
+
 #########################################################
 # Helper: Check URLs against Google Safe Browsing v4
 #########################################################
@@ -285,6 +311,12 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
         for url in urls
     }
 
+    # Normalize each URL to GSB's canonical form and keep a reverse map so that
+    # when GSB returns a match we can key back to the original URL in results.
+    # Without this, a match for "http://evil.com/path" silently drops if we sent
+    # "http://Evil.com/path#fragment" — the URLs don't match as dict keys.
+    norm_to_original: dict[str, str] = {_normalize_for_gsb(url): url for url in urls}
+
     # v4 uses POST with a structured JSON body; API key passed as query param
     payload = {
         "client": {
@@ -300,7 +332,7 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
             ],
             "platformTypes": ["ANY_PLATFORM"],
             "threatEntryTypes": ["URL"],
-            "threatEntries": [{"url": url} for url in urls]
+            "threatEntries": [{"url": norm_url} for norm_url in norm_to_original]
         }
     }
     headers = {"Content-Type": "application/json", "User-Agent": "LinksLens/1.0"}
@@ -338,21 +370,26 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
 
         # v4 response: { "matches": [{ "threat": { "url": "..." }, "threatType": "..." }] }
         for match in data.get("matches", []):
-            url = match.get("threat", {}).get("url", "")
+            gsb_url = match.get("threat", {}).get("url", "")
             threat_type = match.get("threatType", "")
-            if url not in results:
+            # GSB returns the URL in its normalized form — map back to the original
+            original_url = (
+                norm_to_original.get(gsb_url)
+                or norm_to_original.get(_normalize_for_gsb(gsb_url))
+            )
+            if not original_url:
                 continue
 
-            results[url]["flagged"] = True
-            if threat_type not in results[url]["threat_types"]:
-                results[url]["threat_types"].append(threat_type)
+            results[original_url]["flagged"] = True
+            if threat_type not in results[original_url]["threat_types"]:
+                results[original_url]["threat_types"].append(threat_type)
 
             # Determine the worst status from the returned threat type
             if threat_type in _MALICIOUS_THREATS:
-                results[url]["gsb_status"] = "MALICIOUS"
+                results[original_url]["gsb_status"] = "MALICIOUS"
             elif threat_type in _SUSPICIOUS_THREATS:
-                if results[url]["gsb_status"] != "MALICIOUS":
-                    results[url]["gsb_status"] = "SUSPICIOUS"
+                if results[original_url]["gsb_status"] != "MALICIOUS":
+                    results[original_url]["gsb_status"] = "SUSPICIOUS"
 
         # GSB returned 200 OK — URLs not flagged are confirmed SAFE
         for url_key in results:

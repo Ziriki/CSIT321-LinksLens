@@ -24,7 +24,7 @@ import {
 } from "../components/ui-components"
 import type { ScanResponse } from "../lib/api"
 import { fetchPreferences, getCurrentUserId } from "../lib/api"
-import { BROWSER_SCHEMES, type BrowserId } from "../lib/browsers"
+import { BROWSER_PACKAGES, type BrowserId } from "../lib/browsers"
 import { statusToRisk, type RiskLevel } from "../lib/types"
 import { useIconColor } from "../lib/theme"
 
@@ -114,10 +114,20 @@ export default function ScanResults() {
   }, [])
 
   function openURL(url: string) {
-    const prefix = BROWSER_SCHEMES[browser]
-    Linking.openURL(prefix ? `${prefix}${encodeURIComponent(url)}` : url).catch(() =>
+    const pkg = BROWSER_PACKAGES[browser]
+    if (pkg) {
+      // intent:// URIs target the browser package directly — works on Android 11+
+      // without requiring <queries> manifest entries for custom browser schemes.
+      try {
+        const parsed = new URL(url)
+        const intentUri = `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(":", "")};package=${pkg};S.browser_fallback_url=${encodeURIComponent(url)};end`
+        Linking.openURL(intentUri).catch(() => Linking.openURL(url))
+      } catch {
+        Linking.openURL(url)
+      }
+    } else {
       Linking.openURL(url)
-    )
+    }
   }
 
   async function handleExport() {
@@ -127,7 +137,7 @@ export default function ScanResults() {
         Alert.alert("Permission needed", "Allow photo library access to save the report.");
         return;
       }
-      const uri = await captureRef(exportRef, { format: "jpg", quality: 0.9 });
+      const uri = await captureRef(exportRef, { format: "jpg", quality: 0.9, snapshotContentContainer: true });
       await MediaLibrary.saveToLibraryAsync(uri);
       Alert.alert("Saved", "Scan report saved to your gallery.");
     } catch {

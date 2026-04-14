@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>Verify Email | LinksLens</title>
+    <link rel="icon" type="image/svg+xml" href="images/logo.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1565c0',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center px-4">
+
+    <div class="w-full max-w-md">
+
+        <div class="mb-8 text-center">
+            <a href="/" class="inline-flex items-center gap-3">
+                <img src="images/logo.svg" alt="LinksLens" class="h-10 w-10">
+                <span class="text-2xl font-bold tracking-tight">LinksLens</span>
+            </a>
+        </div>
+
+        <div class="rounded-2xl border border-gray-800 bg-gray-900 p-8 shadow-xl text-center">
+
+            <div id="loading" class="">
+                <div class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-700 border-t-blue-500"></div>
+                <h1 class="mb-2 text-2xl font-bold">Verifying your email…</h1>
+                <p class="text-sm text-gray-400">Please wait a moment.</p>
+            </div>
+
+            <div id="success" class="hidden">
+                <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-900/50 border border-green-700">
+                    <svg class="h-7 w-7 text-green-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </div>
+                <h1 class="mb-2 text-2xl font-bold">Email Verified!</h1>
+                <p class="mb-6 text-sm text-gray-400">Your account is now active. Open the LinksLens app and log in.</p>
+                <a href="/" class="inline-block rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors">
+                    Back to home
+                </a>
+            </div>
+
+            <div id="error" class="hidden">
+                <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-900/50 border border-red-700">
+                    <svg class="h-7 w-7 text-red-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </div>
+                <h1 class="mb-2 text-2xl font-bold">Verification Failed</h1>
+                <p id="errorMsg" class="mb-6 text-sm text-gray-400">The link is invalid or has expired.</p>
+                <a href="/" class="inline-block rounded-lg bg-gray-700 px-6 py-2.5 text-sm font-semibold text-white hover:bg-gray-600 transition-colors">
+                    Back to home
+                </a>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        const API = "https://api.linkslens.com";
+
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token");
+
+        function show(id) {
+            ["loading", "success", "error"].forEach(s => {
+                document.getElementById(s).classList.toggle("hidden", s !== id);
+            });
+        }
+
+        async function verify() {
+            if (!token) {
+                document.getElementById("errorMsg").textContent =
+                    "Invalid verification link. Please register again.";
+                show("error");
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/api/accounts/verify-email`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ Token: token }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    show("success");
+                } else {
+                    document.getElementById("errorMsg").textContent =
+                        data.detail ?? "Verification failed. Please try again.";
+                    show("error");
+                }
+            } catch (_) {
+                document.getElementById("errorMsg").textContent =
+                    "Network error. Please check your connection and try again.";
+                show("error");
+            }
+        }
+
+        verify();
+    </script>
+
+</body>
+</html>

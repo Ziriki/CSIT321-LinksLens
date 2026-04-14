@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import { router } from "expo-router";
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "https://api.linkslens.com";
@@ -30,6 +31,25 @@ async function authHeaders(): Promise<Record<string, string>> {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+}
+
+/**
+ * Authenticated fetch wrapper. On 401 (expired/invalid token) it clears the
+ * stored token and redirects to the login screen before throwing, so callers
+ * never need to handle session expiry themselves.
+ */
+async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = await authHeaders();
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...headers, ...(options.headers as Record<string, string> ?? {}) },
+  });
+  if (res.status === 401) {
+    await clearToken();
+    router.replace("/");
+    throw new Error("Session expired. Please log in again.");
+  }
+  return res;
 }
 
 /** Decode JWT payload to extract user_id and role_id. */
@@ -110,17 +130,13 @@ export interface UserDetails {
 }
 
 export async function fetchAccount(userId: number): Promise<UserAccount> {
-  const res = await fetch(`${API_BASE_URL}/api/accounts/${userId}`, {
-    headers: await authHeaders(),
-  });
+  const res = await apiFetch(`${API_BASE_URL}/api/accounts/${userId}`);
   if (!res.ok) throw new Error(`Failed to fetch account: ${res.status}`);
   return res.json();
 }
 
 export async function fetchDetails(userId: number): Promise<UserDetails> {
-  const res = await fetch(`${API_BASE_URL}/api/details/${userId}`, {
-    headers: await authHeaders(),
-  });
+  const res = await apiFetch(`${API_BASE_URL}/api/details/${userId}`);
   if (!res.ok) throw new Error(`Failed to fetch details: ${res.status}`);
   return res.json();
 }
@@ -129,9 +145,8 @@ export async function updateDetails(
   userId: number,
   data: Partial<Pick<UserDetails, "FullName" | "PhoneNumber" | "Address" | "Gender" | "DateOfBirth">>,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/details/${userId}`, {
+  const res = await apiFetch(`${API_BASE_URL}/api/details/${userId}`, {
     method: "PUT",
-    headers: await authHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to update details: ${res.status}`);
@@ -184,9 +199,8 @@ export interface ScanResponse {
 }
 
 export async function scanUrl(url: string): Promise<ScanResponse> {
-  const res = await fetch(`${API_BASE_URL}/scan`, {
+  const res = await apiFetch(`${API_BASE_URL}/scan`, {
     method: "POST",
-    headers: await authHeaders(),
     body: JSON.stringify({ urls: url }),
   });
   if (!res.ok) throw new Error(`Scan request failed: ${res.status}`);
@@ -215,26 +229,18 @@ export interface ScanHistoryItem {
 }
 
 export async function fetchScanHistory(): Promise<ScanHistoryItem[]> {
-  const res = await fetch(`${API_BASE_URL}/api/scans/`, {
-    headers: await authHeaders(),
-  });
+  const res = await apiFetch(`${API_BASE_URL}/api/scans/`);
   if (!res.ok) throw new Error(`Failed to fetch scan history: ${res.status}`);
   return res.json();
 }
 
 export async function deleteScan(scanId: number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/scans/${scanId}`, {
-    method: "DELETE",
-    headers: await authHeaders(),
-  });
+  const res = await apiFetch(`${API_BASE_URL}/api/scans/${scanId}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Failed to delete scan: ${res.status}`);
 }
 
 export async function clearScanHistory(userId: number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/scans/clear/${userId}`, {
-    method: "DELETE",
-    headers: await authHeaders(),
-  });
+  const res = await apiFetch(`${API_BASE_URL}/api/scans/clear/${userId}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Failed to clear scan history: ${res.status}`);
 }
 
@@ -243,9 +249,7 @@ export async function clearScanHistory(userId: number): Promise<void> {
 export const PREF_HAS_SEEN_ONBOARDING = "has_seen_onboarding"
 
 export async function fetchPreferences(userId: number): Promise<Record<string, string>> {
-  const res = await fetch(`${API_BASE_URL}/api/preferences/${userId}`, {
-    headers: await authHeaders(),
-  });
+  const res = await apiFetch(`${API_BASE_URL}/api/preferences/${userId}`);
   if (res.status === 404) return {};
   if (!res.ok) throw new Error(`Failed to fetch preferences: ${res.status}`);
   const data = await res.json();
@@ -253,9 +257,8 @@ export async function fetchPreferences(userId: number): Promise<Record<string, s
 }
 
 export async function updatePreferences(userId: number, prefs: Record<string, string>): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/preferences/${userId}`, {
+  const res = await apiFetch(`${API_BASE_URL}/api/preferences/${userId}`, {
     method: "PUT",
-    headers: await authHeaders(),
     body: JSON.stringify({ Preferences: prefs }),
   });
   if (!res.ok) throw new Error(`Failed to update preferences: ${res.status}`);
@@ -264,9 +267,8 @@ export async function updatePreferences(userId: number, prefs: Record<string, st
 // ─── Feedback ─────────────────────────────────────────────────────────────────
 
 export async function submitAppFeedback(userId: number, feedback: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/feedback/`, {
+  const res = await apiFetch(`${API_BASE_URL}/api/feedback/`, {
     method: "POST",
-    headers: await authHeaders(),
     body: JSON.stringify({ UserID: userId, Feedback: feedback }),
   });
   if (!res.ok) throw new Error(`Failed to submit feedback: ${res.status}`);
@@ -278,9 +280,8 @@ export async function submitScanFeedback(
   suggestedStatus: "SAFE" | "SUSPICIOUS" | "MALICIOUS",
   comments: string,
 ): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/scan-feedback/`, {
+  const res = await apiFetch(`${API_BASE_URL}/api/scan-feedback/`, {
     method: "POST",
-    headers: await authHeaders(),
     body: JSON.stringify({
       ScanID: scanId,
       UserID: userId,
