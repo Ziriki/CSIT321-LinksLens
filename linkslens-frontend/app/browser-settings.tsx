@@ -3,13 +3,16 @@ import { View, Text, Alert } from "react-native"
 import { Check } from "lucide-react-native"
 import { ScreenHeader, ListItem } from "../components/ui-components"
 import { fetchPreferences, updatePreferences, getCurrentUserId } from "../lib/api"
-import { BROWSERS, type BrowserId } from "../lib/browsers"
+import { BROWSERS, type BrowserId, getInstalledBrowserIds } from "../lib/browsers"
 
 export default function BrowserSettings() {
   const [selected, setSelected] = useState<BrowserId>("system")
+  const [installed, setInstalled] = useState<Set<BrowserId>>(new Set(["system"]))
   const userIdRef = useRef<number | null>(null)
 
   useEffect(() => {
+    getInstalledBrowserIds().then(setInstalled)
+
     getCurrentUserId().then((id) => {
       userIdRef.current = id
       if (id) {
@@ -21,6 +24,7 @@ export default function BrowserSettings() {
   }, [])
 
   async function handleSelect(browserId: BrowserId) {
+    if (!installed.has(browserId)) return
     setSelected(browserId)
     if (!userIdRef.current) return
     try {
@@ -40,18 +44,23 @@ export default function BrowserSettings() {
         </Text>
 
         <View className="flex-col gap-2">
-          {BROWSERS.map((browser) => (
-            <ListItem
-              key={browser.id}
-              title={browser.name}
-              onPress={() => handleSelect(browser.id)}
-              rightElement={
-                selected === browser.id
-                  ? <Check size={20} color="#2563eb" />
-                  : undefined
-              }
-            />
-          ))}
+          {BROWSERS.map((browser) => {
+            const isInstalled = installed.has(browser.id)
+            return (
+              <ListItem
+                key={browser.id}
+                title={browser.name}
+                subtitle={!isInstalled ? "Not installed" : undefined}
+                onPress={() => handleSelect(browser.id)}
+                className={!isInstalled ? "opacity-40" : undefined}
+                rightElement={
+                  selected === browser.id
+                    ? <Check size={20} color="#2563eb" />
+                    : undefined
+                }
+              />
+            )
+          })}
         </View>
       </View>
     </View>

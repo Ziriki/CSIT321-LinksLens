@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react"
-import { View, Text, ScrollView, Image, Linking, Pressable, Alert } from "react-native"
+import { View, Text, ScrollView, Image, Linking, Pressable, Alert, Modal } from "react-native"
 import { captureRef } from "react-native-view-shot"
 import * as MediaLibrary from "expo-media-library"
 import { router, useLocalSearchParams } from "expo-router"
@@ -13,6 +13,8 @@ import {
   Camera,
   XCircle,
   AlertTriangle,
+  ImageIcon,
+  GitBranch,
 } from "lucide-react-native"
 
 import {
@@ -103,6 +105,9 @@ function ThreatList({ title, items, color }: { title: string; items: string[]; c
 export default function ScanResults() {
   const { result, error } = useLocalSearchParams<{ result?: string; error?: string }>();
   const iconColor = useIconColor();
+  const [showScreenshot, setShowScreenshot] = useState(true);
+  const [fullscreenImage, setFullscreenImage] = useState(false);
+  const [showRedirects, setShowRedirects] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [browser, setBrowser] = useState<BrowserId>("system");
   const exportRef = useRef<View>(null);
@@ -215,40 +220,72 @@ export default function ScanResults() {
 
         {/* Screenshot */}
         {scanData.screenshot_url && (
-          <Card className="mt-4 overflow-hidden p-0">
-            <Text className="px-4 pt-3 text-xs text-muted-foreground">
-              Website Preview
-            </Text>
-            <Image
-              source={{ uri: scanData.screenshot_url }}
-              style={{ width: "100%", height: 192, marginTop: 8 }}
-              resizeMode="cover"
-            />
-          </Card>
+          <>
+            <Modal visible={fullscreenImage} transparent animationType="fade" onRequestClose={() => setFullscreenImage(false)}>
+              <Pressable
+                className="flex-1 items-center justify-center bg-black/90"
+                onPress={() => setFullscreenImage(false)}
+              >
+                <Image
+                  source={{ uri: scanData.screenshot_url }}
+                  style={{ width: "100%", height: "75%" }}
+                  resizeMode="contain"
+                />
+                <Text className="mt-4 text-sm text-white/60">Tap anywhere to close</Text>
+              </Pressable>
+            </Modal>
+
+            <Card className="mt-4 overflow-hidden p-0" onPress={() => setShowScreenshot(v => !v)}>
+              <View className="flex-row items-center justify-between px-4 py-3">
+                <View className="flex-row items-center gap-3">
+                  <ImageIcon size={20} color={iconColor} />
+                  <Text className="text-sm font-medium text-foreground">Website Preview</Text>
+                </View>
+                {showScreenshot
+                  ? <ChevronDown size={20} color={iconColor} />
+                  : <ChevronRight size={20} color={iconColor} />}
+              </View>
+              {showScreenshot && (
+                <Pressable onPress={() => setFullscreenImage(true)}>
+                  <Image
+                    source={{ uri: scanData.screenshot_url }}
+                    style={{ width: "100%", height: 192 }}
+                    resizeMode="cover"
+                  />
+                </Pressable>
+              )}
+            </Card>
+          </>
         )}
 
         {/* Redirect chain */}
         {hasRedirects && (
-          <Card className="mt-4">
-            <Text className="mb-2 text-sm font-medium text-foreground">
-              Redirect Chain
-            </Text>
-            {scanData.redirect_chain!.map((url, i) => (
-              <View key={i} className="flex-row items-start gap-2 py-1">
-                <Text className="min-w-[18px] text-xs text-muted-foreground">
-                  {i + 1}.
-                </Text>
-                <Text className="flex-1 text-xs text-foreground" numberOfLines={2}>
-                  {url}
-                </Text>
+          <Card className="mt-4" onPress={() => setShowRedirects(v => !v)}>
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-3">
+                <GitBranch size={20} color={iconColor} />
+                <Text className="text-sm font-medium text-foreground">Redirect Chain</Text>
               </View>
-            ))}
+              {showRedirects
+                ? <ChevronDown size={20} color={iconColor} />
+                : <ChevronRight size={20} color={iconColor} />}
+            </View>
+            {showRedirects && (
+              <View className="mt-3 border-t border-border pt-3">
+                {scanData.redirect_chain!.map((url, i) => (
+                  <View key={i} className="flex-row items-start gap-2 py-1">
+                    <Text className="min-w-[18px] text-sm text-muted-foreground">{i + 1}.</Text>
+                    <Text className="flex-1 text-sm text-foreground" numberOfLines={2}>{url}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </Card>
         )}
 
         {/* URL */}
         <Card className="mt-4">
-          <Text className="mb-1 text-xs text-muted-foreground">
+          <Text className="mb-1 text-sm text-muted-foreground">
             Scanned URL
           </Text>
 
@@ -289,7 +326,7 @@ export default function ScanResults() {
             {showAdvanced ? <ChevronDown size={20} color={iconColor} /> : <ChevronRight size={20} color={iconColor} />}
           </View>
           {!showAdvanced && (
-            <Text className="mt-2 text-xs text-muted-foreground">
+            <Text className="mt-2 text-sm text-muted-foreground">
               Domain age, server info, script analysis, and more
             </Text>
           )}
@@ -301,7 +338,7 @@ export default function ScanResults() {
             {/* Domain age */}
             {scanData.domain_age_days != null && (
               <View className="mb-4">
-                <Text className="text-xs text-muted-foreground">Domain Age</Text>
+                <Text className="text-sm text-muted-foreground">Domain Age</Text>
                 <Text className="mt-1 text-sm text-foreground">
                   {scanData.domain_age_days} days
                   {scanData.domain_age_days < 90 ? " (recently registered)" : ""}
@@ -312,7 +349,7 @@ export default function ScanResults() {
             {/* Server location */}
             {scanData.server_location && (
               <View className="mb-4">
-                <Text className="text-xs text-muted-foreground">Server Location</Text>
+                <Text className="text-sm text-muted-foreground">Server Location</Text>
                 <Text className="mt-1 text-sm text-foreground">{scanData.server_location}</Text>
               </View>
             )}
@@ -321,7 +358,7 @@ export default function ScanResults() {
               <>
                 {/* Script risk score */}
                 <View className="mb-4">
-                  <Text className="text-xs text-muted-foreground">Script Risk Score</Text>
+                  <Text className="text-sm text-muted-foreground">Script Risk Score</Text>
                   <View className="mt-2 flex-row items-center gap-3">
                     <View className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
                       <View
@@ -335,7 +372,7 @@ export default function ScanResults() {
                         }`}
                       />
                     </View>
-                    <Text className="w-12 text-right text-xs font-medium text-foreground">
+                    <Text className="w-12 text-right text-sm font-medium text-foreground">
                       {sa.script_risk_score}/100
                     </Text>
                   </View>
@@ -344,11 +381,11 @@ export default function ScanResults() {
                 {/* Tech stack */}
                 {sa.tech_stack.length > 0 && (
                   <View className="mb-4">
-                    <Text className="text-xs text-muted-foreground">Technologies Detected</Text>
+                    <Text className="text-sm text-muted-foreground">Technologies Detected</Text>
                     <View className="mt-2 flex-row flex-wrap gap-1">
                       {sa.tech_stack.map((tech, i) => (
                         <View key={i} className="rounded-full bg-secondary px-2 py-1">
-                          <Text className="text-xs text-foreground">{tech}</Text>
+                          <Text className="text-sm text-foreground">{tech}</Text>
                         </View>
                       ))}
                     </View>
@@ -357,7 +394,7 @@ export default function ScanResults() {
 
                 {/* Ad scripts */}
                 <View className="mb-4">
-                  <Text className="text-xs text-muted-foreground">Ad Scripts</Text>
+                  <Text className="text-sm text-muted-foreground">Ad Scripts</Text>
                   <Text className="mt-1 text-sm text-foreground">
                     {sa.ad_count} found
                     {sa.ad_heavy ? " — ad-heavy site" : ""}
@@ -367,11 +404,11 @@ export default function ScanResults() {
                 {/* Script counts */}
                 <View className="mb-4 flex-row gap-4">
                   <View>
-                    <Text className="text-xs text-muted-foreground">Total Scripts</Text>
+                    <Text className="text-sm text-muted-foreground">Total Scripts</Text>
                     <Text className="mt-1 text-sm text-foreground">{sa.total}</Text>
                   </View>
                   <View>
-                    <Text className="text-xs text-muted-foreground">Trusted CDN</Text>
+                    <Text className="text-sm text-muted-foreground">Trusted CDN</Text>
                     <Text className="mt-1 text-sm text-foreground">{sa.trusted_count}</Text>
                   </View>
                 </View>
@@ -385,16 +422,16 @@ export default function ScanResults() {
             {/* Homograph / IDN attack risk */}
             {scanData.homograph_analysis?.is_homograph && (
               <View className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2">
-                <Text className="text-xs font-semibold text-red-700">IDN Homograph Risk Detected</Text>
-                <Text className="mt-1 text-xs text-foreground">{scanData.homograph_analysis.details}</Text>
-                <Text className="mt-1 text-xs text-muted-foreground">
+                <Text className="text-sm font-semibold text-red-700">IDN Homograph Risk Detected</Text>
+                <Text className="mt-1 text-sm text-foreground">{scanData.homograph_analysis.details}</Text>
+                <Text className="mt-1 text-sm text-muted-foreground">
                   Confusable chars: {scanData.homograph_analysis.confusable_chars.join(", ")}
                 </Text>
               </View>
             )}
 
             {!sa && !scanData.domain_age_days && !scanData.server_location && (
-              <Text className="text-xs text-muted-foreground">
+              <Text className="text-sm text-muted-foreground">
                 No additional analysis data available for this scan.
               </Text>
             )}
@@ -418,7 +455,7 @@ export default function ScanResults() {
                 <Text className="text-sm font-medium text-foreground">
                   Report Incorrect Result
                 </Text>
-                <Text className="text-xs text-muted-foreground">
+                <Text className="text-sm text-muted-foreground">
                   Think this scan is wrong? Let us know
                 </Text>
               </View>
@@ -434,7 +471,7 @@ export default function ScanResults() {
           <AppButton variant="outline" fullWidth onPress={handleExport}>
             <View className="flex-row items-center justify-center gap-2">
               <Camera size={16} color={iconColor} />
-              <Text>Export Screenshot</Text>
+              <Text className="text-foreground">Export Screenshot</Text>
             </View>
           </AppButton>
           <Text className="mt-2 text-center text-xs text-muted-foreground">
