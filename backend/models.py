@@ -158,6 +158,7 @@ class ScanFeedback(Base):
     SuggestedStatus = Column(Enum(SuggestedStatusEnum), nullable=False)
     Comments = Column(Text, nullable=True)
     IsResolved = Column(Boolean, default=False) # Allows moderators to check off feedback they have reviewed
+    CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
 
     # Set up relationships for easier access to ScanHistory and UserAccount details
     scan = relationship("ScanHistory")

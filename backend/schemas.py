@@ -261,6 +261,7 @@ class ScanFeedbackResponse(ScanFeedbackBase):
     ScanID: int
     UserID: int
     IsResolved: bool
+    CreatedAt: Optional[datetime] = None
 
     class Config:
         from_attributes = True

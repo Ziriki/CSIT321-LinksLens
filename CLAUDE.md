@@ -252,7 +252,7 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `RiskLevel` — `'safe' | 'suspicious' | 'malicious'` (frontend display values)
 - `statusToRisk()`, `countScansThisMonth()`, shared interfaces
 
-**Remaining UI stubs:** Notifications toggle in Settings is hardcoded (no backend preference saved).
+**Remaining UI stubs:** None — all settings screens are fully wired to the backend.
 
 **MLKit note:** `@infinitered/react-native-mlkit-text-recognition` is a native module — requires `expo run:android` (custom dev client), not Expo Go.
 
@@ -359,7 +359,6 @@ CREATE TABLE FailedLoginAttempt (
 
 - Single EC2 instance — no horizontal scaling.
 - `UserPreferences.Preferences` is a JSON blob — not queryable field-by-field.
-- `ScanFeedback` has no `CreatedAt` timestamp.
 - `BlacklistRequest` has no rejection reason field.
 - No Redis caching — repeated scans re-run the full pipeline.
 - WHOIS lookups in the scan pipeline may time out on some domains; `DomainAgeDays` will be `null` in those cases.

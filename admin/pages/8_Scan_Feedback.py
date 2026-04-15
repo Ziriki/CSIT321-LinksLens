@@ -82,6 +82,7 @@ if selected_rows:
         st.markdown(f"**Server Location:** {fb.get('ServerLocation') or 'N/A'}")
     with col2:
         st.markdown(f"**Submitted by:** {fb['UserName']} ({fb['UserEmail']})")
+        st.markdown(f"**Feedback submitted:** {fb.get('CreatedAt') or 'N/A'}")
         st.markdown(f"**Scanned at:** {fb.get('ScannedAt') or 'N/A'}")
         st.markdown(f"**Current Verdict:** `{fb['CurrentStatus']}`")
         st.markdown(f"**User suggests:** `{fb['SuggestedStatus']}`")

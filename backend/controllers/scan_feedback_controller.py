@@ -151,6 +151,7 @@ def list_feedback_enriched(
             "SuggestedStatus": fb.SuggestedStatus.value if fb.SuggestedStatus else "N/A",
             "Comments": fb.Comments or "",
             "IsResolved": fb.IsResolved,
+            "CreatedAt": str(fb.CreatedAt) if fb.CreatedAt else None,
             # Extra scan details for the drill-down panel
             "RedirectURL": fb.scan.RedirectURL if fb.scan else None,
             "DomainAgeDays": fb.scan.DomainAgeDays if fb.scan else None,
