@@ -34,14 +34,18 @@
 ### Mobile App (Users)
 - Scan URLs via **camera OCR**, **QR code camera scanner**, **gallery image**, or **manual input**
 - **QR phishing detection ("quishing")** — live camera decodes QR codes and runs them through the full security pipeline
-- Instant **SAFE / SUSPICIOUS / MALICIOUS** verdict with score
+- Instant **SAFE / SUSPICIOUS / MALICIOUS** verdict with score, screenshot preview, and advanced analysis (script risk, tech stack, ad detection)
 - View **redirect chains** and **server location**
 - **IDN Homograph detection** — flags Unicode-spoofed domains (e.g., Cyrillic 'а' replacing Latin 'a')
-- Browse **scan history** with search and filter
+- **Open scanned URL** in preferred browser (Chrome, Firefox, Edge, or system default) directly from results
+- **Export scan report** as an image to your gallery
+- **Haptic feedback** (vibration) when a scan completes
+- Browse **scan history** with search and filter; clear entire history
 - Submit **scan feedback** to flag incorrect results
-- Submit **blacklist requests** for suspicious domains
-- Dark / Light theme toggle
-- Account registration, login, and **password reset via email** — `forgot-password.html` (email entry) and `reset-password.html` (token-based new password form) served from the static site; rate-limited to 3 requests per email and 10 per IP per hour
+- Submit **app feedback** to report issues or suggest improvements
+- **Android share intent** — share any link from another app directly into LinksLens
+- Dark / Light theme toggle; **onboarding tutorial** on first launch
+- Account registration, login, profile editing, and **password reset via email** — `forgot-password.html` (email entry) and `reset-password.html` (token-based new password form) served from the static site; rate-limited to 3 requests per email and 10 per IP per hour
 
 ### Admin Portal (Moderators & Administrators)
 - **Dashboard** — system health overview (user counts, scan stats, service status)

@@ -29,7 +29,7 @@ The official project spec (CSIT-26-S1-05) lists these key functionalities. All m
 
 ## Architecture
 
-- **Mobile App:** React Native + Expo (`linkslens-frontend/`) — NativeWind (Tailwind CSS), Expo Router, on-device ML Kit OCR. Scan pipeline wired to backend; auth and most other screens still UI-only stubs.
+- **Mobile App:** React Native + Expo (`linkslens-frontend/`) — NativeWind (Tailwind CSS), Expo Router, on-device ML Kit OCR. Scan pipeline, auth, scan history, profile editing, app feedback, scan feedback, browser settings, and theme settings are all fully wired to the backend.
 - **Admin Portal:** Streamlit (`admin/`) — fully wired to backend via `admin/models/api_client.py`
 - **Backend API:** FastAPI (`backend/`) — real scan pipeline using Google Safe Browsing v4 + urlscan.io
 - **Database:** MySQL 8.0 (port 3306)
@@ -252,7 +252,7 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `RiskLevel` — `'safe' | 'suspicious' | 'malicious'` (frontend display values)
 - `statusToRisk()`, `countScansThisMonth()`, shared interfaces
 
-**Not yet implemented (UI stubs):** Profile editing, feedback submission, browser settings wiring, language settings, most settings screens. `script_analysis` data from scan response not yet displayed in `scan-results.tsx`.
+**Remaining UI stubs:** Notifications toggle in Settings is hardcoded (no backend preference saved).
 
 **MLKit note:** `@infinitered/react-native-mlkit-text-recognition` is a native module — requires `expo run:android` (custom dev client), not Expo Go.
 
@@ -358,7 +358,6 @@ CREATE TABLE FailedLoginAttempt (
 ## Known Limitations (FYP Scope)
 
 - Single EC2 instance — no horizontal scaling.
-- Most mobile screens (history, profile, feedback, settings) are UI-only stubs with no backend calls.
 - `UserPreferences.Preferences` is a JSON blob — not queryable field-by-field.
 - `ScanFeedback` has no `CreatedAt` timestamp.
 - `BlacklistRequest` has no rejection reason field.
@@ -381,7 +380,7 @@ CREATE TABLE FailedLoginAttempt (
 6. As a user, I want to manually input a URL into the application so that I can still use the application if the image scan doesn't work.
 7. As a user, I want to select images from my photo gallery so that I can scan URLs from past images.
 8. As a user, I want to use my device camera to take photos of links so that I can perform a URL scan.
-9. As a user, I want the application to capture photos directly from my camera so that I can upload photos easily.
+9. As a user, I want to scan QR codes with my camera so that I can check if QR code links are safe before opening them.
 10. As a user, I want to receive a push notification when a scan is completed so that I am alerted.
 
 **Scan Results & Display:**
@@ -389,34 +388,36 @@ CREATE TABLE FailedLoginAttempt (
 12. As a user, I want to be able to toggle between different scan result modes so that I can read my scan in different levels of detail.
 13. As a user, I want to see a safe static screenshot of the webpage without actually visiting it so that I can judge its credibility.
 14. As a user, I want the system to display link redirects so that I can see the actual destination of shortened links.
+15. As a user, I want to open a scanned URL in my preferred browser so that I can visit safe links directly from the scan results.
 
 **Scan History:**
-15. As a user, I want to see my scan history so that I can track what I browsed in the past.
-16. As a user, I want to search my scan history by keywords to find a specific scan.
-17. As a user, I want to filter my scan history by status indicator of the scan so that I can easily view scans that matter to me.
-18. As a user, I want to clear my entire scan history so that I can protect my privacy.
-19. As a user, I want to export a scan report as an image so that I can share the scan results to other people.
+16. As a user, I want to see my scan history so that I can track what I browsed in the past.
+17. As a user, I want to search my scan history by keywords to find a specific scan.
+18. As a user, I want to filter my scan history by status indicator of the scan so that I can easily view scans that matter to me.
+19. As a user, I want to clear my entire scan history so that I can protect my privacy.
+20. As a user, I want to export a scan report as an image so that I can share the scan results to other people.
 
 **Feedback:**
-20. As a user, I want to log feedback about a scan so that I can alert the system where there is an incorrect categorization.
+21. As a user, I want to log feedback about a scan so that I can alert the system where there is an incorrect categorization.
+22. As a user, I want to submit feedback about the application so that I can report issues or suggest improvements.
 
 **Preferences & UX:**
-21. As a user, I want to select my preferred browser so that I can start using the link after a scan.
-22. As a user, I want the device to vibrate when a scan completes so that I am physically alerted.
-23. As a user, I want to toggle between Dark and Light themes so that I can view the application comfortably around different light sources.
-24. As a user, I want to share my current browsing link to the application so that I don't have to open the app to share a link.
-25. As a user, I want to receive a tutorial when I first open the app that I can learn how to use the application.
+23. As a user, I want to select my preferred browser so that I can start using the link after a scan.
+24. As a user, I want the device to vibrate when a scan completes so that I am physically alerted.
+25. As a user, I want to toggle between Dark and Light themes so that I can view the application comfortably around different light sources.
+26. As a user, I want to share my current browsing link to the application so that I don't have to open the app to share a link.
+27. As a user, I want to receive a tutorial when I first open the app that I can learn how to use the application.
 
 ### Moderator (Web Portal)
 
-26. As a moderator, I want to submit malicious URLs so that I can update the application blacklist database.
-27. As a moderator, I want to see the geographical location of the server hosting the website so that I can judge its credibility.
-28. As a moderator, I want to view the domain registration age so that I can better assess the website's credibility.
+28. As a moderator, I want to submit malicious URLs so that I can update the application blacklist database.
+29. As a moderator, I want to see the geographical location of the server hosting the website so that I can judge its credibility.
+30. As a moderator, I want to view the domain registration age so that I can better assess the website's credibility.
 
 ### Administrator (Web Portal)
 
-29. As an administrator, I want to view all user accounts so that I can manage user accounts.
-30. As an administrator, I want to update user accounts so that I can make changes to user details and roles.
-31. As an administrator, I want to deactivate user accounts so that inactive or invalid users are removed.
-32. As an administrator, I want to be able to see an overview of the system health so that I can accurately plan for routine maintenance.
-33. As an administrator, I want to view user feedback about the application so that I can plan for changes and improvements to the application.
+31. As an administrator, I want to view all user accounts so that I can manage user accounts.
+32. As an administrator, I want to update user accounts so that I can make changes to user details and roles.
+33. As an administrator, I want to deactivate user accounts so that inactive or invalid users are removed.
+34. As an administrator, I want to be able to see an overview of the system health so that I can accurately plan for routine maintenance.
+35. As an administrator, I want to view user feedback about the application so that I can plan for changes and improvements to the application.
