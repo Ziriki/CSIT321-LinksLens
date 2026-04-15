@@ -1,5 +1,7 @@
 import { View, Text, ScrollView } from "react-native"
+import { useCallback, useState } from "react"
 import { router } from "expo-router"
+import { useFocusEffect } from "@react-navigation/native"
 import {
   ExternalLink,
   Bell,
@@ -14,17 +16,46 @@ import {
   ScreenHeader,
 } from "../components/ui-components"
 import { THEME_KEY, useIconColor } from "../lib/theme"
+import {
+  getNotificationsEnabled,
+  setNotificationsEnabled,
+  requestNotificationPermission,
+} from "../lib/notifications"
+import { BROWSERS, type BrowserId, getInstalledBrowserIds } from "../lib/browsers"
+import { fetchPreferences, getCurrentUserId } from "../lib/api"
 
 export default function Settings() {
   const { colorScheme, setColorScheme } = useColorScheme()
   const isDark = colorScheme === "dark"
   const iconColor = useIconColor()
   const mutedColor = useIconColor("muted")
+  const [notifsEnabled, setNotifsEnabled] = useState(true)
+  const [browserName, setBrowserName] = useState("System Default")
+
+  useFocusEffect(useCallback(() => {
+    getNotificationsEnabled().then(setNotifsEnabled)
+
+    getCurrentUserId().then((id) => {
+      if (!id) return
+      fetchPreferences(id).then((prefs) => {
+        const browserId = prefs.browser as BrowserId | undefined
+        const match = BROWSERS.find((b) => b.id === browserId)
+        setBrowserName(match?.name ?? "System Default")
+      }).catch(() => {})
+    })
+  }, []))
 
   const toggleTheme = async () => {
     const next = isDark ? "light" : "dark"
     setColorScheme(next)
     await SecureStore.setItemAsync(THEME_KEY, next)
+  }
+
+  const toggleNotifications = async () => {
+    const next = !notifsEnabled
+    if (next) await requestNotificationPermission()
+    await setNotificationsEnabled(next)
+    setNotifsEnabled(next)
   }
 
   return (
@@ -37,7 +68,7 @@ export default function Settings() {
 
           <ListItem
             title="Default Browser"
-            subtitle="In-App Browser"
+            subtitle={browserName}
             leftIcon={<ExternalLink size={20} color={iconColor} />}
             rightElement={<ChevronRight size={20} color={mutedColor} />}
             onPress={() => router.push("/browser-settings")}
@@ -46,9 +77,12 @@ export default function Settings() {
           <ListItem
             title="Notifications"
             leftIcon={<Bell size={20} color={iconColor} />}
+            onPress={toggleNotifications}
             rightElement={
-              <View className="h-6 w-11 rounded-full bg-primary">
-                <View className="absolute right-0.5 top-0.5 h-5 w-5 rounded-full bg-white" />
+              <View className={`h-6 w-11 rounded-full ${notifsEnabled ? "bg-primary" : "bg-secondary"}`}>
+                <View
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white ${notifsEnabled ? "right-0.5" : "left-0.5"}`}
+                />
               </View>
             }
           />

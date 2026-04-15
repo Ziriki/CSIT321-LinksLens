@@ -1,5 +1,5 @@
 import { View, Text, Pressable, Image, Alert, Linking } from "react-native"
-import { Eye } from "lucide-react-native"
+import { Eye, EyeOff } from "lucide-react-native"
 import { router } from "expo-router"
 import { useState } from "react"
 import {
@@ -14,6 +14,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -64,13 +65,18 @@ export default function LoginScreen() {
             <InputField
               label="Password"
               placeholder="Enter your password"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               value={password}
               onChangeText={setPassword}
             />
-            <View className="absolute right-4 top-10">
-              <Eye size={20} color="gray" />
-            </View>
+            <Pressable
+              className="absolute right-4 top-10"
+              onPress={() => setShowPassword((v) => !v)}
+            >
+              {showPassword
+                ? <EyeOff size={20} color="gray" />
+                : <Eye size={20} color="gray" />}
+            </Pressable>
           </View>
 
           <Pressable className="self-end" onPress={() => Linking.openURL("https://linkslens.com/forgot-password")}>
