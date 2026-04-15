@@ -9,6 +9,7 @@ export default function BrowserSettings() {
   const [selected, setSelected] = useState<BrowserId>("system")
   const [installed, setInstalled] = useState<Set<BrowserId>>(new Set(["system"]))
   const userIdRef = useRef<number | null>(null)
+  const prefsRef = useRef<Record<string, string>>({})
 
   useEffect(() => {
     getInstalledBrowserIds().then(setInstalled)
@@ -17,7 +18,10 @@ export default function BrowserSettings() {
       userIdRef.current = id
       if (id) {
         fetchPreferences(id)
-          .then((prefs) => { if (prefs.browser) setSelected(prefs.browser as BrowserId) })
+          .then((prefs) => {
+            prefsRef.current = prefs
+            if (prefs.browser) setSelected(prefs.browser as BrowserId)
+          })
           .catch(() => {})
       }
     })
@@ -28,7 +32,8 @@ export default function BrowserSettings() {
     setSelected(browserId)
     if (!userIdRef.current) return
     try {
-      await updatePreferences(userIdRef.current, { browser: browserId })
+      await updatePreferences(userIdRef.current, { browser: browserId }, prefsRef.current)
+      prefsRef.current = { ...prefsRef.current, browser: browserId }
     } catch {
       Alert.alert("Error", "Could not save browser preference.")
     }
