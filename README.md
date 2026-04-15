@@ -365,9 +365,6 @@ Required GitHub secrets: `HOST`, `USERNAME`, `SSH_KEY`, `DB_ROOT_PASSWORD`, `DB_
 ## Known Limitations
 
 - Single EC2 instance — no horizontal scaling or load balancing
-- Most mobile screens (settings, preferences, browser selection) are UI stubs not yet wired to the backend
-- `ScanHistory.RedirectURL` stores only the final redirect, not the full chain
 - `UserPreferences.Preferences` is an unstructured JSON blob — not queryable field-by-field
-- `ScanFeedback` has no `CreatedAt` timestamp
 - `BlacklistRequest` has no rejection reason field
 - No caching — repeated scans re-run the full pipeline each time

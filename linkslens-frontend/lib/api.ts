@@ -256,16 +256,20 @@ export async function fetchPreferences(userId: number): Promise<Record<string, s
   return data.Preferences ?? {};
 }
 
-export async function updatePreferences(userId: number, prefs: Record<string, string>): Promise<void> {
+export async function updatePreferences(userId: number, patch: Record<string, string>, currentPrefs?: Record<string, string>): Promise<void> {
+  // Merge with existing prefs so saving one key never wipes the others.
+  // Callers that already have fresh prefs can pass them to skip the extra GET.
+  const current = currentPrefs ?? await fetchPreferences(userId);
+  const merged = { ...current, ...patch };
   const res = await apiFetch(`${API_BASE_URL}/api/preferences/${userId}`, {
     method: "PUT",
-    body: JSON.stringify({ Preferences: prefs }),
+    body: JSON.stringify({ Preferences: merged }),
   });
   if (res.status === 404) {
     // No preferences row exists yet — create it
     const createRes = await apiFetch(`${API_BASE_URL}/api/preferences/`, {
       method: "POST",
-      body: JSON.stringify({ UserID: userId, Preferences: prefs }),
+      body: JSON.stringify({ UserID: userId, Preferences: merged }),
     });
     if (!createRes.ok) throw new Error(`Failed to create preferences: ${createRes.status}`);
     return;

@@ -1,5 +1,5 @@
 import { View, Text, ScrollView } from "react-native"
-import { useCallback, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { router } from "expo-router"
 import { useFocusEffect } from "@react-navigation/native"
 import {
@@ -22,7 +22,7 @@ import {
   requestNotificationPermission,
 } from "../lib/notifications"
 import { BROWSERS, type BrowserId, getInstalledBrowserIds } from "../lib/browsers"
-import { fetchPreferences, getCurrentUserId } from "../lib/api"
+import { fetchPreferences, updatePreferences, getCurrentUserId } from "../lib/api"
 
 export default function Settings() {
   const { colorScheme, setColorScheme } = useColorScheme()
@@ -31,16 +31,27 @@ export default function Settings() {
   const mutedColor = useIconColor("muted")
   const [notifsEnabled, setNotifsEnabled] = useState(true)
   const [browserName, setBrowserName] = useState("System Default")
+  const userIdRef = useRef<number | null>(null)
+  const prefsRef = useRef<Record<string, string>>({})
 
   useFocusEffect(useCallback(() => {
     getNotificationsEnabled().then(setNotifsEnabled)
 
     getCurrentUserId().then((id) => {
       if (!id) return
-      fetchPreferences(id).then((prefs) => {
+      userIdRef.current = id
+      fetchPreferences(id).then(async (prefs) => {
+        prefsRef.current = prefs
         const browserId = prefs.browser as BrowserId | undefined
         const match = BROWSERS.find((b) => b.id === browserId)
         setBrowserName(match?.name ?? "System Default")
+
+        // Sync notifications state from backend if saved there
+        if (prefs.notifications !== undefined) {
+          const enabled = prefs.notifications !== "false"
+          setNotifsEnabled(enabled)
+          await setNotificationsEnabled(enabled)
+        }
       }).catch(() => {})
     })
   }, []))
@@ -56,6 +67,11 @@ export default function Settings() {
     if (next) await requestNotificationPermission()
     await setNotificationsEnabled(next)
     setNotifsEnabled(next)
+    if (userIdRef.current) {
+      const updated = { ...prefsRef.current, notifications: next ? "true" : "false" }
+      updatePreferences(userIdRef.current, { notifications: next ? "true" : "false" }, prefsRef.current).catch(() => {})
+      prefsRef.current = updated
+    }
   }
 
   return (
