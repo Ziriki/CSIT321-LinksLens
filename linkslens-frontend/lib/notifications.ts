@@ -1,5 +1,17 @@
 import * as Notifications from "expo-notifications"
+import * as SecureStore from "expo-secure-store"
 import type { ScanStatus } from "./types"
+
+export const NOTIF_KEY = "notifications_enabled"
+
+export async function getNotificationsEnabled(): Promise<boolean> {
+  const stored = await SecureStore.getItemAsync(NOTIF_KEY)
+  return stored !== "false"
+}
+
+export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
+  await SecureStore.setItemAsync(NOTIF_KEY, enabled ? "true" : "false")
+}
 
 export function initNotificationHandler() {
   Notifications.setNotificationHandler({
@@ -42,6 +54,9 @@ export async function notifyScanComplete(
   url: string,
 ): Promise<void> {
   try {
+    const enabled = await getNotificationsEnabled()
+    if (!enabled) return
+
     const label = STATUS_LABEL[status] ?? status
     const body  = STATUS_BODY[status]  ?? "Scan complete."
 

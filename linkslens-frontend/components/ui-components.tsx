@@ -277,7 +277,7 @@ export function BottomNav({
   items,
   activeIndex = 0,
 }: {
-  items: { icon: React.ReactNode; label: string; href: string }[]
+  items: { icon: React.ReactElement<{ color?: string }>; label: string; href: string }[]
   activeIndex?: number
 }) {
   const iconColor = useIconColor()
@@ -290,10 +290,10 @@ export function BottomNav({
       {items.map((item, index) => (
         <Pressable
           key={index}
-          onPress={() => router.push(item.href)}
+          onPress={() => router.navigate(item.href)}
           className="items-center gap-1 rounded-xl px-4 py-2"
         >
-          {React.cloneElement(item.icon as React.ReactElement, { color: iconColor })}
+          {React.cloneElement(item.icon, { color: iconColor })}
           <Text
             className={cx(
               "text-xs font-medium",

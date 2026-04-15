@@ -14,10 +14,14 @@ import { AppButton, ScreenHeader } from "../components/ui-components";
 function extractUrlsFromText(rawText: string): string[] {
   const httpMatches = rawText.match(/https?:\/\/[^\s\n\r<>"'`\]|\\]+/gi) ?? [];
   const wwwMatches  = rawText.match(/www\.[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})+(?:\/[^\s\n\r<>"'`\]|\\]*)*/gi) ?? [];
+  // Bare domains without protocol or www (e.g. m.youtube.com, maps.google.com, youtube.com)
+  const bareMatches = rawText.match(
+    /\b[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}\b(?:\/[^\s\n\r<>"'`\]|\\]*)*/gi
+  ) ?? [];
 
-  return [...httpMatches, ...wwwMatches]
-    .map(u => u.replace(/[.,;:!?)\]]+$/, ""))   // strip trailing punctuation
-    .filter((u, i, arr) => arr.indexOf(u) === i); // deduplicate
+  return [...httpMatches, ...wwwMatches, ...bareMatches]
+    .map(u => u.replace(/[.,;:!?)\]]+$/, ""))
+    .filter((u, i, arr) => arr.indexOf(u) === i);
 }
 
 export default function ScanImage() {
