@@ -36,10 +36,10 @@ def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db)):
     return db_scan
 
 #########################################################
-# Stats: Per-country threat aggregation (Admin only)
+# Stats: Per-country threat aggregation (Admin + Moderator)
 #########################################################
 @router.get("/stats/threats")
-def get_threat_stats(db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def get_threat_stats(db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     """Return per-country threat counts aggregated from ScanHistory."""
     rows = (
         db.query(

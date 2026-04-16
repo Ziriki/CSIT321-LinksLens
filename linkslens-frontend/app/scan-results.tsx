@@ -137,15 +137,16 @@ export default function ScanResults() {
 
   async function handleExport() {
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      const { status } = await MediaLibrary.requestPermissionsAsync({ granularPermissions: ["photo"] });
       if (status !== "granted") {
         Alert.alert("Permission needed", "Allow photo library access to save the report.");
         return;
       }
-      const uri = await captureRef(exportRef, { format: "jpg", quality: 0.9, snapshotContentContainer: true });
+      const uri = await captureRef(exportRef, { format: "jpg", quality: 0.9 });
       await MediaLibrary.saveToLibraryAsync(uri);
       Alert.alert("Saved", "Scan report saved to your gallery.");
-    } catch {
+    } catch (e: any) {
+      console.error("Export failed:", e?.message ?? e);
       Alert.alert("Export failed", "Could not save the scan report.");
     }
   }
