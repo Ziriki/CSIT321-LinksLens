@@ -173,20 +173,95 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
     db.add(models.EmailVerificationToken(
         Token=hash_token(raw_token),
         UserID=db_account.UserID,
-        ExpiresAt=datetime.now(timezone.utc) + timedelta(hours=24),
+        ExpiresAt=datetime.now(timezone.utc) + timedelta(minutes=15),
         IsUsed=False,
     ))
 
     verify_link = f"https://linkslens.com/verify-email.html?token={raw_token}"
-    email_html = f"""
-    <h2>Welcome to LinksLens!</h2>
-    <p>Hi {request.FullName}, thanks for signing up. Please verify your email address to activate your account.</p>
-    <p>This link expires in 24 hours.</p>
-    <a href="{verify_link}" style="display:inline-block; padding:10px 20px; background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">Verify Email Address</a>
-    """
+    email_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+        <!-- Logo -->
+        <tr><td align="center" style="padding-bottom:28px;">
+          <img src="https://linkslens.com/images/logo.svg" alt="LinksLens" width="44" height="44"
+               style="background:#ffffff;border-radius:10px;display:block;">
+          <p style="margin:10px 0 0;font-size:20px;font-weight:700;color:#f1f5f9;letter-spacing:-0.3px;">LinksLens</p>
+        </td></tr>
+
+        <!-- Card -->
+        <tr><td style="background-color:#1e293b;border-radius:16px;border:1px solid #334155;padding:40px 36px;">
+
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#f1f5f9;">Verify your email address</h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#94a3b8;line-height:1.6;">
+            Hi {request.FullName}, welcome to LinksLens! Please confirm your email address to activate your account and start scanning links safely.
+          </p>
+
+          <!-- CTA Button -->
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr><td style="border-radius:8px;background-color:#1d4ed8;">
+              <a href="{verify_link}"
+                 style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.1px;">
+                Verify Email Address
+              </a>
+            </td></tr>
+          </table>
+
+          <!-- Fallback link -->
+          <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Or copy and paste this link into your browser:</p>
+          <p style="margin:0 0 28px;font-size:12px;word-break:break-all;">
+            <a href="{verify_link}" style="color:#60a5fa;text-decoration:none;">{verify_link}</a>
+          </p>
+
+          <!-- Divider -->
+          <hr style="border:none;border-top:1px solid #334155;margin:0 0 24px;">
+
+          <!-- Expiry notice -->
+          <table cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td width="18" valign="top" style="padding-top:1px;">
+                <span style="font-size:15px;">⏰</span>
+              </td>
+              <td style="padding-left:8px;font-size:13px;color:#94a3b8;line-height:1.5;">
+                This link expires in <strong style="color:#f1f5f9;">15 minutes</strong>. After that you will need to register again.
+              </td>
+            </tr>
+            <tr><td colspan="2" style="padding-top:10px;"></td></tr>
+            <tr>
+              <td width="18" valign="top" style="padding-top:1px;">
+                <span style="font-size:15px;">🔒</span>
+              </td>
+              <td style="padding-left:8px;font-size:13px;color:#94a3b8;line-height:1.5;">
+                If you did not create a LinksLens account, you can safely ignore this email.
+              </td>
+            </tr>
+          </table>
+
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td align="center" style="padding-top:24px;">
+          <p style="margin:0 0 6px;font-size:12px;color:#475569;">
+            This is an automated email — please do not reply to this message.
+          </p>
+          <p style="margin:0;font-size:12px;color:#475569;">
+            &copy; 2026 LinksLens &nbsp;&bull;&nbsp;
+            <a href="https://linkslens.com" style="color:#60a5fa;text-decoration:none;">linkslens.com</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
     try:
-        send_email(request.EmailAddress, "Verify your LinksLens account", email_html)
+        send_email(request.EmailAddress, "Verify your email address — LinksLens", email_html)
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to send verification email. Please try again.")
@@ -263,20 +338,90 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
     db.flush()
 
     reset_link = f"https://linkslens.com/reset-password.html?token={raw_token}"
-    email_html = f"""
-    <h2>LinksLens Password Reset</h2>
-    <p>You requested a password reset. Click the link below to choose a new password.
-    This link expires in 15 minutes.</p>
-    <a href="{reset_link}" style="display:inline-block; padding:10px 20px;
-    background-color:#1565c0; color:white; text-decoration:none; border-radius:5px;">
-    Reset Password</a>
-    <p style="margin-top:16px; font-size:13px; color:#555;">
-    If you did not request this, your password has not been changed. You can safely
-    ignore this email.</p>
-    """
+    email_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+        <!-- Logo -->
+        <tr><td align="center" style="padding-bottom:28px;">
+          <img src="https://linkslens.com/images/logo.svg" alt="LinksLens" width="44" height="44"
+               style="background:#ffffff;border-radius:10px;display:block;">
+          <p style="margin:10px 0 0;font-size:20px;font-weight:700;color:#f1f5f9;letter-spacing:-0.3px;">LinksLens</p>
+        </td></tr>
+
+        <!-- Card -->
+        <tr><td style="background-color:#1e293b;border-radius:16px;border:1px solid #334155;padding:40px 36px;">
+
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#f1f5f9;">Reset your password</h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#94a3b8;line-height:1.6;">
+            We received a request to reset the password for your LinksLens account. Click the button below to choose a new password.
+          </p>
+
+          <!-- CTA Button -->
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr><td style="border-radius:8px;background-color:#1d4ed8;">
+              <a href="{reset_link}"
+                 style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.1px;">
+                Reset Password
+              </a>
+            </td></tr>
+          </table>
+
+          <!-- Fallback link -->
+          <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Or copy and paste this link into your browser:</p>
+          <p style="margin:0 0 28px;font-size:12px;word-break:break-all;">
+            <a href="{reset_link}" style="color:#60a5fa;text-decoration:none;">{reset_link}</a>
+          </p>
+
+          <!-- Divider -->
+          <hr style="border:none;border-top:1px solid #334155;margin:0 0 24px;">
+
+          <!-- Notices -->
+          <table cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td width="18" valign="top" style="padding-top:1px;">
+                <span style="font-size:15px;">⏰</span>
+              </td>
+              <td style="padding-left:8px;font-size:13px;color:#94a3b8;line-height:1.5;">
+                This link expires in <strong style="color:#f1f5f9;">15 minutes</strong> and can only be used once.
+              </td>
+            </tr>
+            <tr><td colspan="2" style="padding-top:10px;"></td></tr>
+            <tr>
+              <td width="18" valign="top" style="padding-top:1px;">
+                <span style="font-size:15px;">🔒</span>
+              </td>
+              <td style="padding-left:8px;font-size:13px;color:#94a3b8;line-height:1.5;">
+                If you did not request a password reset, your password has not been changed. You can safely ignore this email.
+              </td>
+            </tr>
+          </table>
+
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td align="center" style="padding-top:24px;">
+          <p style="margin:0 0 6px;font-size:12px;color:#475569;">
+            This is an automated email — please do not reply to this message.
+          </p>
+          <p style="margin:0;font-size:12px;color:#475569;">
+            &copy; 2026 LinksLens &nbsp;&bull;&nbsp;
+            <a href="https://linkslens.com" style="color:#60a5fa;text-decoration:none;">linkslens.com</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
     try:
-        send_email(user.EmailAddress, "Reset your LinksLens Password", email_html, from_name="LinksLens Security")
+        send_email(user.EmailAddress, "Reset your LinksLens password", email_html, from_name="LinksLens Security")
     except Exception:
         db.rollback()
         return generic_message
