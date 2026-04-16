@@ -10,6 +10,7 @@ __pycache__/
 *.pyc
 venv/
 .pytest_cache/
+.idea/
 
 # 3. Mobile Build Files
 mobile-app/android/app/build/
