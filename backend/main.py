@@ -125,8 +125,16 @@ def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(
             raise ValueError(f"HTTP {resp.status_code}")
 
     def check_resend():
-        if not os.getenv("RESEND_KEY"):
+        resend_key = os.getenv("RESEND_KEY")
+        if not resend_key:
             raise ValueError("API key not configured")
+        resp = requests.get(
+            "https://api.resend.com/domains",
+            headers={"Authorization": f"Bearer {resend_key}"},
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            raise ValueError(f"HTTP {resp.status_code}")
 
     checks = [
         ("Database",             check_database),
