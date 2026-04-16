@@ -177,7 +177,7 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
         IsUsed=False,
     ))
 
-    verify_link = f"https://linkslens.com/verify-email?token={raw_token}"
+    verify_link = f"https://linkslens.com/verify-email.html?token={raw_token}"
     email_html = f"""
     <h2>Welcome to LinksLens!</h2>
     <p>Hi {request.FullName}, thanks for signing up. Please verify your email address to activate your account.</p>
@@ -262,7 +262,7 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
     ))
     db.flush()
 
-    reset_link = f"https://linkslens.com/reset-password?token={raw_token}"
+    reset_link = f"https://linkslens.com/reset-password.html?token={raw_token}"
     email_html = f"""
     <h2>LinksLens Password Reset</h2>
     <p>You requested a password reset. Click the link below to choose a new password.

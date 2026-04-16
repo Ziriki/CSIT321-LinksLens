@@ -79,7 +79,7 @@ export default function LoginScreen() {
             </Pressable>
           </View>
 
-          <Pressable className="self-end" onPress={() => Linking.openURL("https://linkslens.com/forgot-password")}>
+          <Pressable className="self-end" onPress={() => Linking.openURL("https://linkslens.com/forgot-password.html")}>
             <Text className="text-sm font-medium text-primary">Forgot Password?</Text>
           </Pressable>
 
