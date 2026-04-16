@@ -213,6 +213,11 @@ class ScanHistoryBase(BaseModel):
     StatusIndicator: Optional[ScanStatusEnum] = ScanStatusEnum.PENDING
     DomainAgeDays: Optional[int] = None
     ServerLocation: Optional[str] = None
+    IpAddress: Optional[str] = None
+    AsnName: Optional[str] = None
+    PageTitle: Optional[str] = None
+    ApexDomain: Optional[str] = None
+    SslInfo: Optional[dict] = None
     ScreenshotURL: Optional[str] = None
     ScriptAnalysis: Optional[dict] = None
     HomographAnalysis: Optional[dict] = None

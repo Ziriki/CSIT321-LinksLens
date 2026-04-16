@@ -1,3 +1,5 @@
+import time
+
 import jwt
 import streamlit as st
 from models import api_client
@@ -22,10 +24,23 @@ def _decode_token():
 
 
 def require_auth():
-    """Redirect unauthenticated users back to the login page."""
-    if not st.session_state.get("access_token"):
+    """Redirect unauthenticated or expired-session users back to the login page."""
+    token = st.session_state.get("access_token")
+    if not token:
         st.error("Please log in first.")
         st.stop()
+    try:
+        payload = jwt.decode(token, options={"verify_signature": False})
+        if payload.get("exp", 0) < time.time():
+            st.session_state["access_token"] = None
+            st.session_state.pop("_decoded_user", None)
+            st.session_state["session_expired"] = True
+            st.switch_page("app.py")
+    except Exception:
+        st.session_state["access_token"] = None
+        st.session_state.pop("_decoded_user", None)
+        st.session_state["session_expired"] = True
+        st.switch_page("app.py")
 
 
 # Streamlit uses the page filename as the sidebar link href — match on filename substrings.
@@ -77,12 +92,26 @@ def render_sidebar():
         st.sidebar.write(f"Logged in as **{role_label}**")
 
     st.sidebar.markdown("---")
-    if st.sidebar.button("Log Out"):
-        if user:
-            api_client.log_action(user["user_id"], "LOGOUT", "Logged out of admin portal.")
-        st.session_state["access_token"] = None
-        st.session_state.pop("_decoded_user", None)
-        st.switch_page("app.py")
+
+    if not st.session_state.get("confirm_logout"):
+        if st.sidebar.button("Log Out"):
+            st.session_state["confirm_logout"] = True
+            st.rerun()
+    else:
+        st.sidebar.warning("Are you sure you want to log out?")
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            if st.button("Yes", key="confirm_logout_yes"):
+                if user:
+                    api_client.log_action(user["user_id"], "LOGOUT", "Logged out of admin portal.")
+                st.session_state["access_token"] = None
+                st.session_state.pop("_decoded_user", None)
+                st.session_state.pop("confirm_logout", None)
+                st.switch_page("app.py")
+        with col2:
+            if st.button("No", key="confirm_logout_no"):
+                st.session_state.pop("confirm_logout", None)
+                st.rerun()
 
 
 def handle_login(email, password):
