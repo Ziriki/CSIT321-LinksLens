@@ -17,6 +17,10 @@ if st.session_state.get("access_token") is None:
     )
     st.image(LOGO_PATH, width=180)
     st.title("LinksLens Admin Portal")
+
+    if st.session_state.pop("session_expired", False):
+        st.warning("Your session has expired. Please log in again.")
+
     with st.form("login"):
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
