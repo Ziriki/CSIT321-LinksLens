@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
+import { Alert } from "react-native";
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "https://api.linkslens.com";
@@ -46,7 +47,11 @@ async function apiFetch(url: string, options: RequestInit = {}): Promise<Respons
   });
   if (res.status === 401) {
     await clearToken();
-    router.replace("/");
+    Alert.alert(
+      "Session Expired",
+      "Your session has expired. Please log in again.",
+      [{ text: "OK", onPress: () => router.replace("/") }]
+    );
     throw new Error("Session expired. Please log in again.");
   }
   return res;
@@ -108,7 +113,14 @@ export async function signup(
 }
 
 export async function logout(): Promise<void> {
-  await clearToken();
+  try {
+    await apiFetch(`${API_BASE_URL}/api/auth/logout`, { method: "POST" });
+  } catch {
+    // 401 (expired token) is already handled by apiFetch — it clears the token
+    // and redirects to login. Any other error (network) is safe to ignore here.
+  } finally {
+    await clearToken();
+  }
 }
 
 // ─── User Profile ─────────────────────────────────────────────────────────────
@@ -161,8 +173,8 @@ export interface ScriptAnalysis {
   ad_heavy: boolean;
   crypto_miners: string[];
   malicious_scripts: string[];
-  suspicious_patterns: string[];
-  tech_stack: string[];
+  suspicious_patterns: { url: string; reason: string }[];
+  tech_stack: { name: string; categories: string[] }[];
   script_risk_score: number;
 }
 
@@ -173,6 +185,14 @@ export interface HomographAnalysis {
   mixed_scripts: string[];
   confusable_chars: string[];
   details: string | null;
+}
+
+export interface SslInfo {
+  issuer: string;
+  subject: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  protocol: string;
 }
 
 export interface ScanResponse {
@@ -187,6 +207,9 @@ export interface ScanResponse {
   domain_age_days: number | null;
   server_location: string | null;
   ip_address: string | null;
+  asn_name: string | null;
+  page_title: string | null;
+  apex_domain: string | null;
   screenshot_url: string | null;
   brands: string[];
   tags: string[];
@@ -195,6 +218,7 @@ export interface ScanResponse {
   gsb_threat_types: string[];
   script_analysis: ScriptAnalysis | null;
   homograph_analysis: HomographAnalysis | null;
+  ssl_info: SslInfo | null;
   scanned_at: string;
 }
 
@@ -222,6 +246,11 @@ export interface ScanHistoryItem {
   StatusIndicator: string | null;
   DomainAgeDays: number | null;
   ServerLocation: string | null;
+  IpAddress: string | null;
+  AsnName: string | null;
+  PageTitle: string | null;
+  ApexDomain: string | null;
+  SslInfo: SslInfo | null;
   ScreenshotURL: string | null;
   ScriptAnalysis: ScriptAnalysis | null;
   HomographAnalysis: HomographAnalysis | null;

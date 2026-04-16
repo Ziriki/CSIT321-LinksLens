@@ -5,13 +5,16 @@ import {
   Search,
   ScanLine,
   Trash2,
+  X,
+  CheckSquare,
+  Square,
 } from "lucide-react-native"
 
 import {
   RiskBadge,
   BottomNav,
 } from "../components/ui-components"
-import { fetchScanHistory, clearScanHistory, getCurrentUserId } from "../lib/api"
+import { fetchScanHistory, deleteScan, getCurrentUserId } from "../lib/api"
 import type { ScanHistoryItem, ScanResponse } from "../lib/api"
 import { statusToRisk } from "../lib/types"
 import { bottomNavItems } from "../lib/navigation"
@@ -43,10 +46,10 @@ export default function ScanHistory() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<FilterOption>("ALL")
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
 
-  useEffect(() => {
-    loadScans()
-  }, [])
+  useEffect(() => { loadScans() }, [])
 
   async function loadScans() {
     setLoading(true)
@@ -60,49 +63,125 @@ export default function ScanHistory() {
     }
   }
 
-  async function handleClearAll() {
-    Alert.alert("Clear History", "Delete all scan history?", [
+  const filtered = useMemo(
+    () =>
+      scans.filter((s: ScanHistoryItem) => {
+        const matchesStatus = filterStatus === "ALL" || s.StatusIndicator === filterStatus
+        const matchesSearch = !search || s.InitialURL.toLowerCase().includes(search.toLowerCase())
+        return matchesStatus && matchesSearch
+      }),
+    [scans, search, filterStatus],
+  )
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelected(new Set())
+  }
+
+  function toggleSelect(scanId: number) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(scanId) ? next.delete(scanId) : next.add(scanId)
+      return next
+    })
+  }
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(s => selected.has(s.ScanID))
+
+  function toggleSelectAll() {
+    setSelected(prev => {
+      const next = new Set(prev)
+      filtered.forEach((s: ScanHistoryItem) => allFilteredSelected ? next.delete(s.ScanID) : next.add(s.ScanID))
+      return next
+    })
+  }
+
+  async function handleDeleteSingle(scanId: number) {
+    Alert.alert("Delete Scan", "Delete this scan from your history?", [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Delete All",
+        text: "Delete",
         style: "destructive",
         onPress: async () => {
           try {
-            const userId = await getCurrentUserId()
-            if (userId) await clearScanHistory(userId)
-            setScans([])
+            await deleteScan(scanId)
+            setScans(prev => prev.filter(s => s.ScanID !== scanId))
           } catch {
-            Alert.alert("Error", "Failed to clear history.")
+            Alert.alert("Error", "Failed to delete scan.")
           }
         },
       },
     ])
   }
 
-  const filtered = useMemo(
-    () =>
-      scans.filter((s: ScanHistoryItem) => {
-        const matchesStatus =
-          filterStatus === "ALL" || s.StatusIndicator === filterStatus
-        const matchesSearch =
-          !search ||
-          s.InitialURL.toLowerCase().includes(search.toLowerCase())
-        return matchesStatus && matchesSearch
-      }),
-    [scans, search, filterStatus],
-  )
+  async function handleDeleteSelected() {
+    if (selected.size === 0) return
+    Alert.alert(
+      "Delete Scans",
+      `Delete ${selected.size} selected scan${selected.size > 1 ? "s" : ""}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await Promise.all([...selected].map(id => deleteScan(id)))
+              setScans(prev => prev.filter(s => !selected.has(s.ScanID)))
+              exitSelectMode()
+            } catch {
+              Alert.alert("Error", "Failed to delete selected scans.")
+            }
+          },
+        },
+      ]
+    )
+  }
 
   return (
     <View className="flex-1 bg-background">
+
       {/* Header */}
       <View className="flex-row items-center justify-between border-b border-border bg-background px-4 py-3">
-        <View className="w-10" />
+        {selectMode ? (
+          <Pressable className="p-2" onPress={exitSelectMode}>
+            <X size={20} color={iconColor} />
+          </Pressable>
+        ) : (
+          <View className="w-10" />
+        )}
+
         <Text className="text-lg font-semibold text-foreground">
-          Previous Scans
+          {selectMode
+            ? selected.size > 0 ? `${selected.size} selected` : "Select Scans"
+            : "Previous Scans"}
         </Text>
-        <Pressable className="p-2" onPress={handleClearAll}>
-          <Trash2 size={20} color="#dc2626" />
-        </Pressable>
+
+        <View className="flex-row items-center gap-1">
+          {selectMode ? (
+            <>
+              {/* Select all toggle */}
+              <Pressable className="p-2" onPress={toggleSelectAll}>
+                {allFilteredSelected
+                  ? <CheckSquare size={20} color="#2563eb" />
+                  : <Square size={20} color={iconColor} />}
+              </Pressable>
+              {/* Delete selected */}
+              <Pressable
+                className="p-2"
+                onPress={handleDeleteSelected}
+                disabled={selected.size === 0}
+              >
+                <Trash2 size={20} color={selected.size > 0 ? "#dc2626" : "#6b7280"} />
+              </Pressable>
+            </>
+          ) : (
+            /* Enter select mode */
+            <Pressable className="p-2" onPress={() => setSelectMode(true)}>
+              <CheckSquare size={20} color={iconColor} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* Search */}
@@ -137,11 +216,7 @@ export default function ScanHistory() {
             }`}
             onPress={() => setFilterStatus(opt)}
           >
-            <Text
-              className={`text-xs font-medium ${
-                filterStatus === opt ? "text-white" : "text-foreground"
-              }`}
-            >
+            <Text className={`text-xs font-medium ${filterStatus === opt ? "text-white" : "text-foreground"}`}>
               {opt}
             </Text>
           </Pressable>
@@ -151,67 +226,100 @@ export default function ScanHistory() {
       {/* List */}
       <ScrollView className="flex-1 px-4 py-3">
         {loading && (
-          <Text className="py-8 text-center text-muted-foreground">
-            Loading...
-          </Text>
+          <Text className="py-8 text-center text-muted-foreground">Loading...</Text>
         )}
 
         {!loading && filtered.length === 0 && (
-          <Text className="py-8 text-center text-muted-foreground">
-            No scans found.
-          </Text>
+          <Text className="py-8 text-center text-muted-foreground">No scans found.</Text>
         )}
 
-        {filtered.map((scan: ScanHistoryItem) => (
-          <Pressable
-            key={scan.ScanID}
-            className="mb-2 flex-row items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
-            onPress={() =>
-              router.push({
-                pathname: "/scan-results",
-                params: {
-                  result: JSON.stringify({
-                    scan_id: scan.ScanID,
-                    user_id: scan.UserID,
-                    uuid: null,
-                    initial_url: scan.InitialURL,
-                    redirect_url: scan.RedirectURL,
-                    redirect_chain: scan.RedirectChain ?? null,
-                    status_indicator: (scan.StatusIndicator ?? "UNAVAILABLE") as ScanResponse["status_indicator"],
-                    score: 0,
-                    domain_age_days: scan.DomainAgeDays ?? null,
-                    server_location: scan.ServerLocation,
-                    ip_address: null,
-                    screenshot_url: scan.ScreenshotURL,
-                    brands: [],
-                    tags: [],
-                    result_url: "",
-                    gsb_flagged: false,
-                    gsb_threat_types: [],
-                    script_analysis: scan.ScriptAnalysis ?? null,
-                    homograph_analysis: scan.HomographAnalysis ?? null,
-                    scanned_at: scan.ScannedAt,
-                  } satisfies ScanResponse),
-                },
-              })
-            }
-          >
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
-              <ScanLine size={20} color={iconColor} />
-            </View>
+        {filtered.map((scan: ScanHistoryItem) => {
+          const isSelected = selected.has(scan.ScanID)
+          return (
+            <Pressable
+              key={scan.ScanID}
+              className={`mb-2 flex-row items-center gap-3 rounded-xl border px-4 py-3 ${
+                isSelected ? "border-primary bg-primary/10" : "border-border bg-card"
+              }`}
+              onPress={() => {
+                if (selectMode) {
+                  toggleSelect(scan.ScanID)
+                } else {
+                  router.push({
+                    pathname: "/scan-results",
+                    params: {
+                      result: JSON.stringify({
+                        scan_id: scan.ScanID,
+                        user_id: scan.UserID,
+                        uuid: null,
+                        initial_url: scan.InitialURL,
+                        redirect_url: scan.RedirectURL,
+                        redirect_chain: scan.RedirectChain ?? null,
+                        status_indicator: (scan.StatusIndicator ?? "UNAVAILABLE") as ScanResponse["status_indicator"],
+                        score: 0,
+                        domain_age_days: scan.DomainAgeDays ?? null,
+                        server_location: scan.ServerLocation,
+                        ip_address: scan.IpAddress ?? null,
+                        asn_name: scan.AsnName ?? null,
+                        page_title: scan.PageTitle ?? null,
+                        apex_domain: scan.ApexDomain ?? null,
+                        screenshot_url: scan.ScreenshotURL,
+                        brands: [],
+                        tags: [],
+                        result_url: "",
+                        gsb_flagged: false,
+                        gsb_threat_types: [],
+                        script_analysis: scan.ScriptAnalysis ?? null,
+                        homograph_analysis: scan.HomographAnalysis ?? null,
+                        ssl_info: scan.SslInfo ?? null,
+                        scanned_at: scan.ScannedAt,
+                      } satisfies ScanResponse),
+                    },
+                  })
+                }
+              }}
+              onLongPress={() => {
+                if (!selectMode) {
+                  setSelectMode(true)
+                  setSelected(new Set([scan.ScanID]))
+                }
+              }}
+            >
+              {selectMode ? (
+                <View className={`h-6 w-6 items-center justify-center rounded-full border-2 ${
+                  isSelected ? "border-primary bg-primary" : "border-border"
+                }`}>
+                  {isSelected && <Text className="text-xs font-bold text-white">✓</Text>}
+                </View>
+              ) : (
+                <View className="h-10 w-10 items-center justify-center rounded-full bg-secondary">
+                  <ScanLine size={20} color={iconColor} />
+                </View>
+              )}
 
-            <View className="flex-1">
-              <Text className="font-medium text-foreground" numberOfLines={1}>
-                {scan.InitialURL}
-              </Text>
-              <Text className="text-sm text-muted-foreground">
-                {timeAgo(scan.ScannedAt)}
-              </Text>
-            </View>
+              <View className="flex-1">
+                <Text className="font-medium text-foreground" numberOfLines={1}>
+                  {scan.InitialURL}
+                </Text>
+                <Text className="text-sm text-muted-foreground">
+                  {timeAgo(scan.ScannedAt)}
+                </Text>
+              </View>
 
-            <RiskBadge riskLevel={statusToRisk(scan.StatusIndicator)} size="sm" />
-          </Pressable>
-        ))}
+              <View className="flex-row items-center gap-2">
+                <RiskBadge riskLevel={statusToRisk(scan.StatusIndicator)} size="sm" />
+                {!selectMode && (
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => handleDeleteSingle(scan.ScanID)}
+                  >
+                    <Trash2 size={18} color="#dc2626" />
+                  </Pressable>
+                )}
+              </View>
+            </Pressable>
+          )
+        })}
       </ScrollView>
 
       <BottomNav activeIndex={2} items={bottomNavItems} />

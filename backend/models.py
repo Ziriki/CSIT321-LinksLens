@@ -128,13 +128,18 @@ class ScanHistory(Base):
     __tablename__ = "ScanHistory"
 
     ScanID = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=True) 
+    UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=True)
     InitialURL = Column(String(2048), nullable=False)
     RedirectURL = Column(String(2048), nullable=True)
     RedirectChain = Column(JSON, nullable=True)  # Ordered list of all redirect URLs
     StatusIndicator = Column(Enum(ScanStatusEnum), default=ScanStatusEnum.PENDING, nullable=False)
     DomainAgeDays = Column(Integer, nullable=True)
     ServerLocation = Column(String(100), nullable=True)
+    IpAddress = Column(String(45), nullable=True)
+    AsnName = Column(String(255), nullable=True)
+    PageTitle = Column(String(512), nullable=True)
+    ApexDomain = Column(String(255), nullable=True)
+    SslInfo = Column(JSON, nullable=True)
     ScreenshotURL = Column(String(2048), nullable=True)
     ScriptAnalysis = Column(JSON, nullable=True)
     HomographAnalysis = Column(JSON, nullable=True)

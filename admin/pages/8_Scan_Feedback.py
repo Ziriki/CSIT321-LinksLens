@@ -3,7 +3,7 @@ import pandas as pd
 from controllers import auth_controller
 from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
-from utils import search_dataframe
+from utils import search_dataframe, render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander
 
 st.set_page_config(page_title="Scan Feedback", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 # Admin + Moderator (RoleID 1, 2)
@@ -73,26 +73,40 @@ if selected_rows:
     st.markdown("---")
     st.subheader(f"Feedback #{fb['FeedbackID']} — Scan #{fb['ScanID']}")
 
-    # Scan info
+    # ── Overview ──────────────────────────────────────────────────────────
     col1, col2 = st.columns(2)
     with col1:
         st.markdown(f"**Scanned URL:** {fb['InitialURL']}")
-        st.markdown(f"**Redirect URL:** {fb.get('RedirectURL') or 'None'}")
+        if fb.get("RedirectURL"):
+            st.markdown(f"**Redirect URL:** {fb['RedirectURL']}")
+        if fb.get("PageTitle"):
+            st.markdown(f"**Page Title:** {fb['PageTitle']}")
+        if fb.get("ApexDomain"):
+            st.markdown(f"**Registered Domain:** `{fb['ApexDomain']}`")
         st.markdown(f"**Domain Age:** {fb.get('DomainAgeDays') or 'N/A'} days")
-        st.markdown(f"**Server Location:** {fb.get('ServerLocation') or 'N/A'}")
     with col2:
         st.markdown(f"**Submitted by:** {fb['UserName']} ({fb['UserEmail']})")
         st.markdown(f"**Feedback submitted:** {fb.get('CreatedAt') or 'N/A'}")
         st.markdown(f"**Scanned at:** {fb.get('ScannedAt') or 'N/A'}")
+        st.markdown(f"**IP Address:** {fb.get('IpAddress') or 'N/A'}")
+        st.markdown(f"**Country:** {fb.get('ServerLocation') or 'N/A'}")
+        st.markdown(f"**Hosting Provider:** {fb.get('AsnName') or 'N/A'}")
         st.markdown(f"**Current Verdict:** `{fb['CurrentStatus']}`")
         st.markdown(f"**User suggests:** `{fb['SuggestedStatus']}`")
+
+    render_ssl_expander(fb.get("SslInfo") or {})
 
     if fb.get("Comments"):
         st.info(f"**User comment:** {fb['Comments']}")
 
+    # ── Screenshot ────────────────────────────────────────────────────────
     if fb.get("ScreenshotURL"):
-        with st.expander("View Sandboxed Screenshot"):
+        with st.expander("Website Screenshot"):
             st.image(fb["ScreenshotURL"], caption="Sandboxed render of the website")
+
+    render_redirect_chain_expander(fb.get("RedirectChain") or [])
+    render_script_analysis_expander(fb.get("ScriptAnalysis") or {})
+    render_homograph_expander(fb.get("HomographAnalysis") or {})
 
     # -----------------------------------------------------------------
     # Verdict dropdown + apply button
