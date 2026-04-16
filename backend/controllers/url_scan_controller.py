@@ -490,6 +490,41 @@ def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
 
 
 #########################################################
+# Helper: Extract SSL/TLS certificate info from urlscan
+#########################################################
+def extract_ssl_info(raw_result: dict | None) -> dict | None:
+    """
+    Extract SSL/TLS certificate details from the first HTTPS request in the
+    urlscan.io raw result that contains securityDetails.
+    Returns None when SSL info is unavailable (HTTP site or scan timeout).
+    Non-blocking — failures must never abort the scan pipeline.
+    """
+    if not raw_result:
+        return None
+    try:
+        for req in raw_result.get("data", {}).get("requests", []):
+            sec = req.get("response", {}).get("response", {}).get("securityDetails")
+            if not sec:
+                continue
+            protocol = sec.get("protocol")
+            issuer = sec.get("issuer")
+            if not (protocol and issuer):
+                continue
+            valid_from_ts = sec.get("validFrom")
+            valid_to_ts = sec.get("validTo")
+            return {
+                "issuer": issuer,
+                "subject": sec.get("subjectName"),
+                "valid_from": datetime.fromtimestamp(valid_from_ts, tz=timezone.utc).strftime("%Y-%m-%d") if valid_from_ts else None,
+                "valid_to": datetime.fromtimestamp(valid_to_ts, tz=timezone.utc).strftime("%Y-%m-%d") if valid_to_ts else None,
+                "protocol": protocol,
+            }
+    except Exception:
+        pass
+    return None
+
+
+#########################################################
 # Helper: Map urlscan.io raw result to a structured dict
 #########################################################
 def process_result(uuid: str | None, raw_result: dict | None) -> dict:
@@ -503,6 +538,9 @@ def process_result(uuid: str | None, raw_result: dict | None) -> dict:
             "redirect_url": None,
             "server_location": None,
             "ip_address": None,
+            "asn_name": None,
+            "page_title": None,
+            "apex_domain": None,
             "screenshot_url": None,
             "result_url": None,
             "brands": [],
@@ -534,6 +572,9 @@ def process_result(uuid: str | None, raw_result: dict | None) -> dict:
         "redirect_url": redirect_url if redirect_url and redirect_url != initial_url and redirect_url.startswith("http") else None,
         "server_location": page.get("country"),
         "ip_address": page.get("ip"),
+        "asn_name": page.get("asnname"),
+        "page_title": page.get("title"),
+        "apex_domain": page.get("apexDomain"),
         "screenshot_url": URLSCAN_SCREENSHOT_URL.format(uuid=uuid),
         "result_url": f"https://urlscan.io/result/{uuid}/",
         "brands": overall.get("brands", []),
@@ -779,6 +820,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             redirect_chain     = extract_redirect_chain(initial_url, raw_result)
             script_analysis    = analyze_scripts(raw_result, initial_url)
             homograph_analysis = detect_homograph_risk(initial_url)
+            ssl_info           = extract_ssl_info(raw_result)
 
             final_status = compare_async_results(gsb, urlscan_result, blacklist_check)
 
@@ -803,6 +845,11 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 StatusIndicator=models.ScanStatusEnum(final_status),
                 DomainAgeDays=domain_age_days,
                 ServerLocation=urlscan_result["server_location"],
+                IpAddress=urlscan_result["ip_address"],
+                AsnName=urlscan_result["asn_name"],
+                PageTitle=urlscan_result["page_title"],
+                ApexDomain=urlscan_result["apex_domain"],
+                SslInfo=ssl_info,
                 ScreenshotURL=urlscan_result["screenshot_url"],
                 ScriptAnalysis=script_analysis,
                 HomographAnalysis=homograph_analysis,
@@ -823,6 +870,9 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 "domain_age_days": domain_age_days,
                 "server_location": urlscan_result["server_location"],
                 "ip_address": urlscan_result["ip_address"],
+                "asn_name": urlscan_result["asn_name"],
+                "page_title": urlscan_result["page_title"],
+                "apex_domain": urlscan_result["apex_domain"],
                 "screenshot_url": urlscan_result["screenshot_url"],
                 "brands": urlscan_result["brands"],
                 "tags": urlscan_result["tags"],
@@ -832,6 +882,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 "gsb_threat_types": gsb["threat_types"],
                 "script_analysis": script_analysis,
                 "homograph_analysis": homograph_analysis,
+                "ssl_info": ssl_info,
             })
 
     except HTTPException:
