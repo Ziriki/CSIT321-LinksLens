@@ -154,10 +154,18 @@ def list_feedback_enriched(
             "CreatedAt": str(fb.CreatedAt) if fb.CreatedAt else None,
             # Extra scan details for the drill-down panel
             "RedirectURL": fb.scan.RedirectURL if fb.scan else None,
+            "RedirectChain": fb.scan.RedirectChain if fb.scan else None,
             "DomainAgeDays": fb.scan.DomainAgeDays if fb.scan else None,
             "ServerLocation": fb.scan.ServerLocation if fb.scan else None,
+            "IpAddress": fb.scan.IpAddress if fb.scan else None,
+            "AsnName": fb.scan.AsnName if fb.scan else None,
+            "PageTitle": fb.scan.PageTitle if fb.scan else None,
+            "ApexDomain": fb.scan.ApexDomain if fb.scan else None,
+            "SslInfo": fb.scan.SslInfo if fb.scan else None,
             "ScreenshotURL": fb.scan.ScreenshotURL if fb.scan else None,
             "ScannedAt": str(fb.scan.ScannedAt) if fb.scan and fb.scan.ScannedAt else None,
+            "ScriptAnalysis": fb.scan.ScriptAnalysis if fb.scan else None,
+            "HomographAnalysis": fb.scan.HomographAnalysis if fb.scan else None,
         })
 
     return enriched

@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from utils import render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander
 from controllers import auth_controller
 from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
@@ -101,21 +102,33 @@ if selected_scan_id:
     if data:
         st.markdown("---")
         st.subheader(f"Scan #{data['ScanID']} Details")
-        st.write(f"**Target URL:** {data['InitialURL']}")
-        if data.get("RedirectURL"):
-            st.write(f"**Redirect URL:** {data['RedirectURL']}")
-        st.write(f"**Final Verdict:** `{data['StatusIndicator']}`")
 
+        # ── Overview ──────────────────────────────────────────────────────
         col1, col2 = st.columns(2)
         with col1:
-            st.info(f"**Server Location:** {data.get('ServerLocation', 'N/A')}")
+            st.markdown(f"**Target URL:** {data['InitialURL']}")
+            if data.get("RedirectURL"):
+                st.markdown(f"**Redirect URL:** {data['RedirectURL']}")
+            if data.get("PageTitle"):
+                st.markdown(f"**Page Title:** {data['PageTitle']}")
+            if data.get("ApexDomain"):
+                st.markdown(f"**Registered Domain:** `{data['ApexDomain']}`")
+            st.markdown(f"**Final Verdict:** `{data['StatusIndicator']}`")
+            st.markdown(f"**Scanned At:** {data.get('ScannedAt', 'N/A')}")
         with col2:
-            st.warning(f"**Domain Age (Days):** {data.get('DomainAgeDays', 'N/A')}")
+            st.markdown(f"**IP Address:** {data.get('IpAddress') or 'N/A'}")
+            st.markdown(f"**Country:** {data.get('ServerLocation') or 'N/A'}")
+            st.markdown(f"**Hosting Provider:** {data.get('AsnName') or 'N/A'}")
+            st.markdown(f"**Domain Age:** {data.get('DomainAgeDays') or 'N/A'} days")
+            st.markdown(f"**User ID:** {data.get('UserID', 'N/A')}")
 
+        render_ssl_expander(data.get("SslInfo") or {})
+
+        # ── Screenshot ────────────────────────────────────────────────────
         if data.get("ScreenshotURL"):
-            with st.expander("View Sandboxed Screenshot"):
+            with st.expander("Website Screenshot"):
                 st.image(data["ScreenshotURL"], caption="Sandboxed render of the website")
 
-        if data.get("RawText"):
-            with st.expander("View Extracted Raw Text"):
-                st.text(data["RawText"])
+        render_redirect_chain_expander(data.get("RedirectChain") or [])
+        render_script_analysis_expander(data.get("ScriptAnalysis") or {})
+        render_homograph_expander(data.get("HomographAnalysis") or {})

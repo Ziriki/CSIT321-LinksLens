@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { View, Text, ScrollView } from "react-native"
+import { View, Text, ScrollView, Alert } from "react-native"
 import { router } from "expo-router"
 import {
   Settings,
@@ -96,9 +96,22 @@ export default function Profile() {
           <ListItem
             title="Sign Out"
             leftIcon={<LogOut size={20} color={iconColor} />}
-            onPress={async () => {
-              await logout()
-              router.replace("/")
+            onPress={() => {
+              Alert.alert(
+                "Sign Out",
+                "Are you sure you want to sign out?",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Sign Out",
+                    style: "destructive",
+                    onPress: async () => {
+                      await logout()
+                      router.replace("/")
+                    },
+                  },
+                ]
+              )
             }}
           />
         </View>
