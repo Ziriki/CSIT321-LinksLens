@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react"
-import { View, Text, ScrollView, Image, Linking, Pressable, Alert, Modal } from "react-native"
+import React, { useState, useRef, useEffect, useMemo } from "react"
+import { View, Text, ScrollView, Image, Linking, Pressable, Modal, Animated, Alert } from "react-native"
 import { captureRef } from "react-native-view-shot"
 import * as MediaLibrary from "expo-media-library"
 import { router, useLocalSearchParams } from "expo-router"
@@ -15,6 +15,10 @@ import {
   AlertTriangle,
   ImageIcon,
   GitBranch,
+  Lock,
+  MapPin,
+  Shield,
+  Link2,
 } from "lucide-react-native"
 
 import {
@@ -102,6 +106,38 @@ function ThreatList({ title, items, color }: { title: string; items: string[]; c
   )
 }
 
+function InfoRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <View className="mb-2 flex-row items-start justify-between gap-2">
+      <Text className="flex-shrink-0 text-sm text-muted-foreground">{label}</Text>
+      <Text className={`flex-1 text-right text-sm ${valueColor ?? "text-foreground"}`} numberOfLines={2}>{value}</Text>
+    </View>
+  )
+}
+
+function DetailSectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <View className="mb-3 flex-row items-center gap-2 border-b border-border pb-2">
+      {icon}
+      <Text className="text-sm font-semibold text-foreground">{title}</Text>
+    </View>
+  )
+}
+
+function HighlightRow({ label, value, ok, noBorder }: { label: string; value: string; ok: boolean | null; noBorder?: boolean }) {
+  const dotColor = ok === null ? "#6b7280" : ok ? "#16a34a" : "#dc2626"
+  const textClass = ok === null ? "text-muted-foreground" : ok ? "text-green-500" : "text-red-500"
+  return (
+    <View className={`flex-row items-center justify-between py-2.5 ${noBorder ? "" : "border-b border-border"}`}>
+      <Text className="text-sm text-muted-foreground">{label}</Text>
+      <View className="flex-row items-center gap-1.5">
+        <View className="h-2 w-2 rounded-full" style={{ backgroundColor: dotColor }} />
+        <Text className={`text-sm font-medium ${textClass}`}>{value}</Text>
+      </View>
+    </View>
+  )
+}
+
 export default function ScanResults() {
   const { result, error } = useLocalSearchParams<{ result?: string; error?: string }>();
   const iconColor = useIconColor();
@@ -110,7 +146,26 @@ export default function ScanResults() {
   const [showRedirects, setShowRedirects] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [browser, setBrowser] = useState<BrowserId>("system");
-  const exportRef = useRef<View>(null);
+  const exportRef = useRef<ScrollView>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const runningAnim = useRef<Animated.CompositeAnimation | null>(null);
+
+  function showToast(message: string, type: "success" | "error") {
+    runningAnim.current?.stop();
+    toastOpacity.setValue(0);
+    setToast({ message, type });
+    runningAnim.current = Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(2200),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]);
+    runningAnim.current.start(() => setToast(null));
+  }
+
+  useEffect(() => {
+    return () => { runningAnim.current?.stop(); };
+  }, []);
 
   useEffect(() => {
     getCurrentUserId().then((id) => {
@@ -118,20 +173,46 @@ export default function ScanResults() {
     })
   }, [])
 
-  function openURL(url: string) {
+  async function openURL(url: string) {
+    if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+      Alert.alert("Cannot open link", "This URL cannot be opened.")
+      return
+    }
+
     const pkg = BROWSER_PACKAGES[browser]
     if (pkg) {
-      // intent:// URIs target the browser package directly — works on Android 11+
-      // without requiring <queries> manifest entries for custom browser schemes.
+      // intent:// URIs target a specific browser package on Android 11+.
+      // We verify the URL parses first, then try the intent URI.
+      // If Android dispatches but the browser still shows blank, we fall back
+      // to Linking.openURL(url) which lets the OS pick the default browser.
       try {
         const parsed = new URL(url)
-        const intentUri = `intent://${parsed.host}${parsed.pathname}${parsed.search}#Intent;scheme=${parsed.protocol.replace(":", "")};package=${pkg};S.browser_fallback_url=${encodeURIComponent(url)};end`
-        Linking.openURL(intentUri).catch(() => Linking.openURL(url))
+        const scheme = parsed.protocol.replace(":", "")
+        const intentUri = [
+          `intent://${parsed.host}${parsed.pathname}${parsed.search}`,
+          `#Intent`,
+          `scheme=${scheme}`,
+          `package=${pkg}`,
+          `S.browser_fallback_url=${encodeURIComponent(url)}`,
+          `end`,
+        ].join(";")
+
+        const opened = await Linking.openURL(intentUri).then(() => true).catch(() => false)
+        if (!opened) {
+          await Linking.openURL(url).catch(() => {
+            Alert.alert("Cannot open link", "No browser available to open this URL.")
+          })
+        }
       } catch {
-        Linking.openURL(url)
+        // URL parsing failed — fall back to system browser
+        await Linking.openURL(url).catch(() => {
+          Alert.alert("Cannot open link", "Could not open this URL.")
+        })
       }
     } else {
-      Linking.openURL(url)
+      await Linking.openURL(url).catch(() => {
+        Alert.alert("Cannot open link", "Could not open this URL.")
+      })
     }
   }
 
@@ -139,15 +220,15 @@ export default function ScanResults() {
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync({ granularPermissions: ["photo"] });
       if (status !== "granted") {
-        Alert.alert("Permission needed", "Allow photo library access to save the report.");
+        showToast("Allow photo library access to save the report.", "error");
         return;
       }
-      const uri = await captureRef(exportRef, { format: "jpg", quality: 0.9 });
+      const uri = await captureRef(exportRef, { format: "jpg", quality: 0.9, snapshotContentContainer: true });
       await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert("Saved", "Scan report saved to your gallery.");
+      showToast("Scan report saved to your gallery.", "success");
     } catch (e: any) {
       console.error("Export failed:", e?.message ?? e);
-      Alert.alert("Export failed", "Could not save the scan report.");
+      showToast("Could not save the scan report.", "error");
     }
   }
 
@@ -191,8 +272,8 @@ export default function ScanResults() {
 
       <ScreenHeader title="Scan Results" />
 
-      <ScrollView className="flex-1 px-4 py-4">
-        <View ref={exportRef} collapsable={false}>
+      <ScrollView ref={exportRef} className="flex-1 px-4 py-4">
+        <View collapsable={false}>
 
         {/* Result hero */}
         <View className="items-center py-6">
@@ -218,6 +299,44 @@ export default function ScanResults() {
                 : threatDescription}
           </Text>
         </View>
+
+        {/* Key Highlights — plain-English security signals for layman users */}
+        <Card className="mt-2">
+          <Text className="mb-1 text-sm font-semibold text-foreground">Security Highlights</Text>
+          <HighlightRow
+            label="Connection"
+            value={scanData.initial_url.startsWith("https://") ? "Secure (HTTPS)" : "Not Secure (HTTP)"}
+            ok={scanData.initial_url.startsWith("https://")}
+          />
+          <HighlightRow
+            label="Redirects"
+            value={
+              (scanData.redirect_chain?.length ?? 0) === 0
+                ? "No redirects"
+                : `Redirects ${scanData.redirect_chain!.length} time${scanData.redirect_chain!.length > 1 ? "s" : ""}`
+            }
+            ok={(scanData.redirect_chain?.length ?? 0) === 0}
+          />
+          <HighlightRow
+            label="Domain Age"
+            value={
+              scanData.domain_age_days == null
+                ? "Unknown"
+                : scanData.domain_age_days < 90
+                  ? `${scanData.domain_age_days} days old (new)`
+                  : scanData.domain_age_days < 365
+                    ? `${Math.floor(scanData.domain_age_days / 30)} months old`
+                    : `${Math.floor(scanData.domain_age_days / 365)} year${Math.floor(scanData.domain_age_days / 365) > 1 ? "s" : ""} old`
+            }
+            ok={scanData.domain_age_days == null ? null : scanData.domain_age_days >= 90}
+          />
+          <HighlightRow
+            label="Safety Databases"
+            value={scanData.gsb_flagged ? "Flagged as threat" : "Not flagged"}
+            ok={!scanData.gsb_flagged}
+            noBorder
+          />
+        </Card>
 
         {/* Screenshot */}
         {scanData.screenshot_url && (
@@ -297,7 +416,7 @@ export default function ScanResults() {
           <View className="mt-3 border-t border-border pt-3">
             <Pressable
               className="flex-row items-center gap-1"
-              onPress={() => openURL(scanData!.initial_url)}
+              onPress={() => void openURL(scanData!.initial_url)}
             >
               <ExternalLink size={16} color="#2563eb" />
               <Text className="text-sm font-medium text-primary">
@@ -307,28 +426,20 @@ export default function ScanResults() {
           </View>
         </Card>
 
-        {/* Confidence */}
-        <Card className="mt-4">
-          <Text className="mb-3 text-sm font-medium text-foreground">
-            Analysis Confidence
-          </Text>
-          <ConfidenceIndicator value={confidence} />
-        </Card>
-
-        {/* Advanced Analysis toggle */}
+        {/* Technical Details toggle */}
         <Card className="mt-4" onPress={() => setShowAdvanced(!showAdvanced)}>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-3">
               <Info size={20} color={iconColor} />
               <Text className="text-sm font-medium text-foreground">
-                Advanced Analysis
+                Technical Details
               </Text>
             </View>
             {showAdvanced ? <ChevronDown size={20} color={iconColor} /> : <ChevronRight size={20} color={iconColor} />}
           </View>
           {!showAdvanced && (
             <Text className="mt-2 text-sm text-muted-foreground">
-              Domain age, server info, script analysis, and more
+              SSL certificate, IP geolocation, script analysis, and more
             </Text>
           )}
         </Card>
@@ -336,40 +447,141 @@ export default function ScanResults() {
         {showAdvanced && (
           <Card className="mt-1">
 
-            {/* Domain age */}
-            {scanData.domain_age_days != null && (
-              <View className="mb-4">
-                <Text className="text-sm text-muted-foreground">Domain Age</Text>
-                <Text className="mt-1 text-sm text-foreground">
-                  {scanData.domain_age_days} days
-                  {scanData.domain_age_days < 90 ? " (recently registered)" : ""}
+            {/* ── Analysis Confidence ── */}
+            <View className="mb-5">
+              <DetailSectionHeader icon={<Info size={15} color="#6b7280" />} title="Analysis Confidence" />
+              <ConfidenceIndicator value={confidence} />
+            </View>
+
+            {/* ── Page Identity ── is this site pretending to be someone else? */}
+            <View className="mb-5">
+              <DetailSectionHeader icon={<Shield size={15} color="#6b7280" />} title="Page Identity" />
+              {scanData.page_title && <InfoRow label="Page Title" value={scanData.page_title} />}
+              {scanData.apex_domain && <InfoRow label="Registered Domain" value={scanData.apex_domain} />}
+              {scanData.brands.length > 0 && (
+                <View className="mb-2 flex-row items-start justify-between gap-2">
+                  <Text className="flex-shrink-0 text-sm text-muted-foreground">Brand Impersonation</Text>
+                  <View className="flex-1 flex-row flex-wrap justify-end gap-1">
+                    {scanData.brands.map((b, i) => (
+                      <View key={i} className="rounded-full bg-red-500/10 px-2 py-0.5">
+                        <Text className="text-xs font-medium text-red-500">{b}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {scanData.tags.length > 0 && (
+                <View className="mb-2 flex-row items-start justify-between gap-2">
+                  <Text className="flex-shrink-0 text-sm text-muted-foreground">Community Tags</Text>
+                  <View className="flex-1 flex-row flex-wrap justify-end gap-1">
+                    {scanData.tags.map((t, i) => (
+                      <View key={i} className="rounded-full bg-secondary px-2 py-0.5">
+                        <Text className="text-xs text-muted-foreground">{t}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {!scanData.page_title && !scanData.apex_domain && scanData.brands.length === 0 && scanData.tags.length === 0 && (
+                <Text className="text-sm text-muted-foreground">Identity data unavailable.</Text>
+              )}
+            </View>
+
+            {/* ── SSL Certificate ── */}
+            <View className="mb-5">
+              <DetailSectionHeader icon={<Lock size={15} color="#6b7280" />} title="SSL Certificate" />
+              {scanData.ssl_info ? (
+                <>
+                  <InfoRow label="Issuer" value={scanData.ssl_info.issuer} />
+                  {scanData.ssl_info.subject && <InfoRow label="Subject" value={scanData.ssl_info.subject} />}
+                  {scanData.ssl_info.valid_from && <InfoRow label="Valid From" value={scanData.ssl_info.valid_from} />}
+                  {scanData.ssl_info.valid_to && <InfoRow label="Valid Until" value={scanData.ssl_info.valid_to} />}
+                  <InfoRow label="Protocol" value={scanData.ssl_info.protocol} />
+                </>
+              ) : (
+                <Text className="text-sm text-muted-foreground">
+                  {scanData.initial_url.startsWith("https://")
+                    ? "SSL details not available for this scan."
+                    : "Site does not use HTTPS."}
                 </Text>
-              </View>
-            )}
+              )}
+            </View>
 
-            {/* Server location */}
-            {scanData.server_location && (
-              <View className="mb-4">
-                <Text className="text-sm text-muted-foreground">Server Location</Text>
-                <Text className="mt-1 text-sm text-foreground">{scanData.server_location}</Text>
-              </View>
-            )}
+            {/* ── Redirects ── */}
+            <View className="mb-5">
+              <DetailSectionHeader icon={<Link2 size={15} color="#6b7280" />} title="Redirects" />
+              <InfoRow
+                label="Number of Redirects"
+                value={String(scanData.redirect_chain?.length ?? 0)}
+              />
+              {(scanData.redirect_chain?.length ?? 0) > 0 && (
+                <View className="mt-1">
+                  {scanData.redirect_chain!.map((url, i) => (
+                    <View key={i} className="flex-row items-start gap-2 py-0.5">
+                      <Text className="min-w-[18px] text-xs text-muted-foreground">{i + 1}.</Text>
+                      <Text className="flex-1 text-xs text-foreground" numberOfLines={2}>{url}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
 
+            {/* ── Hosting & Network ── */}
+            <View className="mb-5">
+              <DetailSectionHeader icon={<MapPin size={15} color="#6b7280" />} title="Hosting & Network" />
+              {scanData.ip_address && <InfoRow label="IP Address" value={scanData.ip_address} />}
+              {scanData.server_location && <InfoRow label="Country" value={scanData.server_location} />}
+              {scanData.asn_name && <InfoRow label="Hosting Provider" value={scanData.asn_name} />}
+              {!scanData.ip_address && !scanData.server_location && !scanData.asn_name && (
+                <Text className="text-sm text-muted-foreground">Network data unavailable.</Text>
+              )}
+            </View>
+
+            {/* ── Threat Intelligence ── */}
+            <View className="mb-5">
+              <DetailSectionHeader icon={<AlertTriangle size={15} color="#6b7280" />} title="Threat Intelligence" />
+              <InfoRow
+                label="Blacklist Status"
+                value={scanData.gsb_flagged ? "Flagged by Google Safe Browsing" : "Clean"}
+                valueColor={scanData.gsb_flagged ? "text-red-500" : "text-green-500"}
+              />
+              <InfoRow label="Threat Score" value={`${scanData.score ?? 0} / 100`} />
+              {scanData.domain_age_days != null && (
+                <InfoRow
+                  label="Domain Age"
+                  value={`${scanData.domain_age_days} days${scanData.domain_age_days < 90 ? " (recently registered)" : ""}`}
+                  valueColor={scanData.domain_age_days < 90 ? "text-yellow-500" : undefined}
+                />
+              )}
+              {scanData.gsb_threat_types.length > 0 && (
+                <View className="mb-2 flex-row items-start justify-between gap-2">
+                  <Text className="flex-shrink-0 text-sm text-muted-foreground">Threat Types</Text>
+                  <View className="flex-1 flex-row flex-wrap justify-end gap-1">
+                    {scanData.gsb_threat_types.map((t, i) => (
+                      <View key={i} className="rounded-full bg-red-500/10 px-2 py-0.5">
+                        <Text className="text-xs font-medium text-red-500">{t}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* ── Script Analysis ── */}
             {sa && (
-              <>
-                {/* Script risk score */}
+              <View className="mb-5">
+                <DetailSectionHeader icon={<Info size={15} color="#6b7280" />} title="Script Analysis" />
+
                 <View className="mb-4">
-                  <Text className="text-sm text-muted-foreground">Script Risk Score</Text>
-                  <View className="mt-2 flex-row items-center gap-3">
+                  <Text className="mb-2 text-sm text-muted-foreground">Script Risk Score</Text>
+                  <View className="flex-row items-center gap-3">
                     <View className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
                       <View
                         style={{ width: `${sa.script_risk_score}%` }}
                         className={`h-full rounded-full ${
-                          sa.script_risk_score >= 50
-                            ? "bg-red-500"
-                            : sa.script_risk_score >= 25
-                              ? "bg-yellow-500"
-                              : "bg-green-500"
+                          sa.script_risk_score >= 50 ? "bg-red-500"
+                            : sa.script_risk_score >= 25 ? "bg-yellow-500"
+                            : "bg-green-500"
                         }`}
                       />
                     </View>
@@ -379,50 +591,42 @@ export default function ScanResults() {
                   </View>
                 </View>
 
-                {/* Tech stack */}
+                <InfoRow label="Total Scripts" value={String(sa.total)} />
+                <InfoRow label="Trusted CDN Scripts" value={String(sa.trusted_count)} />
+                <InfoRow label="Ad Scripts" value={`${sa.ad_count}${sa.ad_heavy ? " (ad-heavy)" : ""}`} />
+
                 {sa.tech_stack.length > 0 && (
-                  <View className="mb-4">
-                    <Text className="text-sm text-muted-foreground">Technologies Detected</Text>
-                    <View className="mt-2 flex-row flex-wrap gap-1">
+                  <View className="mb-3 mt-1">
+                    <Text className="mb-2 text-sm text-muted-foreground">Technologies Detected</Text>
+                    <View className="flex-row flex-wrap gap-1">
                       {sa.tech_stack.map((tech, i) => (
                         <View key={i} className="rounded-full bg-secondary px-2 py-1">
-                          <Text className="text-sm text-foreground">{tech}</Text>
+                          <Text className="text-xs text-foreground">{tech.name}</Text>
                         </View>
                       ))}
                     </View>
                   </View>
                 )}
 
-                {/* Ad scripts */}
-                <View className="mb-4">
-                  <Text className="text-sm text-muted-foreground">Ad Scripts</Text>
-                  <Text className="mt-1 text-sm text-foreground">
-                    {sa.ad_count} found
-                    {sa.ad_heavy ? " — ad-heavy site" : ""}
-                  </Text>
-                </View>
-
-                {/* Script counts */}
-                <View className="mb-4 flex-row gap-4">
-                  <View>
-                    <Text className="text-sm text-muted-foreground">Total Scripts</Text>
-                    <Text className="mt-1 text-sm text-foreground">{sa.total}</Text>
-                  </View>
-                  <View>
-                    <Text className="text-sm text-muted-foreground">Trusted CDN</Text>
-                    <Text className="mt-1 text-sm text-foreground">{sa.trusted_count}</Text>
-                  </View>
-                </View>
-
                 <ThreatList title="Crypto Miners Detected" items={sa.crypto_miners} color="text-red-600" />
                 <ThreatList title="Malicious Scripts" items={sa.malicious_scripts} color="text-red-600" />
-                <ThreatList title="Suspicious Patterns" items={sa.suspicious_patterns} color="text-yellow-600" />
-              </>
+                {sa.suspicious_patterns.length > 0 && (
+                  <View className="mb-4">
+                    <Text className="text-xs font-semibold text-yellow-600">Suspicious Patterns</Text>
+                    {sa.suspicious_patterns.map((p, i) => (
+                      <View key={i} className="mt-1">
+                        <Text className="text-xs text-foreground">{p.reason}</Text>
+                        <Text className="text-xs text-muted-foreground" numberOfLines={1}>{p.url}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
             )}
 
-            {/* Homograph / IDN attack risk */}
+            {/* ── Homograph / IDN Risk ── */}
             {scanData.homograph_analysis?.is_homograph && (
-              <View className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+              <View className="mb-5 rounded-xl border border-red-200 bg-red-50 px-3 py-2">
                 <Text className="text-sm font-semibold text-red-700">IDN Homograph Risk Detected</Text>
                 <Text className="mt-1 text-sm text-foreground">{scanData.homograph_analysis.details}</Text>
                 <Text className="mt-1 text-sm text-muted-foreground">
@@ -431,11 +635,17 @@ export default function ScanResults() {
               </View>
             )}
 
-            {!sa && !scanData.domain_age_days && !scanData.server_location && (
-              <Text className="text-sm text-muted-foreground">
-                No additional analysis data available for this scan.
-              </Text>
-            )}
+            {/* ── Full Report Link ── */}
+            {scanData.result_url ? (
+              <Pressable
+                className="flex-row items-center justify-center gap-2 rounded-xl border border-border py-2.5"
+                onPress={() => Linking.openURL(scanData!.result_url).catch(() => {})}
+              >
+                <ExternalLink size={14} color="#6b7280" />
+                <Text className="text-sm text-muted-foreground">View full urlscan.io report</Text>
+              </Pressable>
+            ) : null}
+
           </Card>
         )}
 
@@ -465,29 +675,40 @@ export default function ScanResults() {
           </View>
         </Card>
 
-        </View>{/* end exportRef */}
-
-        {/* Export */}
-        <View className="mt-4">
-          <AppButton variant="outline" fullWidth onPress={handleExport}>
-            <View className="flex-row items-center justify-center gap-2">
-              <Camera size={16} color={iconColor} />
-              <Text className="text-foreground">Export Screenshot</Text>
-            </View>
-          </AppButton>
-          <Text className="mt-2 text-center text-xs text-muted-foreground">
-            Saves a screenshot of results to your gallery
-          </Text>
         </View>
 
       </ScrollView>
 
-      {/* Footer */}
-      <View className="border-t border-border px-4 py-4">
+      {/* Footer — outside ScrollView so it is not captured in the export */}
+      <View className="border-t border-border px-4 pb-4 pt-3">
+        <AppButton variant="outline" fullWidth onPress={handleExport}>
+          <View className="flex-row items-center justify-center gap-2">
+            <Camera size={16} color={iconColor} />
+            <Text className="text-foreground">Export Screenshot</Text>
+          </View>
+        </AppButton>
+        <Text className="mb-3 mt-1 text-center text-xs text-muted-foreground">
+          Saves a screenshot of results to your gallery
+        </Text>
         <AppButton fullWidth onPress={() => router.push("/home")}>
           Done
         </AppButton>
       </View>
+
+      {/* Toast notification */}
+      {toast && (
+        <Animated.View
+          style={{ opacity: toastOpacity }}
+          className={`absolute bottom-28 left-6 right-6 flex-row items-center gap-3 rounded-2xl px-4 py-3 shadow-lg ${
+            toast.type === "success" ? "bg-green-600" : "bg-red-600"
+          }`}
+        >
+          {toast.type === "success"
+            ? <CheckCircle size={18} color="#fff" />
+            : <XCircle size={18} color="#fff" />}
+          <Text className="flex-1 text-sm font-medium text-white">{toast.message}</Text>
+        </Animated.View>
+      )}
     </View>
   )
 }
