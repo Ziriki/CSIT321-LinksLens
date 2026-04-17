@@ -14,8 +14,8 @@ import {
   RiskBadge,
   BottomNav,
 } from "../components/ui-components"
-import { fetchScanHistory, deleteScan } from "../lib/api"
-import type { ScanHistoryItem, ScanResponse } from "../lib/api"
+import { fetchScanHistory, deleteScan, scanHistoryToResponse } from "../lib/api"
+import type { ScanHistoryItem } from "../lib/api"
 import { statusToRisk } from "../lib/types"
 import { bottomNavItems } from "../lib/navigation"
 import { useIconColor } from "../lib/theme"
@@ -244,34 +244,7 @@ export default function ScanHistory() {
                 } else {
                   router.push({
                     pathname: "/scan-results",
-                    params: {
-                      result: JSON.stringify({
-                        scan_id: scan.ScanID,
-                        user_id: scan.UserID,
-                        uuid: null,
-                        initial_url: scan.InitialURL,
-                        redirect_url: scan.RedirectURL,
-                        redirect_chain: scan.RedirectChain ?? null,
-                        status_indicator: (scan.StatusIndicator ?? "UNAVAILABLE") as ScanResponse["status_indicator"],
-                        score: 0,
-                        domain_age_days: scan.DomainAgeDays ?? null,
-                        server_location: scan.ServerLocation,
-                        ip_address: scan.IpAddress ?? null,
-                        asn_name: scan.AsnName ?? null,
-                        page_title: scan.PageTitle ?? null,
-                        apex_domain: scan.ApexDomain ?? null,
-                        screenshot_url: scan.ScreenshotURL,
-                        brands: [],
-                        tags: [],
-                        result_url: "",
-                        gsb_flagged: false,
-                        gsb_threat_types: [],
-                        script_analysis: scan.ScriptAnalysis ?? null,
-                        homograph_analysis: scan.HomographAnalysis ?? null,
-                        ssl_info: scan.SslInfo ?? null,
-                        scanned_at: scan.ScannedAt,
-                      } satisfies ScanResponse),
-                    },
+                    params: { result: JSON.stringify(scanHistoryToResponse(scan)) },
                   })
                 }
               }}

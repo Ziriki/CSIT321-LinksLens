@@ -5,9 +5,11 @@ import { Stack, router } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { lightVars, darkVars, THEME_KEY, getBackgroundColor } from '../lib/theme';
 import { initNotificationHandler, requestNotificationPermission } from '../lib/notifications';
+import { fetchScanById, scanHistoryToResponse } from '../lib/api';
 
 function extractSharedURL(raw: string): string | null {
   if (/^https?:\/\//i.test(raw)) return raw;
@@ -47,7 +49,23 @@ export default function RootLayout() {
       const target = extractSharedURL(url);
       if (target) router.push({ pathname: '/scan-link', params: { url: target } });
     });
-    return () => sub.remove();
+
+    const notifSub = Notifications.addNotificationResponseReceivedListener(async (response) => {
+      const scanId = response.notification.request.content.data?.scan_id as number | null;
+      if (!scanId) return;
+      try {
+        const scan = await fetchScanById(scanId);
+        router.push({
+          pathname: '/scan-results',
+          params: { result: JSON.stringify(scanHistoryToResponse(scan)) },
+        });
+      } catch { /* silently fail — scan may have been deleted */ }
+    });
+
+    return () => {
+      sub.remove();
+      notifSub.remove();
+    };
   }, [loaded]);
 
   if (!loaded) return null;
