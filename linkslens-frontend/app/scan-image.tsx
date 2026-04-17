@@ -1,16 +1,11 @@
 import { recognizeText } from "@infinitered/react-native-mlkit-text-recognition";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { ChevronDown, ChevronUp, Upload } from "lucide-react-native";
+import { Camera, ChevronDown, ChevronUp, Upload } from "lucide-react-native";
 import React, { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { AppButton, ScreenHeader } from "../components/ui-components";
 
-/**
- * Extract all URL-like strings from raw OCR text.
- * Matches http/https URLs first, then bare www. domains.
- * Trailing punctuation (., ; : ! ?) is stripped — OCR often captures it.
- */
 function extractUrlsFromText(rawText: string): string[] {
   const httpMatches = rawText.match(/https?:\/\/[^\s\n\r<>"'`\]|\\]+/gi) ?? [];
   const wwwMatches  = rawText.match(/www\.[a-zA-Z0-9-]+(?:\.[a-zA-Z]{2,})+(?:\/[^\s\n\r<>"'`\]|\\]*)*/gi) ?? [];
@@ -25,44 +20,51 @@ function extractUrlsFromText(rawText: string): string[] {
 }
 
 export default function ScanImage() {
-  const [imageUri, setImageUri]       = useState<string | null>(null);
+  const [imageUri, setImageUri]           = useState<string | null>(null);
   const [extractedUrls, setExtractedUrls] = useState<string[]>([]);
-  const [selectedUrl, setSelectedUrl] = useState("");
-  const [rawOcrText, setRawOcrText]   = useState("");
-  const [loading, setLoading]         = useState(false);
-  const [showRaw, setShowRaw]         = useState(false);
+  const [selectedUrl, setSelectedUrl]     = useState("");
+  const [rawOcrText, setRawOcrText]       = useState("");
+  const [loading, setLoading]             = useState(false);
+  const [showRaw, setShowRaw]             = useState(false);
 
-  const handlePickImage = async () => {
+  async function processImage(uri: string) {
+    setImageUri(uri);
+    setLoading(true);
+    setExtractedUrls([]);
+    setSelectedUrl("");
+    setRawOcrText("");
+    setShowRaw(false);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 1,
-      });
-
-      if (!result.canceled) {
-        const uri = result.assets[0].uri;
-        setImageUri(uri);
-        setLoading(true);
-        setExtractedUrls([]);
-        setSelectedUrl("");
-        setRawOcrText("");
-        setShowRaw(false);
-
-        const response = await recognizeText(uri);
-        const raw = response.text ?? "";
-        const urls = extractUrlsFromText(raw);
-
-        setRawOcrText(raw);
-        setExtractedUrls(urls);
-        setSelectedUrl(urls[0] ?? "");
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error("Error recognizing text:", error);
+      const response = await recognizeText(uri);
+      const raw = response.text ?? "";
+      const urls = extractUrlsFromText(raw);
+      setRawOcrText(raw);
+      setExtractedUrls(urls);
+      setSelectedUrl(urls[0] ?? "");
+    } catch {
       setRawOcrText("Error: Could not recognise text from image.");
+    } finally {
       setLoading(false);
     }
+  }
+
+  const handlePickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      allowsEditing: true,
+      quality: 1,
+    });
+    if (!result.canceled) await processImage(result.assets[0].uri);
+  };
+
+  const handleTakePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") return;
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 1,
+    });
+    if (!result.canceled) await processImage(result.assets[0].uri);
   };
 
   const normalise = (url: string) =>
@@ -70,28 +72,44 @@ export default function ScanImage() {
 
   return (
     <View className="flex-1 bg-background">
-      <ScreenHeader title="Upload Photo" />
+      <ScreenHeader title="Scan Image" />
 
       <ScrollView className="flex-1 px-4 py-6" keyboardShouldPersistTaps="handled">
 
-        {/* Image picker */}
-        <Pressable
-          className="h-64 items-center justify-center rounded-2xl border-2 border-dashed border-border overflow-hidden"
-          onPress={handlePickImage}
-        >
+        {/* Image preview */}
+        <View className="h-56 items-center justify-center rounded-2xl border-2 border-dashed border-border overflow-hidden bg-secondary/10">
           {imageUri ? (
-            <Image source={{ uri: imageUri }} className="w-full h-full" />
+            <Image source={{ uri: imageUri }} className="w-full h-full" resizeMode="cover" />
           ) : (
             <>
-              <Upload size={48} color="#6b7280" />
-              <Text className="mt-4 font-medium text-foreground">Tap to select image</Text>
+              <Upload size={40} color="#6b7280" />
+              <Text className="mt-3 font-medium text-muted-foreground">No image selected</Text>
             </>
           )}
-        </Pressable>
+        </View>
+
+        {/* Source buttons */}
+        <View className="mt-4 flex-row gap-3">
+          <Pressable
+            className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card py-3"
+            onPress={handleTakePhoto}
+          >
+            <Camera size={20} color="#6b7280" />
+            <Text className="text-sm font-medium text-foreground">Take Photo</Text>
+          </Pressable>
+
+          <Pressable
+            className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card py-3"
+            onPress={handlePickImage}
+          >
+            <Upload size={20} color="#6b7280" />
+            <Text className="text-sm font-medium text-foreground">Upload Photo</Text>
+          </Pressable>
+        </View>
 
         {/* Crop hint */}
         <Text className="mt-3 text-xs text-muted-foreground text-center">
-          For best results, crop the image tightly around the URL before selecting.
+          For best results, crop tightly around the URL.
           OCR captures all visible text — extra words may prevent detection.
         </Text>
 
@@ -99,14 +117,12 @@ export default function ScanImage() {
         {!loading && rawOcrText !== "" && (
           <View className="mt-6 gap-4">
 
-            {/* Found URLs */}
             {extractedUrls.length > 0 ? (
               <View className="p-4 rounded-xl bg-secondary/20">
                 <Text className="text-xs uppercase text-muted-foreground font-bold mb-2">
                   {extractedUrls.length === 1 ? "URL Extracted" : `${extractedUrls.length} URLs Found — tap to select`}
                 </Text>
 
-                {/* Selectable URL chips when multiple found */}
                 {extractedUrls.length > 1 && (
                   <View className="flex-row flex-wrap gap-2 mb-3">
                     {extractedUrls.map((url, i) => (
@@ -130,7 +146,6 @@ export default function ScanImage() {
                   </View>
                 )}
 
-                {/* Editable selected URL */}
                 <TextInput
                   className="text-base text-blue-500"
                   value={selectedUrl}
@@ -147,7 +162,7 @@ export default function ScanImage() {
               <View className="p-4 rounded-xl bg-secondary/20">
                 <Text className="text-xs uppercase text-muted-foreground font-bold mb-2">No URL Detected</Text>
                 <Text className="text-sm text-muted-foreground mb-3">
-                  No URL was found in the image. Try cropping tighter around the link, or enter it manually below.
+                  No URL was found. Try cropping tighter around the link, or enter it manually below.
                 </Text>
                 <TextInput
                   className="text-base text-foreground border border-border rounded-lg px-3 py-2"
@@ -162,15 +177,13 @@ export default function ScanImage() {
               </View>
             )}
 
-            {/* Collapsible raw OCR output */}
             <Pressable
               onPress={() => setShowRaw(v => !v)}
               className="flex-row items-center gap-1"
             >
               {showRaw
                 ? <ChevronUp size={14} color="#9ca3af" />
-                : <ChevronDown size={14} color="#9ca3af" />
-              }
+                : <ChevronDown size={14} color="#9ca3af" />}
               <Text className="text-xs text-muted-foreground">
                 {showRaw ? "Hide" : "Show"} full OCR text
               </Text>

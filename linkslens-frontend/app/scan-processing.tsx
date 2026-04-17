@@ -54,7 +54,7 @@ export default function ScanProcessing() {
                 : Haptics.NotificationFeedbackType.Error,
           )
         } catch { /* haptics unavailable on some devices */ }
-        notifyScanComplete(status, url)
+        notifyScanComplete(status, url, result.scan_id)
         router.replace({
           pathname: "/scan-results",
           params: { result: JSON.stringify(result) },
