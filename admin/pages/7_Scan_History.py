@@ -6,7 +6,6 @@ from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
 
 st.set_page_config(page_title="Scan History", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
-# Admin + Moderator (RoleID 1, 2)
 auth_controller.require_role(1, 2)
 auth_controller.render_sidebar()
 
@@ -14,11 +13,6 @@ st.title("Scan History")
 
 PAGE_SIZE = 10
 
-# Backend now returns FullName directly via JOIN — no need for separate user lookup
-
-# ---------------------------------------------------------------------------
-# Filters
-# ---------------------------------------------------------------------------
 status_filter = st.radio("Status", ["All", "SAFE", "SUSPICIOUS", "MALICIOUS"], horizontal=True)
 
 col_search, col_user = st.columns(2)
@@ -27,18 +21,12 @@ with col_search:
 with col_user:
     search_user = st.text_input("Search by User", placeholder="e.g. John Doe")
 
-# ---------------------------------------------------------------------------
-# Pagination state
-# ---------------------------------------------------------------------------
 if "scan_page" not in st.session_state:
     st.session_state["scan_page"] = 0
 
 page = st.session_state["scan_page"]
 skip = page * PAGE_SIZE
 
-# ---------------------------------------------------------------------------
-# Fetch data
-# ---------------------------------------------------------------------------
 records = api_client.fetch_scan_list(
     skip=skip,
     limit=PAGE_SIZE + 1,
@@ -50,16 +38,12 @@ records = api_client.fetch_scan_list(
 has_next = len(records) > PAGE_SIZE
 display_records = records[:PAGE_SIZE]
 
-# ---------------------------------------------------------------------------
-# Table with row selection
-# ---------------------------------------------------------------------------
 selected_scan_id = None
 
 if not display_records:
     st.info("No scan records found.")
 else:
     df = pd.DataFrame(display_records)
-    # Backend returns FullName directly via JOIN
     df.rename(columns={"FullName": "User"}, inplace=True)
     columns = ["ScanID", "User", "InitialURL", "StatusIndicator",
                 "DomainAgeDays", "ServerLocation", "ScannedAt"]
@@ -77,9 +61,6 @@ else:
     if selected_rows:
         selected_scan_id = int(df.iloc[selected_rows[0]]["ScanID"])
 
-# ---------------------------------------------------------------------------
-# Pagination controls (always below the table)
-# ---------------------------------------------------------------------------
 col_prev, col_info, col_next = st.columns([1, 4, 1])
 with col_prev:
     if st.button("Previous", disabled=(page == 0)):
@@ -94,16 +75,12 @@ with col_next:
         st.session_state["scan_page"] = page + 1
         st.rerun()
 
-# ---------------------------------------------------------------------------
-# Detail panel (below pagination)
-# ---------------------------------------------------------------------------
 if selected_scan_id:
     data = api_client.fetch_scan_details(selected_scan_id)
     if data:
         st.markdown("---")
         st.subheader(f"Scan #{data['ScanID']} Details")
 
-        # ── Overview ──────────────────────────────────────────────────────
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"**Target URL:** {data['InitialURL']}")
@@ -124,7 +101,6 @@ if selected_scan_id:
 
         render_ssl_expander(data.get("SslInfo") or {})
 
-        # ── Screenshot ────────────────────────────────────────────────────
         if data.get("ScreenshotURL"):
             with st.expander("Website Screenshot"):
                 st.image(data["ScreenshotURL"], caption="Sandboxed render of the website")

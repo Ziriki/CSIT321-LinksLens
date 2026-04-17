@@ -2,30 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-# Import custom files
 import models
 import schemas
 from database import get_db
 from dependencies import require_role
 from utils import get_or_404, apply_updates
 
-# Create a router for this controller
 router = APIRouter(
     prefix="/api/roles",
     tags=["User Roles"]
 )
 
-#########################################################
-# CREATE function for UserRole table
-#########################################################
 @router.post("/", response_model=schemas.UserRoleResponse)
 def create_role(role: schemas.UserRoleCreate, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    # Check if the RoleName already exists
     existing_role = db.query(models.UserRole).filter(models.UserRole.RoleName == role.RoleName).first()
     if existing_role:
         raise HTTPException(status_code=400, detail="A role with this name already exists")
 
-    # Create a new SQLAlchemy model instance
     db_role = models.UserRole(
         RoleName=role.RoleName,
         RoleDescription=role.RoleDescription,
@@ -36,22 +29,15 @@ def create_role(role: schemas.UserRoleCreate, db: Session = Depends(get_db), _: 
     db.refresh(db_role)
     return db_role
 
-#########################################################
-# READ function for UserRole table (Get by ID)
-#########################################################
 @router.get("/{role_id}", response_model=schemas.UserRoleResponse)
 def read_role(role_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     role = get_or_404(db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first(), "Role not found")
     return role
 
-#########################################################
-# UPDATE function for UserRole table
-#########################################################
 @router.put("/{role_id}", response_model=schemas.UserRoleResponse)
 def update_role(role_id: int, role_update: schemas.UserRoleUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     db_role = get_or_404(db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first(), "Role not found")
 
-    # Ensure the new RoleName is not the same as existing role
     if role_update.RoleName:
         name_check = db.query(models.UserRole).filter(models.UserRole.RoleName == role_update.RoleName).first()
         if name_check and name_check.RoleID != role_id:
@@ -60,22 +46,14 @@ def update_role(role_id: int, role_update: schemas.UserRoleUpdate, db: Session =
     apply_updates(db, db_role, role_update)
     return db_role
 
-#########################################################
-# DELETE function for UserRole table (Soft Delete)
-#########################################################
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_role(role_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     db_role = get_or_404(db.query(models.UserRole).filter(models.UserRole.RoleID == role_id).first(), "Role not found")
 
-    # Soft Delete
     db_role.IsActive = False
     db.commit()
-    
-    return None  # 204 No Content does not return a body
+    return None
 
-#########################################################
-# LIST function for UserRole table
-#########################################################
 @router.get("/", response_model=List[schemas.UserRoleResponse])
 def list_roles(
     search: Optional[str] = None,
@@ -84,13 +62,9 @@ def list_roles(
     db: Session = Depends(get_db),
     _: dict = Depends(require_role(1))
 ):
-    # Start with a base query
     query = db.query(models.UserRole).filter(models.UserRole.IsActive == True)
 
-    # Filter logic if a search term is provided
     if search:
-        # .ilike() provides case-insensitive matching in MySQL
         query = query.filter(models.UserRole.RoleName.ilike(f"%{search}%"))
 
-    # Execute the query with optional pagination
     return query.offset(skip).limit(limit).all()

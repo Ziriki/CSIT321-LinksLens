@@ -23,6 +23,14 @@ def _decode_token():
         return None
 
 
+def _expire_session():
+    """Clear auth state and redirect to the login page with an expiry flag."""
+    st.session_state["access_token"] = None
+    st.session_state.pop("_decoded_user", None)
+    st.session_state["session_expired"] = True
+    st.switch_page("app.py")
+
+
 def require_auth():
     """Redirect unauthenticated or expired-session users back to the login page."""
     token = st.session_state.get("access_token")
@@ -32,15 +40,9 @@ def require_auth():
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
         if payload.get("exp", 0) < time.time():
-            st.session_state["access_token"] = None
-            st.session_state.pop("_decoded_user", None)
-            st.session_state["session_expired"] = True
-            st.switch_page("app.py")
+            _expire_session()
     except Exception:
-        st.session_state["access_token"] = None
-        st.session_state.pop("_decoded_user", None)
-        st.session_state["session_expired"] = True
-        st.switch_page("app.py")
+        _expire_session()
 
 
 # Streamlit uses the page filename as the sidebar link href — match on filename substrings.
@@ -129,7 +131,7 @@ def handle_login(email, password):
             try:
                 payload = jwt.decode(token, options={"verify_signature": False})
                 role_id = int(payload.get("role", 0))
-                if role_id not in (1, 2):  # Only Administrator (1) and Moderator (2)
+                if role_id not in (1, 2):
                     st.error("Login failed. Check credentials.")
                     return
             except Exception:

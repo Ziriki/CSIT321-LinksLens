@@ -14,7 +14,7 @@ import {
   RiskBadge,
   BottomNav,
 } from "../components/ui-components"
-import { fetchScanHistory, deleteScan, getCurrentUserId } from "../lib/api"
+import { fetchScanHistory, deleteScan } from "../lib/api"
 import type { ScanHistoryItem, ScanResponse } from "../lib/api"
 import { statusToRisk } from "../lib/types"
 import { bottomNavItems } from "../lib/navigation"
@@ -160,13 +160,11 @@ export default function ScanHistory() {
         <View className="flex-row items-center gap-1">
           {selectMode ? (
             <>
-              {/* Select all toggle */}
               <Pressable className="p-2" onPress={toggleSelectAll}>
                 {allFilteredSelected
                   ? <CheckSquare size={20} color="#2563eb" />
                   : <Square size={20} color={iconColor} />}
               </Pressable>
-              {/* Delete selected */}
               <Pressable
                 className="p-2"
                 onPress={handleDeleteSelected}
@@ -176,7 +174,6 @@ export default function ScanHistory() {
               </Pressable>
             </>
           ) : (
-            /* Enter select mode */
             <Pressable className="p-2" onPress={() => setSelectMode(true)}>
               <CheckSquare size={20} color={iconColor} />
             </Pressable>

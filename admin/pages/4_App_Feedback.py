@@ -4,7 +4,6 @@ from config import LOGO_PATH, PAGE_LAYOUT
 from utils import search_dataframe, render_pagination
 
 st.set_page_config(page_title="App Feedback", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
-# Admin only (RoleID 1)
 auth_controller.require_role(1)
 auth_controller.render_sidebar()
 
@@ -17,10 +16,8 @@ if df.empty:
     st.info("No feedback submitted yet.")
     st.stop()
 
-# Sort descending by FeedbackID
 df = df.sort_values(by="FeedbackID", ascending=False).reset_index(drop=True)
 
-# Search
 search_query = st.text_input("Search", placeholder="Search by name, feedback content...")
 df = search_dataframe(df, search_query)
 

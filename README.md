@@ -2,7 +2,7 @@
 
 **LinksLens** is a mobile-first URL security scanner that helps users determine whether a web link is safe before visiting it. Users submit URLs via camera OCR, gallery image selection, or manual input and receive an instant safety assessment powered by Google Safe Browsing and urlscan.io.
 
-**FYP Project ID:** FYP-26-S1-03P
+**FYP Group:** FYP-26-S1-03P
 
 ---
 

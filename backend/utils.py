@@ -9,12 +9,15 @@ import resend as resend_lib
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_password_hash(password: str) -> str:
+    """Hash a password using bcrypt."""
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a plain password against its bcrypt hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_fullname(user_account, default="N/A"):
+    """Return the FullName from a UserAccount relationship, or default if unavailable."""
     if user_account and user_account.details:
         return user_account.details.FullName
     return default

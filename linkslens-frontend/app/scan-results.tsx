@@ -124,6 +124,30 @@ function DetailSectionHeader({ icon, title }: { icon: React.ReactNode; title: st
   )
 }
 
+function formatDomainAge(days: number | null): string {
+  if (days == null) return "Unknown"
+  if (days < 90) return `${days} days old (new)`
+  if (days < 365) return `${Math.floor(days / 30)} months old`
+  const y = Math.floor(days / 365)
+  return `${y} year${y > 1 ? "s" : ""} old`
+}
+
+function PillRow({ label, items, pillBg, pillText }: { label: string; items: string[]; pillBg: string; pillText: string }) {
+  if (items.length === 0) return null
+  return (
+    <View className="mb-2 flex-row items-start justify-between gap-2">
+      <Text className="flex-shrink-0 text-sm text-muted-foreground">{label}</Text>
+      <View className="flex-1 flex-row flex-wrap justify-end gap-1">
+        {items.map((item, i) => (
+          <View key={i} className={`rounded-full ${pillBg} px-2 py-0.5`}>
+            <Text className={`text-xs ${pillText}`}>{item}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
 function HighlightRow({ label, value, ok, noBorder }: { label: string; value: string; ok: boolean | null; noBorder?: boolean }) {
   const dotColor = ok === null ? "#6b7280" : ok ? "#16a34a" : "#dc2626"
   const textClass = ok === null ? "text-muted-foreground" : ok ? "text-green-500" : "text-red-500"
@@ -319,15 +343,7 @@ export default function ScanResults() {
           />
           <HighlightRow
             label="Domain Age"
-            value={
-              scanData.domain_age_days == null
-                ? "Unknown"
-                : scanData.domain_age_days < 90
-                  ? `${scanData.domain_age_days} days old (new)`
-                  : scanData.domain_age_days < 365
-                    ? `${Math.floor(scanData.domain_age_days / 30)} months old`
-                    : `${Math.floor(scanData.domain_age_days / 365)} year${Math.floor(scanData.domain_age_days / 365) > 1 ? "s" : ""} old`
-            }
+            value={formatDomainAge(scanData.domain_age_days)}
             ok={scanData.domain_age_days == null ? null : scanData.domain_age_days >= 90}
           />
           <HighlightRow
@@ -458,30 +474,8 @@ export default function ScanResults() {
               <DetailSectionHeader icon={<Shield size={15} color="#6b7280" />} title="Page Identity" />
               {scanData.page_title && <InfoRow label="Page Title" value={scanData.page_title} />}
               {scanData.apex_domain && <InfoRow label="Registered Domain" value={scanData.apex_domain} />}
-              {scanData.brands.length > 0 && (
-                <View className="mb-2 flex-row items-start justify-between gap-2">
-                  <Text className="flex-shrink-0 text-sm text-muted-foreground">Brand Impersonation</Text>
-                  <View className="flex-1 flex-row flex-wrap justify-end gap-1">
-                    {scanData.brands.map((b, i) => (
-                      <View key={i} className="rounded-full bg-red-500/10 px-2 py-0.5">
-                        <Text className="text-xs font-medium text-red-500">{b}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-              {scanData.tags.length > 0 && (
-                <View className="mb-2 flex-row items-start justify-between gap-2">
-                  <Text className="flex-shrink-0 text-sm text-muted-foreground">Community Tags</Text>
-                  <View className="flex-1 flex-row flex-wrap justify-end gap-1">
-                    {scanData.tags.map((t, i) => (
-                      <View key={i} className="rounded-full bg-secondary px-2 py-0.5">
-                        <Text className="text-xs text-muted-foreground">{t}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
+              <PillRow label="Brand Impersonation" items={scanData.brands} pillBg="bg-red-500/10" pillText="font-medium text-red-500" />
+              <PillRow label="Community Tags" items={scanData.tags} pillBg="bg-secondary" pillText="text-muted-foreground" />
               {!scanData.page_title && !scanData.apex_domain && scanData.brands.length === 0 && scanData.tags.length === 0 && (
                 <Text className="text-sm text-muted-foreground">Identity data unavailable.</Text>
               )}
@@ -553,18 +547,7 @@ export default function ScanResults() {
                   valueColor={scanData.domain_age_days < 90 ? "text-yellow-500" : undefined}
                 />
               )}
-              {scanData.gsb_threat_types.length > 0 && (
-                <View className="mb-2 flex-row items-start justify-between gap-2">
-                  <Text className="flex-shrink-0 text-sm text-muted-foreground">Threat Types</Text>
-                  <View className="flex-1 flex-row flex-wrap justify-end gap-1">
-                    {scanData.gsb_threat_types.map((t, i) => (
-                      <View key={i} className="rounded-full bg-red-500/10 px-2 py-0.5">
-                        <Text className="text-xs font-medium text-red-500">{t}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
+              <PillRow label="Threat Types" items={scanData.gsb_threat_types} pillBg="bg-red-500/10" pillText="font-medium text-red-500" />
             </View>
 
             {/* ── Script Analysis ── */}

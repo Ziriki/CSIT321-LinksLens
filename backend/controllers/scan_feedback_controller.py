@@ -3,21 +3,16 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from utils import get_fullname, get_or_404
-# Import custom files
 import models
 import schemas
 from database import get_db
 from dependencies import get_current_user, require_role
 
-# Create a router for this controller
 router = APIRouter(
     prefix="/api/scan-feedback",
     tags=["Scan Feedback"]
 )
 
-#########################################################
-# CREATE function for ScanFeedback table
-#########################################################
 @router.post("/", response_model=schemas.ScanFeedbackResponse, status_code=status.HTTP_201_CREATED)
 def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == feedback.ScanID).first(), "Scan not found")
@@ -38,22 +33,15 @@ def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(
     db.refresh(db_feedback)
     return db_feedback
 
-#########################################################
-# READ function for ScanFeedback table (Get by ID)
-#########################################################
 @router.get("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
 def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
     return feedback
 
-#########################################################
-# UPDATE function for ScanFeedback table
-#########################################################
 @router.put("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
 def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     db_feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
 
-    # Generally, we only update the 'IsResolved' status here.
     if feedback_update.IsResolved is not None:
         db_feedback.IsResolved = feedback_update.IsResolved
 
@@ -61,9 +49,6 @@ def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdat
     db.refresh(db_feedback)
     return db_feedback
 
-#########################################################
-# DELETE function for ScanFeedback table
-#########################################################
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     db_feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
@@ -72,9 +57,6 @@ def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = D
     db.commit()
     return None
 
-#########################################################
-# LIST function for ScanFeedback table
-#########################################################
 @router.get("/", response_model=None)
 def list_feedback(
     is_resolved: Optional[bool] = None,
@@ -89,19 +71,15 @@ def list_feedback(
         joinedload(models.ScanFeedback.user).joinedload(models.UserAccount.details)
     )
 
-    # Filter logic if optional query parameters are provided
     if is_resolved is not None:
         query = query.filter(models.ScanFeedback.IsResolved == is_resolved)
 
-    # Filter logic if scan_id is provided
     if scan_id:
         query = query.filter(models.ScanFeedback.ScanID == scan_id)
 
-    # Filter logic if user_id is provided
     if user_id:
         query = query.filter(models.ScanFeedback.UserID == user_id)
 
-    # Execute the query with optional pagination
     results = query.offset(skip).limit(limit).all()
 
     return [
@@ -117,9 +95,6 @@ def list_feedback(
         for fb in results
     ]
 
-#########################################################
-# LIST ENRICHED — returns feedback with joined scan + user info
-#########################################################
 @router.get("/enriched/", response_model=None)
 def list_feedback_enriched(
     is_resolved: Optional[bool] = None,
@@ -152,7 +127,7 @@ def list_feedback_enriched(
             "Comments": fb.Comments or "",
             "IsResolved": fb.IsResolved,
             "CreatedAt": str(fb.CreatedAt) if fb.CreatedAt else None,
-            # Extra scan details for the drill-down panel
+            # Extra fields for the admin detail panel
             "RedirectURL": fb.scan.RedirectURL if fb.scan else None,
             "RedirectChain": fb.scan.RedirectChain if fb.scan else None,
             "DomainAgeDays": fb.scan.DomainAgeDays if fb.scan else None,

@@ -27,7 +27,6 @@ from controllers.scan_feedback_controller import router as scan_feedback_router
 from controllers.auth_controller import router as auth_router
 from controllers.url_scan_controller import router as url_scan_router
 
-# Tells FastAPI to try connecting 5 times, waiting 5 seconds between each try.
 retries = 5
 while retries > 0:
     try:
@@ -52,7 +51,6 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-# Connect the UserRole Controller to the main app
 app.include_router(user_role_router)
 app.include_router(user_account_router)
 app.include_router(user_details_router)
@@ -71,7 +69,7 @@ def read_root():
     return {
         "status": "Online",
         "service": "LinkLens Backend API",
-        "documentation": "/docs"  # FastAPI automatically generates this
+        "documentation": "/docs"
     }
 
 def _check_component(name: str, check_fn: Callable[[], None]) -> dict:
@@ -86,7 +84,7 @@ def _check_component(name: str, check_fn: Callable[[], None]) -> dict:
 def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     """System health dashboard — Admin only."""
 
-    # --- Component checks (run in parallel to minimise latency) ---
+    # Run component checks in parallel to minimise health endpoint latency.
 
     def check_database():
         db.execute(text("SELECT 1"))
@@ -146,8 +144,6 @@ def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(
         components = list(executor.map(lambda c: _check_component(c[0], c[1]), checks))
 
     overall = "outage" if any(c["status"] == "outage" for c in components) else "operational"
-
-    # --- Operational metrics (work queues) ---
 
     pending_blacklist_requests = db.query(models.BlacklistRequest).filter(
         models.BlacklistRequest.Status == models.RequestStatus.PENDING
