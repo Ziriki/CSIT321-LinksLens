@@ -4,12 +4,12 @@ from models import api_client
 
 
 def get_pending_requests_dataframe():
+    """Return pending blacklist requests as a display-ready DataFrame."""
     raw_data = api_client.fetch_pending_requests()
     if not raw_data:
         return pd.DataFrame()
     df = pd.DataFrame(raw_data)
 
-    # Backend now returns FullName directly via JOIN
     df.rename(columns={"FullName": "RequestedBy"}, inplace=True)
 
     cols = ["RequestID", "URLDomain", "RequestedBy", "CreatedAt"]
@@ -18,6 +18,7 @@ def get_pending_requests_dataframe():
 
 
 def handle_review_action(request_id, action, moderator_id):
+    """Apply an APPROVED or REJECTED decision to a blacklist request."""
     success = api_client.update_request_status(request_id, action, moderator_id)
     if success:
         api_client.log_action(

@@ -6,7 +6,6 @@ from config import LOGO_PATH, PAGE_LAYOUT
 from utils import search_dataframe, render_pagination
 
 st.set_page_config(page_title="User Management", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
-# Admin only (RoleID 1)
 current_user = auth_controller.require_role(1)
 auth_controller.render_sidebar()
 
@@ -14,18 +13,13 @@ st.title("User Management")
 
 PAGE_SIZE = 20
 
-# ---------------------------------------------------------------------------
-# User table with pagination
-# ---------------------------------------------------------------------------
 all_df = user_controller.get_users_dataframe()
 if all_df.empty:
     st.info("No users found.")
     st.stop()
 
-# Map RoleID to label for display
 all_df["Role"] = all_df["RoleID"].map(ROLE_LABELS)
 
-# Search
 search_query = st.text_input("Search", placeholder="Search by name, email, role...")
 all_df = search_dataframe(all_df, search_query, columns=["FullName", "EmailAddress", "Role"])
 
@@ -41,9 +35,6 @@ event = st.dataframe(
     selection_mode="single-row",
 )
 
-# ---------------------------------------------------------------------------
-# Detect row selection
-# ---------------------------------------------------------------------------
 selected_rows = event.selection.rows if event.selection else []
 
 if not selected_rows:
@@ -53,7 +44,6 @@ row_idx = selected_rows[0]
 uid = int(page_df.iloc[row_idx]["UserID"])
 user_row = all_df[all_df["UserID"] == uid].iloc[0]
 
-# Fetch extended details from /api/details/{uid}
 details = api_client.fetch_user_detail(uid) or {}
 
 st.markdown("---")
@@ -100,7 +90,6 @@ if address != (details.get("Address") or ""):
 if dob != (details.get("DateOfBirth") or ""):
     snapshot["DateOfBirth"] = dob if dob else None
 
-# Buttons
 btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 4])
 with btn_col1:
     if st.button("Update", type="primary", key="btn_update"):
@@ -133,7 +122,6 @@ with btn_col2:
         if st.button("Deactivate", type="secondary", key="btn_deactivate"):
             st.session_state["confirm_deactivate"] = uid
 
-# Deactivation confirmation dialog
 if st.session_state.get("confirm_deactivate") == uid:
     st.warning(f"Are you sure you want to deactivate User #{uid}?")
     confirm_col1, confirm_col2 = st.columns(2)

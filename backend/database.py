@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Load environment variables securely
 load_dotenv()
 
 MYSQL_USER = os.getenv("MYSQL_USER")
@@ -18,7 +17,6 @@ SQLALCHEMY_DATABASE_URL = (
     f"@{MYSQL_HOST}:3306/{MYSQL_DATABASE}"
 )
 
-# Initialize the SQLAlchemy engine
 # pool_pre_ping: test connection before using it (auto-reconnects stale connections)
 # pool_recycle: discard connections older than 1 hour (MySQL default wait_timeout is 8h)
 engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
@@ -26,7 +24,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-# Dependency block to open and close DB connections automatically
 def get_db():
     db = SessionLocal()
     try:

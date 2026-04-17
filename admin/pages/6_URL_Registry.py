@@ -5,13 +5,11 @@ from config import LOGO_PATH, PAGE_LAYOUT
 from utils import search_dataframe, render_pagination
 
 st.set_page_config(page_title="URL Registry", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
-# Admin + Moderator (RoleID 1, 2)
 current_user = auth_controller.require_role(1, 2)
 auth_controller.render_sidebar()
 
 st.title("URL Registry")
 
-# --- Add new rule ---
 with st.expander("Submit a Domain to Blacklist / Whitelist", expanded=False):
     with st.form("add_rule_form", clear_on_submit=True):
         domain = st.text_input("Domain", placeholder="e.g. example.com")
@@ -32,7 +30,6 @@ with st.expander("Submit a Domain to Blacklist / Whitelist", expanded=False):
 
 st.markdown("---")
 
-# --- List rules ---
 PAGE_SIZE = 20
 
 df = rules_controller.get_rules_dataframe()
@@ -56,7 +53,6 @@ if total == 0:
 start, end = render_pagination("rules_page", total, PAGE_SIZE)
 page_df = df.iloc[start:end].reset_index(drop=True)
 
-# Display table with a delete button per row
 col_headers = st.columns([2, 2, 3, 2, 1])
 for col, label in zip(col_headers, ["List Type", "Domain", "Added By", "Created At", "Action"]):
     col.markdown(f"**{label}**")

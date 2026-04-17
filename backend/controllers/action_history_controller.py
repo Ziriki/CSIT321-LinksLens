@@ -3,28 +3,21 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from utils import get_fullname, get_or_404
-# Import custom files
 import models
 import schemas
 from database import get_db
 from dependencies import get_current_user, require_role
 
-# Create a router for this controller
 router = APIRouter(
     prefix="/api/history",
     tags=["Action History"]
 )
 
-#########################################################
-# CREATE function for ActionHistory table
-#########################################################
 @router.post("/", response_model=schemas.ActionHistoryResponse, status_code=status.HTTP_201_CREATED)
 def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    # Regular users can only create logs for themselves
     if current_user["role_id"] not in (1, 2) and log.UserID != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only create logs for your own actions")
 
-    # Verify the user performing the action actually exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == log.UserID).first()
     if not account:
         raise HTTPException(status_code=404, detail="User Account not found")
@@ -35,17 +28,11 @@ def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), 
     db.refresh(db_log)
     return db_log
 
-#########################################################
-# READ function for ActionHistory table (Get by ID)
-#########################################################
 @router.get("/{log_id}", response_model=schemas.ActionHistoryResponse)
 def read_log(log_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     log = get_or_404(db.query(models.ActionHistory).filter(models.ActionHistory.LogID == log_id).first(), "Log entry not found")
     return log
 
-#########################################################
-# LIST function for ActionHistory table
-#########################################################
 @router.get("/", response_model=None)
 def list_logs(
     user_id: Optional[int] = None,
@@ -59,18 +46,14 @@ def list_logs(
         joinedload(models.ActionHistory.account).joinedload(models.UserAccount.details)
     )
 
-    # Filter logic if a user_id is provided
     if user_id:
         query = query.filter(models.ActionHistory.UserID == user_id)
 
-    # Filter logic if an action_type is provided
     if action_type:
         query = query.filter(models.ActionHistory.ActionType.ilike(f"%{action_type}%"))
 
-    # Order by newest first (Descending)
     query = query.order_by(models.ActionHistory.Timestamp.desc())
 
-    # Execute the query with optional pagination
     results = query.offset(skip).limit(limit).all()
 
     return [

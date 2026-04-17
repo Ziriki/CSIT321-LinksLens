@@ -3,29 +3,22 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 
 from utils import get_fullname, get_or_404, apply_updates
-# Import custom files
 import models
 import schemas
 from database import get_db
 from dependencies import get_current_user, require_role
 
-# Create a router for this controller
 router = APIRouter(
     prefix="/api/url-rules",
     tags=["URL Rules (Blacklist/Whitelist)"]
 )
 
-#########################################################
-# CREATE function for URLRules table
-#########################################################
 @router.post("/", response_model=schemas.URLRulesResponse, status_code=status.HTTP_201_CREATED)
 def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    # Check if the admin/moderator exists
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == rule.AddedBy).first()
     if not account:
         raise HTTPException(status_code=404, detail="Admin/Moderator account not found")
 
-    # Prevent duplicate domains in the master list
     existing_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == rule.URLDomain).first()
     if existing_rule:
         raise HTTPException(status_code=400, detail=f"Domain already exists in the {existing_rule.ListType.value}.")
@@ -36,22 +29,15 @@ def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: 
     db.refresh(db_rule)
     return db_rule
 
-#########################################################
-# READ function for URLRules table (Get by ID)
-#########################################################
 @router.get("/{rule_id}", response_model=schemas.URLRulesResponse)
 def read_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     rule = get_or_404(db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first(), "Rule not found")
     return rule
 
-#########################################################
-# UPDATE function for URLRules table
-#########################################################
 @router.put("/{rule_id}", response_model=schemas.URLRulesResponse)
 def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     db_rule = get_or_404(db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first(), "Rule not found")
 
-    # If updating the domain, ensure the new domain isn't already listed elsewhere
     if rule_update.URLDomain:
         duplicate_check = db.query(models.URLRules).filter(models.URLRules.URLDomain == rule_update.URLDomain).first()
         if duplicate_check and duplicate_check.RuleID != rule_id:
@@ -60,9 +46,6 @@ def update_rule(rule_id: int, rule_update: schemas.URLRulesUpdate, db: Session =
     apply_updates(db, db_rule, rule_update)
     return db_rule
 
-#########################################################
-# DELETE function for URLRules table
-#########################################################
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
     db_rule = get_or_404(db.query(models.URLRules).filter(models.URLRules.RuleID == rule_id).first(), "Rule not found")
@@ -71,9 +54,6 @@ def delete_rule(rule_id: int, db: Session = Depends(get_db), _: dict = Depends(r
     db.commit()
     return None
 
-#########################################################
-# LIST function for URLRules table
-#########################################################
 @router.get("/", response_model=None)
 def list_rules(
     list_type: Optional[models.ListTypeEnum] = None,
@@ -87,15 +67,12 @@ def list_rules(
         joinedload(models.URLRules.admin).joinedload(models.UserAccount.details)
     )
 
-    # Filter logic if a list_type is provided
     if list_type:
         query = query.filter(models.URLRules.ListType == list_type)
 
-    # Filter logic if a search_domain is provided
     if search_domain:
         query = query.filter(models.URLRules.URLDomain.ilike(f"%{search_domain}%"))
 
-    # Execute the query with optional pagination
     results = query.offset(skip).limit(limit).all()
 
     return [
