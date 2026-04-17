@@ -257,9 +257,44 @@ export interface ScanHistoryItem {
   ScannedAt: string;
 }
 
+export function scanHistoryToResponse(scan: ScanHistoryItem): ScanResponse {
+  return {
+    scan_id: scan.ScanID,
+    user_id: scan.UserID,
+    uuid: null,
+    initial_url: scan.InitialURL,
+    redirect_url: scan.RedirectURL,
+    redirect_chain: scan.RedirectChain ?? null,
+    status_indicator: (scan.StatusIndicator ?? "UNAVAILABLE") as ScanResponse["status_indicator"],
+    score: 0,
+    domain_age_days: scan.DomainAgeDays ?? null,
+    server_location: scan.ServerLocation,
+    ip_address: scan.IpAddress ?? null,
+    asn_name: scan.AsnName ?? null,
+    page_title: scan.PageTitle ?? null,
+    apex_domain: scan.ApexDomain ?? null,
+    screenshot_url: scan.ScreenshotURL,
+    brands: [],
+    tags: [],
+    result_url: "",
+    gsb_flagged: false,
+    gsb_threat_types: [],
+    script_analysis: scan.ScriptAnalysis ?? null,
+    homograph_analysis: scan.HomographAnalysis ?? null,
+    ssl_info: scan.SslInfo ?? null,
+    scanned_at: scan.ScannedAt,
+  }
+}
+
 export async function fetchScanHistory(): Promise<ScanHistoryItem[]> {
   const res = await apiFetch(`${API_BASE_URL}/api/scans/`);
   if (!res.ok) throw new Error(`Failed to fetch scan history: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchScanById(scanId: number): Promise<ScanHistoryItem> {
+  const res = await apiFetch(`${API_BASE_URL}/api/scans/${scanId}`);
+  if (!res.ok) throw new Error(`Failed to fetch scan: ${res.status}`);
   return res.json();
 }
 
