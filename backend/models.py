@@ -28,7 +28,6 @@ class UserAccount(Base):
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
     UpdatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Set up a relationship for easier access to the role details from an account
     role = relationship("UserRole")
     details = relationship("UserDetails", uselist=False, back_populates="account")
     reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
@@ -46,7 +45,6 @@ class UserDetails(Base):
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
     UpdatedAt = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # Set up a relationship for easier access to the user account details
     account = relationship("UserAccount")
 
 class UserPreferences(Base):
@@ -64,7 +62,6 @@ class ActionHistory(Base):
     Action = Column(Text, nullable=False)
     Timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Set up a relationship for easier access to the user account details
     account = relationship("UserAccount")
 
 class AppFeedback(Base):
@@ -78,7 +75,6 @@ class AppFeedback(Base):
     account = relationship("UserAccount")
 
 
-# Define the strict Enum for the BlacklistRequest status
 class RequestStatus(str, enum.Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
@@ -90,16 +86,14 @@ class BlacklistRequest(Base):
     RequestID = Column(Integer, primary_key=True, index=True, autoincrement=True)
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
     URLDomain = Column(String(255), nullable=False)
-    Status = Column(Enum(RequestStatus), default=RequestStatus.PENDING) # Use the Enum defined above. Default is always PENDING.
-    ReviewedBy = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=True) # This is null until a moderator actually reviews it  
+    Status = Column(Enum(RequestStatus), default=RequestStatus.PENDING)
+    ReviewedBy = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=True)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
     ReviewedAt = Column(DateTime(timezone=True), nullable=True)
 
-    # Set up relationships for easier access to the user account details (user and reviewer data)
     requester = relationship("UserAccount", foreign_keys=[UserID])
     reviewer = relationship("UserAccount", foreign_keys=[ReviewedBy])
 
-# Define the strict Enum for the URL list type
 class ListTypeEnum(str, enum.Enum):
     BLACKLIST = "BLACKLIST"
     WHITELIST = "WHITELIST"
@@ -108,15 +102,13 @@ class URLRules(Base):
     __tablename__ = "URLRules"
 
     RuleID = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    URLDomain = Column(String(255), nullable=False, unique=True) # unique=True prevents duplicates
+    URLDomain = Column(String(255), nullable=False, unique=True)
     ListType = Column(Enum(ListTypeEnum), nullable=False)
-    AddedBy = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=False) # Tracks which Admin or Moderator added this rule
+    AddedBy = Column(Integer, ForeignKey("UserAccount.UserID"), nullable=False)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Set up relationship for easier access to the user account details (the admin's details)
     admin = relationship("UserAccount")
 
-# Define the strict Enum for the scan status
 class ScanStatusEnum(str, enum.Enum):
     SAFE = "SAFE"
     SUSPICIOUS = "SUSPICIOUS"
@@ -145,10 +137,8 @@ class ScanHistory(Base):
     HomographAnalysis = Column(JSON, nullable=True)
     ScannedAt = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Set up relationship for easier access to the user account details
     user = relationship("UserAccount")
 
-# Define the strict Enum for the suggested status
 class SuggestedStatusEnum(str, enum.Enum):
     SAFE = "SAFE"
     SUSPICIOUS = "SUSPICIOUS"
@@ -162,10 +152,9 @@ class ScanFeedback(Base):
     UserID = Column(Integer, ForeignKey("UserAccount.UserID", ondelete="CASCADE"), nullable=False)
     SuggestedStatus = Column(Enum(SuggestedStatusEnum), nullable=False)
     Comments = Column(Text, nullable=True)
-    IsResolved = Column(Boolean, default=False) # Allows moderators to check off feedback they have reviewed
+    IsResolved = Column(Boolean, default=False)
     CreatedAt = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Set up relationships for easier access to ScanHistory and UserAccount details
     scan = relationship("ScanHistory")
     user = relationship("UserAccount")
 

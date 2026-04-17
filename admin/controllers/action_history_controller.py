@@ -3,12 +3,12 @@ from models import api_client
 
 
 def get_audit_dataframe():
+    """Return audit log entries as a display-ready DataFrame, sorted by LogID descending."""
     raw_data = api_client.fetch_action_history()
     if not raw_data:
         return pd.DataFrame()
     df = pd.DataFrame(raw_data)
 
-    # Backend now returns FullName directly via JOIN
     df.rename(columns={"FullName": "User"}, inplace=True)
 
     return df[["LogID", "Timestamp", "User", "ActionType", "Action"]].sort_values(

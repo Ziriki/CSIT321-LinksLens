@@ -4,7 +4,6 @@ from config import LOGO_PATH, PAGE_LAYOUT
 from utils import search_dataframe, render_pagination
 
 st.set_page_config(page_title="Action History Log", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
-# Admin only (RoleID 1)
 auth_controller.require_role(1)
 auth_controller.render_sidebar()
 
@@ -21,7 +20,6 @@ if df.empty:
 # Already sorted descending by LogID in controller, reset index
 df = df.reset_index(drop=True)
 
-# Search
 search_query = st.text_input("Search", placeholder="Search by name, action type, action...")
 df = search_dataframe(df, search_query)
 

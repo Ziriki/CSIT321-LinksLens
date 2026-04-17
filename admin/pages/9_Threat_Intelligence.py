@@ -49,7 +49,6 @@ auth_controller.render_sidebar()
 
 st.title("Threat Intelligence")
 
-# ── Global Threat Heatmap ──────────────────────────────────────────────────
 st.subheader("Global Threat Heatmap")
 
 stats = api_client.fetch_threat_stats()
@@ -90,7 +89,6 @@ else:
 
     st_folium(world_map, width=None, height=450, returned_objects=[])
 
-# ── Recent Threats Feed ────────────────────────────────────────────────────
 st.subheader("Recent Threats")
 
 threats = api_client.fetch_recent_threats()

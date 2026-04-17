@@ -3,7 +3,6 @@ from controllers import auth_controller, moderation_controller
 from config import LOGO_PATH, PAGE_LAYOUT
 
 st.set_page_config(page_title="Blacklist Requests", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
-# Admin + Moderator (RoleID 1, 2)
 user = auth_controller.require_role(1, 2)
 auth_controller.render_sidebar()
 

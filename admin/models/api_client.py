@@ -18,6 +18,7 @@ def _get_headers():
 # -- Auth --
 
 def authenticate_user(email: str, password: str):
+    """Authenticate an admin or moderator and return the raw response."""
     return requests.post(
         f"{BACKEND_URL}/api/auth/login",
         json={"EmailAddress": email, "Password": password, "ClientType": "web"},
@@ -28,11 +29,12 @@ def authenticate_user(email: str, password: str):
 # -- System Health --
 
 def check_backend_health():
+    """Return the raw response from the backend root health endpoint."""
     return requests.get(f"{BACKEND_URL}/", headers=_get_headers(), timeout=_TIMEOUT)
 
 
 def fetch_system_health():
-    """Fetches detailed system health stats (admin only)."""
+    """Fetch detailed system health stats (admin only)."""
     response = requests.get(f"{BACKEND_URL}/api/health", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else None
 
@@ -40,6 +42,7 @@ def fetch_system_health():
 # -- Blacklist Requests (Moderation) --
 
 def fetch_pending_requests():
+    """Return all pending blacklist requests."""
     response = requests.get(
         f"{BACKEND_URL}/api/blacklist-requests/?status=PENDING",
         headers=_get_headers(),
@@ -49,6 +52,7 @@ def fetch_pending_requests():
 
 
 def update_request_status(request_id: int, status: str, moderator_id: int):
+    """Set the status of a blacklist request (APPROVED or REJECTED)."""
     payload = {"Status": status, "ReviewedBy": moderator_id}
     response = requests.put(
         f"{BACKEND_URL}/api/blacklist-requests/{request_id}",
@@ -62,11 +66,13 @@ def update_request_status(request_id: int, status: str, moderator_id: int):
 # -- User Accounts --
 
 def fetch_all_users():
+    """Return all user accounts."""
     response = requests.get(f"{BACKEND_URL}/api/accounts/", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
 def deactivate_user(user_id: int):
+    """Set a user account to inactive."""
     response = requests.put(
         f"{BACKEND_URL}/api/accounts/{user_id}",
         json={"IsActive": False},
@@ -77,6 +83,7 @@ def deactivate_user(user_id: int):
 
 
 def update_user_details(user_id: int, payload: dict):
+    """Update account-level fields (EmailAddress, RoleID, IsActive)."""
     response = requests.put(
         f"{BACKEND_URL}/api/accounts/{user_id}",
         json=payload,
@@ -89,6 +96,7 @@ def update_user_details(user_id: int, payload: dict):
 # -- User Details --
 
 def fetch_user_detail(user_id: int):
+    """Return profile details for a single user, or None if not found."""
     response = requests.get(
         f"{BACKEND_URL}/api/details/{user_id}", headers=_get_headers(), timeout=_TIMEOUT
     )
@@ -109,6 +117,7 @@ def update_user_profile(user_id: int, payload: dict):
 # -- App Feedback --
 
 def fetch_app_feedback():
+    """Return all app feedback submissions."""
     response = requests.get(f"{BACKEND_URL}/api/feedback/", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
@@ -116,6 +125,7 @@ def fetch_app_feedback():
 # -- Action History --
 
 def fetch_action_history():
+    """Return all audit log entries."""
     response = requests.get(f"{BACKEND_URL}/api/history/", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
@@ -136,11 +146,13 @@ def log_action(user_id: int, action_type: str, action: str):
 # -- URL Rules --
 
 def fetch_url_rules():
+    """Return all URL blacklist and whitelist rules."""
     response = requests.get(f"{BACKEND_URL}/api/url-rules/", headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
 def create_url_rule(domain: str, list_type: str, added_by: int):
+    """Add a domain to the blacklist or whitelist."""
     response = requests.post(
         f"{BACKEND_URL}/api/url-rules/",
         json={"URLDomain": domain, "ListType": list_type, "AddedBy": added_by},
@@ -151,6 +163,7 @@ def create_url_rule(domain: str, list_type: str, added_by: int):
 
 
 def delete_url_rule(rule_id: int):
+    """Delete a URL rule by ID."""
     response = requests.delete(
         f"{BACKEND_URL}/api/url-rules/{rule_id}", headers=_get_headers(), timeout=_TIMEOUT
     )
@@ -179,6 +192,7 @@ def fetch_scan_list(skip: int = 0, limit: int = 25, search_url: str = None,
 
 
 def fetch_scan_details(scan_id: int):
+    """Return full details for a single scan record."""
     response = requests.get(
         f"{BACKEND_URL}/api/scans/{scan_id}", headers=_get_headers(), timeout=_TIMEOUT
     )
@@ -188,6 +202,7 @@ def fetch_scan_details(scan_id: int):
 # -- Scan Feedback --
 
 def fetch_scan_feedback(is_resolved: bool = None):
+    """Return scan feedback submissions, optionally filtered by resolution status."""
     params = {}
     if is_resolved is not None:
         params["is_resolved"] = str(is_resolved).lower()
@@ -212,6 +227,7 @@ def fetch_scan_feedback_enriched(is_resolved: bool = None):
 
 
 def resolve_scan_feedback(feedback_id: int):
+    """Mark a scan feedback entry as resolved."""
     response = requests.put(
         f"{BACKEND_URL}/api/scan-feedback/{feedback_id}",
         json={"IsResolved": True},

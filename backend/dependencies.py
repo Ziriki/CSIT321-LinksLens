@@ -12,20 +12,16 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 
 def get_current_user(request: Request) -> dict:
-    """
-    Extracts and verifies the JWT from either:
-    - HttpOnly cookie 'access_token' (web clients)
-    - Authorization: Bearer <token> header (mobile clients)
-    Returns: {"user_id": int, "role_id": int}
+    """Extract and verify the JWT from an HttpOnly cookie (web) or Authorization header (mobile).
+
+    Returns {'user_id': int, 'role_id': int}.
     """
     token = None
 
-    # Try cookie first (web client sets 'access_token' cookie)
     cookie_value = request.cookies.get("access_token")
     if cookie_value and cookie_value.startswith("Bearer "):
         token = cookie_value[7:]
 
-    # Fall back to Authorization header (mobile client)
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):

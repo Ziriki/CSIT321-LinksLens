@@ -10,32 +10,24 @@ from utils import get_client_ip, get_fullname, get_or_404, get_password_hash, ha
 
 load_dotenv()
 
-# Import custom files
 import models
 import schemas
 from database import get_db
 from dependencies import get_current_user, require_role
 
-# Create a router for this controller
 router = APIRouter(
     prefix="/api/accounts",
     tags=["User Accounts"]
 )
 
-#########################################################
-# CREATE function for UserAccount table
-#########################################################
 @router.post("/", response_model=schemas.UserAccountResponse, status_code=status.HTTP_201_CREATED)
 def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get_db)):
-    # Check if Email already exists
     if db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == account.EmailAddress).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Check if the RoleID actually exists in the UserRole table
+
     if not db.query(models.UserRole).filter(models.UserRole.RoleID == account.RoleID).first():
         raise HTTPException(status_code=400, detail="Invalid RoleID provided")
 
-    # Hash the password and create the record
     hashed_pwd = get_password_hash(account.Password)
     db_account = models.UserAccount(
         EmailAddress=account.EmailAddress,
@@ -48,27 +40,18 @@ def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get
     db.refresh(db_account)
     return db_account
 
-#########################################################
-# READ function for UserAccount table (Get by ID)
-#########################################################
 @router.get("/{account_id}", response_model=schemas.UserAccountResponse)
 def read_account(account_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    # Regular users can only view their own account; admins can view any
     if current_user["role_id"] not in (1, 2) and account_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only view your own account")
     account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
     return account
 
-#########################################################
-# UPDATE function for UserAccount table
-#########################################################
 @router.put("/{account_id}", response_model=schemas.UserAccountResponse)
 def update_account(account_id: int, account_update: schemas.UserAccountUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    # Regular users can only update their own account
     if current_user["role_id"] not in (1, 2) and account_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="You can only update your own account")
 
-    # Only admins can change RoleID or IsActive
     update_data = account_update.model_dump(exclude_unset=True)
     if current_user["role_id"] != 1:
         if "RoleID" in update_data or "IsActive" in update_data:
@@ -76,18 +59,15 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
 
     db_account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
 
-    # If updating email, check if the new email is taken by someone else
     if account_update.EmailAddress:
         email_check = db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == account_update.EmailAddress).first()
         if email_check and email_check.UserID != account_id:
             raise HTTPException(status_code=400, detail="Email already in use")
 
-    # If updating RoleID, check if it exists
     if account_update.RoleID:
         if not db.query(models.UserRole).filter(models.UserRole.RoleID == account_update.RoleID).first():
             raise HTTPException(status_code=400, detail="Invalid RoleID provided")
 
-    # Handle password hashing separately if provided
     if "Password" in update_data:
         db_account.PasswordHash = get_password_hash(update_data.pop("Password"))
 
@@ -98,9 +78,6 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
     db.refresh(db_account)
     return db_account
 
-#########################################################
-# DELETE function for UserAccount table (Soft Delete)
-#########################################################
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
     db_account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
@@ -109,9 +86,6 @@ def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Dep
     db.commit()
     return None
 
-#########################################################
-# LIST function for UserAccount table
-#########################################################
 @router.get("/", response_model=None)
 def list_accounts(
     search_email: Optional[str] = None,
@@ -121,21 +95,16 @@ def list_accounts(
     db: Session = Depends(get_db),
     _: dict = Depends(require_role(1))
 ):
-    # Start with a base query
     query = db.query(models.UserAccount).options(
         joinedload(models.UserAccount.details)
     ).filter(models.UserAccount.IsActive == True)
 
-    # Filter logic if a search term is provided
     if search_email:
-        # .ilike() provides case-insensitive matching in MySQL
         query = query.filter(models.UserAccount.EmailAddress.ilike(f"%{search_email}%"))
 
-    # Additional filter for RoleID if provided
     if role_id:
         query = query.filter(models.UserAccount.RoleID == role_id)
 
-    # Execute the query with optional pagination
     results = query.offset(skip).limit(limit).all()
 
     return [
@@ -149,9 +118,6 @@ def list_accounts(
         for acc in results
     ]
 
-#########################################################
-# REGISTER - Create Account + Send Verification Email
-#########################################################
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get_db)):
     if db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == request.EmailAddress).first():
@@ -270,9 +236,6 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
     return {"message": "Account created. Please check your email to verify your account."}
 
 
-#########################################################
-# VERIFY EMAIL - Activate Account
-#########################################################
 @router.post("/verify-email")
 def verify_email(request: schemas.VerifyEmailRequest, db: Session = Depends(get_db)):
     token_record = db.query(models.EmailVerificationToken).filter(
@@ -295,9 +258,6 @@ def verify_email(request: schemas.VerifyEmailRequest, db: Session = Depends(get_
     return {"message": "Email verified successfully. You can now log in."}
 
 
-#########################################################
-# FORGOT PASSWORD - Create Token Record & Send Email
-#########################################################
 @router.post("/forgot-password")
 def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Request, db: Session = Depends(get_db)):
     generic_message = {"message": "If that email exists in our system, a password reset link has been sent."}
@@ -429,9 +389,6 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
     db.commit()
     return generic_message
 
-#########################################################
-# RESET PASSWORD - Verify Token Record & Update Password
-#########################################################
 @router.post("/reset-password")
 def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
     token_record = db.query(models.PasswordResetToken).filter(

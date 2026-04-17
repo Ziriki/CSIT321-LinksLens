@@ -4,7 +4,6 @@ from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
 
 st.set_page_config(page_title="Dashboard", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
-# Admin only (RoleID 1)
 auth_controller.require_role(1)
 auth_controller.render_sidebar()
 
@@ -15,7 +14,6 @@ if not health:
     st.warning("Could not fetch system health data.")
     st.stop()
 
-# --- Overall status banner ---
 overall = health.get("overall_status", "unknown")
 if overall == "operational":
     st.success("All Systems Operational")
@@ -24,7 +22,6 @@ elif overall == "degraded":
 else:
     st.error("Service Outage Detected")
 
-# --- Component status ---
 st.markdown("---")
 st.subheader("Component Status")
 
@@ -40,7 +37,6 @@ for col, component in zip(cols, components):
         if detail:
             st.caption(detail)
 
-# --- Pending work queues ---
 st.markdown("---")
 st.subheader("Pending Work")
 
@@ -53,7 +49,6 @@ with col2:
 with col3:
     st.metric("App Feedback Unreviewed", pending.get("app_feedback_unreviewed", 0))
 
-# --- Activity & URL rules ---
 st.markdown("---")
 col1, col2, col3 = st.columns(3)
 with col1:
