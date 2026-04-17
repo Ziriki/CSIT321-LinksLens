@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react"
 import { View, Text, ScrollView, Image, Linking, Pressable, Modal, Animated, Alert } from "react-native"
-import { captureRef } from "react-native-view-shot"
+import ViewShot from "react-native-view-shot"
 import * as MediaLibrary from "expo-media-library"
 import { router, useLocalSearchParams } from "expo-router"
 import {
@@ -170,7 +170,7 @@ export default function ScanResults() {
   const [showRedirects, setShowRedirects] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [browser, setBrowser] = useState<BrowserId>("system");
-  const exportRef = useRef<ScrollView>(null);
+  const exportRef = useRef<ViewShot>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const runningAnim = useRef<Animated.CompositeAnimation | null>(null);
@@ -193,7 +193,7 @@ export default function ScanResults() {
 
   useEffect(() => {
     getCurrentUserId().then((id) => {
-      if (id) fetchPreferences(id).then((p) => { if (p.browser) setBrowser(p.browser) }).catch(() => {})
+      if (id) fetchPreferences(id).then((p) => { if (p.browser) setBrowser(p.browser as BrowserId) }).catch(() => {})
     })
   }, [])
 
@@ -242,12 +242,12 @@ export default function ScanResults() {
 
   async function handleExport() {
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync({ granularPermissions: ["photo"] });
+      const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
         showToast("Allow photo library access to save the report.", "error");
         return;
       }
-      const uri = await captureRef(exportRef, { format: "jpg", quality: 0.9, snapshotContentContainer: true });
+      const uri = await exportRef.current!.capture!();
       await MediaLibrary.saveToLibraryAsync(uri);
       showToast("Scan report saved to your gallery.", "success");
     } catch (e: any) {
@@ -292,12 +292,29 @@ export default function ScanResults() {
       : "Suspicious activity detected";
 
   return (
+    <ViewShot ref={exportRef} style={{ flex: 1 }}>
     <View className="flex-1 bg-background">
 
       <ScreenHeader title="Scan Results" />
 
-      <ScrollView ref={exportRef} className="flex-1 px-4 py-4">
-        <View collapsable={false}>
+      {scanData.screenshot_url && (
+        <Modal visible={fullscreenImage} transparent animationType="fade" onRequestClose={() => setFullscreenImage(false)}>
+          <Pressable
+            className="flex-1 items-center justify-center bg-black/90"
+            onPress={() => setFullscreenImage(false)}
+          >
+            <Image
+              source={{ uri: scanData.screenshot_url }}
+              style={{ width: "100%", height: "75%" }}
+              resizeMode="contain"
+            />
+            <Text className="mt-4 text-sm text-white/60">Tap anywhere to close</Text>
+          </Pressable>
+        </Modal>
+      )}
+
+      <ScrollView className="flex-1 px-4 py-4">
+        <View>
 
         {/* Result hero */}
         <View className="items-center py-6">
@@ -356,42 +373,26 @@ export default function ScanResults() {
 
         {/* Screenshot */}
         {scanData.screenshot_url && (
-          <>
-            <Modal visible={fullscreenImage} transparent animationType="fade" onRequestClose={() => setFullscreenImage(false)}>
-              <Pressable
-                className="flex-1 items-center justify-center bg-black/90"
-                onPress={() => setFullscreenImage(false)}
-              >
+          <Card className="mt-4 overflow-hidden p-0" onPress={() => setShowScreenshot(v => !v)}>
+            <View className="flex-row items-center justify-between px-4 py-3">
+              <View className="flex-row items-center gap-3">
+                <ImageIcon size={20} color={iconColor} />
+                <Text className="text-sm font-medium text-foreground">Website Preview</Text>
+              </View>
+              {showScreenshot
+                ? <ChevronDown size={20} color={iconColor} />
+                : <ChevronRight size={20} color={iconColor} />}
+            </View>
+            {showScreenshot && (
+              <Pressable onPress={() => setFullscreenImage(true)}>
                 <Image
                   source={{ uri: scanData.screenshot_url }}
-                  style={{ width: "100%", height: "75%" }}
-                  resizeMode="contain"
+                  style={{ width: "100%", height: 192 }}
+                  resizeMode="cover"
                 />
-                <Text className="mt-4 text-sm text-white/60">Tap anywhere to close</Text>
               </Pressable>
-            </Modal>
-
-            <Card className="mt-4 overflow-hidden p-0" onPress={() => setShowScreenshot(v => !v)}>
-              <View className="flex-row items-center justify-between px-4 py-3">
-                <View className="flex-row items-center gap-3">
-                  <ImageIcon size={20} color={iconColor} />
-                  <Text className="text-sm font-medium text-foreground">Website Preview</Text>
-                </View>
-                {showScreenshot
-                  ? <ChevronDown size={20} color={iconColor} />
-                  : <ChevronRight size={20} color={iconColor} />}
-              </View>
-              {showScreenshot && (
-                <Pressable onPress={() => setFullscreenImage(true)}>
-                  <Image
-                    source={{ uri: scanData.screenshot_url }}
-                    style={{ width: "100%", height: 192 }}
-                    resizeMode="cover"
-                  />
-                </Pressable>
-              )}
-            </Card>
-          </>
+            )}
+          </Card>
         )}
 
         {/* Redirect chain */}
@@ -693,5 +694,6 @@ export default function ScanResults() {
         </Animated.View>
       )}
     </View>
+    </ViewShot>
   )
 }

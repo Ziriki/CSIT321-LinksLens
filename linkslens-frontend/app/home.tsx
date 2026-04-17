@@ -18,7 +18,7 @@ import {
   SectionHeader,
   BottomNav,
 } from "../components/ui-components"
-import { fetchDetails, fetchScanHistory, getCurrentUserId } from "../lib/api"
+import { fetchDetails, fetchScanHistory, getCurrentUserId, scanHistoryToResponse } from "../lib/api"
 import type { ScanHistoryItem } from "../lib/api"
 import { statusToRisk, countScansThisMonth } from "../lib/types"
 import { bottomNavItems } from "../lib/navigation"
@@ -141,6 +141,10 @@ export default function HomePage() {
               rightElement={
                 <RiskBadge riskLevel={statusToRisk(scan.StatusIndicator)} size="sm" />
               }
+              onPress={() => router.push({
+                pathname: "/scan-results",
+                params: { result: JSON.stringify(scanHistoryToResponse(scan)) },
+              })}
             />
           ))}
         </View>

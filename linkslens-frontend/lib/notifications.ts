@@ -52,6 +52,7 @@ const STATUS_BODY: Record<ScanStatus, string> = {
 export async function notifyScanComplete(
   status: ScanStatus,
   url: string,
+  scanId?: number,
 ): Promise<void> {
   try {
     const enabled = await getNotificationsEnabled()
@@ -65,7 +66,7 @@ export async function notifyScanComplete(
         title: `Scan Complete: ${label}`,
         body,
         subtitle: url.length > 60 ? url.slice(0, 57) + "…" : url,
-        data: { status, url },
+        data: { status, url, scan_id: scanId ?? null },
       },
       trigger: null,
     })
