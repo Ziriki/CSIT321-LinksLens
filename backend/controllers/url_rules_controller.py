@@ -73,7 +73,7 @@ def list_rules(
     if search_domain:
         query = query.filter(models.URLRules.URLDomain.ilike(f"%{search_domain}%"))
 
-    results = query.offset(skip).limit(limit).all()
+    results = query.order_by(models.URLRules.RuleID.desc()).offset(skip).limit(limit).all()
 
     return [
         {

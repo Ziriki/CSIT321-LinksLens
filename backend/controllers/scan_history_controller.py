@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from utils import get_fullname, get_or_404, apply_updates
 import models
@@ -87,9 +88,24 @@ def read_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = 
     return scan
 
 @router.put("/{scan_id}", response_model=schemas.ScanHistoryResponse)
-def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
+def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_role(1, 2))):
     db_scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
     apply_updates(db, db_scan, scan_update)
+
+    # When a moderator overrides a verdict to MALICIOUS, blacklist the domain so future scans are also overridden.
+    # Mirrors the approved-blacklist-request flow — domain must be in URLRules for check_blacklist_db to catch it.
+    if scan_update.StatusIndicator == models.ScanStatusEnum.MALICIOUS:
+        domain = urlparse(db_scan.InitialURL).netloc
+        if domain:
+            existing_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == domain).first()
+            if not existing_rule:
+                db.add(models.URLRules(
+                    URLDomain=domain,
+                    ListType=models.ListTypeEnum.BLACKLIST,
+                    AddedBy=current_user["user_id"]
+                ))
+                db.commit()
+
     return db_scan
 
 @router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -106,8 +122,7 @@ def delete_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict 
 def list_scans(
     user_id: Optional[int] = None,
     status_indicator: Optional[models.ScanStatusEnum] = None,
-    search_url: Optional[str] = None,
-    search_user: Optional[str] = None,
+    search: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -125,17 +140,14 @@ def list_scans(
     if status_indicator:
         query = query.filter(models.ScanHistory.StatusIndicator == status_indicator)
 
-    if search_url:
-        query = query.filter(models.ScanHistory.InitialURL.ilike(f"%{search_url}%"))
-
     # Subquery avoids conflicts with the existing joinedload on UserAccount.details
-    if search_user:
+    if search:
+        matching_user_ids = db.query(models.UserDetails.UserID).filter(
+            models.UserDetails.FullName.ilike(f"%{search}%")
+        )
         query = query.filter(
-            models.ScanHistory.UserID.in_(
-                db.query(models.UserDetails.UserID).filter(
-                    models.UserDetails.FullName.ilike(f"%{search_user}%")
-                )
-            )
+            models.ScanHistory.InitialURL.ilike(f"%{search}%")
+            | models.ScanHistory.UserID.in_(matching_user_ids)
         )
 
     query = query.order_by(models.ScanHistory.ScanID.desc())
