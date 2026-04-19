@@ -89,11 +89,9 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      <View className="items-center py-6">
-        <Text className="text-muted-foreground">
-          {"Don't have an account? "}
-          <TextLink onPress={() => router.push("/signup")}>Sign Up</TextLink>
-        </Text>
+      <View className="w-full flex-row items-center justify-center py-6">
+        <Text className="text-muted-foreground">{"Don't have an account? "}</Text>
+        <TextLink onPress={() => router.push("/signup")}>Sign Up</TextLink>
       </View>
     </View>
   )
