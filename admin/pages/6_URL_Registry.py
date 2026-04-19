@@ -13,7 +13,7 @@ st.title("URL Registry")
 with st.expander("Submit a Domain to Blacklist / Whitelist", expanded=False):
     with st.form("add_rule_form", clear_on_submit=True):
         domain = st.text_input("Domain", placeholder="e.g. example.com")
-        list_type = st.selectbox("List Type", ["BLACKLIST", "WHITELIST"])
+        list_type = st.radio("List Type", ["BLACKLIST", "WHITELIST"], horizontal=True)
         submitted = st.form_submit_button("Submit")
 
     if submitted:
@@ -22,11 +22,11 @@ with st.expander("Submit a Domain to Blacklist / Whitelist", expanded=False):
             st.warning("Please enter a domain.")
         else:
             if api_client.create_url_rule(domain, list_type, current_user["user_id"]):
-                api_client.log_action(current_user["user_id"], "URL Rule", f"Added {domain} to {list_type}")
-                st.success(f"{domain} added to {list_type} successfully.")
+                api_client.log_action(current_user["user_id"], "URL Rule", f"Set {domain} to {list_type}")
+                st.success(f"{domain} is now in the {list_type}.")
                 st.rerun()
             else:
-                st.error("Failed to add rule. The domain may already exist.")
+                st.error(f"{domain} is already in the {list_type}.")
 
 st.markdown("---")
 
