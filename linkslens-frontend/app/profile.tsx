@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react"
+import { useState, useCallback } from "react"
 import { View, Text, ScrollView, Alert } from "react-native"
-import { router } from "expo-router"
+import { router, useFocusEffect } from "expo-router"
 import {
   Settings,
   LogOut,
@@ -26,28 +26,29 @@ export default function Profile() {
   const [totalScans, setTotalScans] = useState(0)
   const [monthScans, setMonthScans] = useState(0)
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const userId = await getCurrentUserId()
-        if (!userId) return
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        try {
+          const userId = await getCurrentUserId()
+          if (!userId) return
 
-        const [account, details, scans] = await Promise.all([
-          fetchAccount(userId),
-          fetchDetails(userId).catch(() => null),
-          fetchScanHistory().catch(() => []),
-        ])
+          const [account, details, scans] = await Promise.all([
+            fetchAccount(userId),
+            fetchDetails(userId).catch(() => null),
+            fetchScanHistory().catch(() => []),
+          ])
 
-        setEmail(account.EmailAddress)
-        setName(details?.FullName ?? "User")
-        setTotalScans(scans.length)
-
-        setMonthScans(countScansThisMonth(scans))
-      } catch {
-        // Silently fail — show defaults
-      }
-    })()
-  }, [])
+          setEmail(account.EmailAddress)
+          setName(details?.FullName ?? "User")
+          setTotalScans(scans.length)
+          setMonthScans(countScansThisMonth(scans))
+        } catch {
+          // Silently fail — show defaults
+        }
+      })()
+    }, [])
+  )
 
   return (
     <View className="flex-1 bg-background">

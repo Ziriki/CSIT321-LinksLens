@@ -835,6 +835,11 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 ) and final_status == "SAFE":
                     final_status = "SUSPICIOUS"
 
+            # If urlscan.io couldn't reach the URL (domain unreachable / doesn't exist)
+            # and no other signal flagged it, the result is genuinely unknown — not SAFE.
+            if raw_result is None and final_status == "SAFE":
+                final_status = "UNAVAILABLE"
+
             domain_age_days = domain_info.get("total_days")
 
             scan_record = models.ScanHistory(

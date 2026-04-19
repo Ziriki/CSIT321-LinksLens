@@ -1,6 +1,7 @@
 import '../global.css';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Stack, router } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -74,6 +75,7 @@ export default function RootLayout() {
 
   return (
     <View style={[{ flex: 1, paddingTop: insets.top, backgroundColor: getBackgroundColor(colorScheme) }, themeVars]}>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }} />
     </View>
   );
