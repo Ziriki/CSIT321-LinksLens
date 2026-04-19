@@ -221,9 +221,9 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `notifications.ts` — `initNotificationHandler`, `requestNotificationPermission`, `notifyScanComplete`
 - `url-validation.ts` — `URL_PATTERN` regex shared across all scan entry screens
 - `navigation.tsx` — `bottomNavItems` array (icon, label, href) used by `BottomNav` component
-- `browsers.ts` — `BROWSERS` list (id + name), `BrowserId` type, `BROWSER_SCHEMES` deep-link map for Chrome/Firefox/Edge; `"system"` ID is absent from `BROWSER_SCHEMES` — callers fall back to `Linking.openURL` directly
+- `browsers.ts` — `BROWSERS` list (id + name), `BrowserId` type, `BROWSER_SCHEMES` deep-link URL scheme map, `BROWSER_PACKAGES` Android package name map; `"system"` ID is absent from both maps — callers fall back to `Linking.openURL` directly
 
-**Shared UI components (`components/ui-components.tsx`):** `Card`, `RiskBadge` (safe/suspicious/malicious colour), `AppButton` (primary/secondary/outline/ghost variants), `BackButton`, `BottomNav`, plus a local `cx(...classes)` helper for conditional Tailwind class joining.
+**Shared UI components (`components/ui-components.tsx`):** `Card`, `RiskBadge` (safe/suspicious/malicious colour), `AppButton` (primary/secondary/outline/ghost variants), `InputField`, `ListItem`, `SectionHeader`, `ScreenHeader`, `BottomNav`, `ConfidenceIndicator` (0–100 score bar), `TextLink`, plus a local `cx(...classes)` helper for conditional Tailwind class joining.
 
 **API client:** `lib/api.ts` — `API_BASE_URL` defaults to `https://api.linkslens.com` (override with `EXPO_PUBLIC_API_URL`).
 
@@ -239,13 +239,15 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 - `scan-qr.tsx` → live camera QR code scanner (`expo-camera` `CameraView`); decodes QR URL and navigates to `scan-processing`; handles camera permission state (loading/denied/granted); displays scan-frame overlay with corner accents and status feedback
 - `scan-link.tsx` → manual URL entry, navigates to `scan-processing`
 - `scan-processing.tsx` → shows simulated progress messages timed to backend pipeline steps (7 stages, 0–21s) → calls `scanUrl(url)` → on result fires local push notification via `lib/notifications.ts` → navigates to `scan-results`
-- `scan-results.tsx` → displays `status_indicator`, `score`, `gsb_threat_types`, `initial_url`
+- `scan-results.tsx` → full results screen: `RiskBadge` + `ConfidenceIndicator`, collapsible detail panels (script analysis, homograph analysis, redirect chain, screenshot preview, server location), open-in-preferred-browser via `BROWSER_PACKAGES` (Android intent), export scan report as image to gallery (`react-native-view-shot` + `expo-media-library`), haptic feedback on load (`expo-haptics`), flag/report button to `report-scan.tsx`
+- `onboarding.tsx` → first-launch tutorial shown before `index.tsx`; completion state persisted via `expo-secure-store`
 
 **Notifications (`lib/notifications.ts`):**
 - `initNotificationHandler()` — called in `_layout.tsx` on startup; sets foreground banner behaviour
 - `requestNotificationPermission()` — called in `_layout.tsx`; prompts OS permission dialog on first launch
 - `notifyScanComplete(status, url)` — fires immediate local notification; fails silently
 - `expo-notifications ~0.31.2` registered as Expo plugin in `app.json`; requires rebuild after adding
+- `expo-haptics` — used in `scan-results.tsx` for vibration feedback on scan result load; registered as Expo plugin in `app.json`
 
 **Types (`lib/types.ts`):**
 - `ScanStatus` — `'SAFE' | 'SUSPICIOUS' | 'MALICIOUS' | 'UNAVAILABLE'` (backend status values)

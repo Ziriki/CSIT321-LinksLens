@@ -149,6 +149,7 @@ export function InputField({
   value,
   className,
   secureTextEntry,
+  editable = true,
   onChangeText,
 }: {
   label?: string
@@ -156,6 +157,7 @@ export function InputField({
   value?: string
   className?: string
   secureTextEntry?: boolean
+  editable?: boolean
   onChangeText?: (text: string) => void
 }) {
   return (
@@ -167,8 +169,12 @@ export function InputField({
         placeholder={placeholder}
         placeholderTextColor="#9CA3AF"
         secureTextEntry={secureTextEntry}
+        editable={editable}
         onChangeText={onChangeText}
-        className="w-full rounded-xl border border-input bg-card px-4 py-3 text-base text-foreground"
+        className={cx(
+          "w-full rounded-xl border border-input px-4 py-3 text-base text-foreground",
+          editable ? "bg-card" : "bg-secondary opacity-70"
+        )}
       />
     </View>
   )
