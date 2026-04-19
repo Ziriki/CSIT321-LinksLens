@@ -19,16 +19,17 @@ if all_df.empty:
     st.stop()
 
 all_df["Role"] = all_df["RoleID"].map(ROLE_LABELS)
+all_df["Status"] = all_df["IsActive"].map({True: "Active", False: "Inactive"})
 
 search_query = st.text_input("Search", placeholder="Search by name, email, role...")
-all_df = search_dataframe(all_df, search_query, columns=["FullName", "EmailAddress", "Role"])
+all_df = search_dataframe(all_df, search_query, columns=["FullName", "EmailAddress", "Role", "Status"])
 
 total = len(all_df)
 start, end = render_pagination("user_page", total, PAGE_SIZE)
 page_df = all_df.iloc[start:end]
 
 event = st.dataframe(
-    page_df[["UserID", "FullName", "EmailAddress", "Role"]],
+    page_df[["UserID", "FullName", "EmailAddress", "Role", "Status"]],
     use_container_width=True,
     hide_index=True,
     on_select="rerun",
