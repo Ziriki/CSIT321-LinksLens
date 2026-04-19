@@ -82,6 +82,17 @@ def deactivate_user(user_id: int):
     return response.status_code == 200
 
 
+def activate_user(user_id: int):
+    """Set a user account to active."""
+    response = requests.put(
+        f"{BACKEND_URL}/api/accounts/{user_id}",
+        json={"IsActive": True},
+        headers=_get_headers(),
+        timeout=_TIMEOUT,
+    )
+    return response.status_code == 200
+
+
 def update_user_details(user_id: int, payload: dict):
     """Update account-level fields (EmailAddress, RoleID, IsActive)."""
     response = requests.put(
