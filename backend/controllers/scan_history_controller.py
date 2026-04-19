@@ -92,16 +92,24 @@ def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Sessio
     db_scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
     apply_updates(db, db_scan, scan_update)
 
-    # When a moderator overrides a verdict to MALICIOUS, blacklist the domain so future scans are also overridden.
-    # Mirrors the approved-blacklist-request flow — domain must be in URLRules for check_blacklist_db to catch it.
-    if scan_update.StatusIndicator == models.ScanStatusEnum.MALICIOUS:
+    new_status = scan_update.StatusIndicator
+    if new_status in (models.ScanStatusEnum.MALICIOUS, models.ScanStatusEnum.SAFE):
         domain = urlparse(db_scan.InitialURL).netloc
+        target_list_type = (
+            models.ListTypeEnum.BLACKLIST if new_status == models.ScanStatusEnum.MALICIOUS
+            else models.ListTypeEnum.WHITELIST
+        )
         if domain:
             existing_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == domain).first()
-            if not existing_rule:
+            if existing_rule:
+                if existing_rule.ListType != target_list_type:
+                    existing_rule.ListType = target_list_type
+                    existing_rule.AddedBy = current_user["user_id"]
+                    db.commit()
+            else:
                 db.add(models.URLRules(
                     URLDomain=domain,
-                    ListType=models.ListTypeEnum.BLACKLIST,
+                    ListType=target_list_type,
                     AddedBy=current_user["user_id"]
                 ))
                 db.commit()
