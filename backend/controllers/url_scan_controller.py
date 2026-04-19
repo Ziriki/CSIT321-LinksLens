@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, literal, or_
 from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -608,12 +609,20 @@ def check_blacklist_db(url: str) -> dict:
     db_gen = get_db()
     db = next(db_gen)
     try:
-        url_rule = db.query(models.URLRules).filter(
-            models.URLRules.URLDomain == domain
-        ).first()
+        # Match exact domain or any subdomain (e.g. "www.mom.gov.sg" matches stored "mom.gov.sg")
+        # The CONCAT check uses "%.domain" so "evil-mom.gov.sg" does NOT match "mom.gov.sg"
+        domain_match = or_(
+            models.URLRules.URLDomain == domain,
+            literal(domain).like(func.concat("%.", models.URLRules.URLDomain))
+        )
+        url_rule = db.query(models.URLRules).filter(domain_match).first()
 
-        approved_blacklist = db.query(models.BlacklistRequest).filter(
+        bl_domain_match = or_(
             models.BlacklistRequest.URLDomain == domain,
+            literal(domain).like(func.concat("%.", models.BlacklistRequest.URLDomain))
+        )
+        approved_blacklist = db.query(models.BlacklistRequest).filter(
+            bl_domain_match,
             models.BlacklistRequest.Status == models.RequestStatus.APPROVED
         ).first()
 
