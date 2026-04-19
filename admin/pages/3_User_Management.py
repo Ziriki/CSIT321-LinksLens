@@ -121,22 +121,28 @@ with btn_col1:
 with btn_col2:
     if user_row["IsActive"]:
         if st.button("Deactivate", type="secondary", key="btn_deactivate"):
-            st.session_state["confirm_deactivate"] = uid
+            st.session_state["confirm_status_change"] = (uid, "deactivate")
+    else:
+        if st.button("Activate", type="secondary", key="btn_activate"):
+            st.session_state["confirm_status_change"] = (uid, "activate")
 
-if st.session_state.get("confirm_deactivate") == uid:
-    st.warning(f"Are you sure you want to deactivate User #{uid}?")
+pending = st.session_state.get("confirm_status_change")
+if pending and pending[0] == uid:
+    action = pending[1]
+    st.warning(f"Are you sure you want to {action} User #{uid}?")
     confirm_col1, confirm_col2 = st.columns(2)
     with confirm_col1:
-        if st.button("Yes, deactivate", key="confirm_yes"):
-            api_client.deactivate_user(uid)
-            api_client.log_action(
-                current_user["user_id"], "DEACTIVATED_USER",
-                f"Deactivated User #{uid}.",
-            )
-            st.session_state.pop("confirm_deactivate", None)
+        if st.button(f"Yes, {action}", key="confirm_yes"):
+            if action == "deactivate":
+                api_client.deactivate_user(uid)
+                api_client.log_action(current_user["user_id"], "DEACTIVATED_USER", f"Deactivated User #{uid}.")
+            else:
+                api_client.activate_user(uid)
+                api_client.log_action(current_user["user_id"], "ACTIVATED_USER", f"Activated User #{uid}.")
+            st.session_state.pop("confirm_status_change", None)
             st.cache_data.clear()
             st.rerun()
     with confirm_col2:
         if st.button("Cancel", key="confirm_no"):
-            st.session_state.pop("confirm_deactivate", None)
+            st.session_state.pop("confirm_status_change", None)
             st.rerun()
