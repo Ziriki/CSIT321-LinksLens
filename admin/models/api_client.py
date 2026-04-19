@@ -67,7 +67,7 @@ def update_request_status(request_id: int, status: str, moderator_id: int):
 
 def fetch_all_users():
     """Return all user accounts."""
-    response = requests.get(f"{BACKEND_URL}/api/accounts/", headers=_get_headers(), timeout=_TIMEOUT)
+    response = requests.get(f"{BACKEND_URL}/api/accounts/", params={"limit": 10000}, headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
