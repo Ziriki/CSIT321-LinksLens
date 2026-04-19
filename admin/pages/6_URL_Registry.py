@@ -23,10 +23,13 @@ with st.expander("Submit a Domain to Blacklist / Whitelist", expanded=False):
         else:
             if api_client.create_url_rule(domain, list_type, current_user["user_id"]):
                 api_client.log_action(current_user["user_id"], "URL Rule", f"Set {domain} to {list_type}")
-                st.success(f"{domain} is now in the {list_type}.")
+                st.session_state["url_registry_toast"] = f"{domain} is now in the {list_type}."
                 st.rerun()
             else:
                 st.error(f"{domain} is already in the {list_type}.")
+
+if toast := st.session_state.pop("url_registry_toast", None):
+    st.success(toast)
 
 st.markdown("---")
 
