@@ -97,7 +97,7 @@ def list_accounts(
 ):
     query = db.query(models.UserAccount).options(
         joinedload(models.UserAccount.details)
-    ).filter(models.UserAccount.IsActive == True)
+    )
 
     if search_email:
         query = query.filter(models.UserAccount.EmailAddress.ilike(f"%{search_email}%"))
