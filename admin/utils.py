@@ -6,9 +6,10 @@ from typing import Any
 
 
 _SCROLL_JS = (
-    "<script>window.parent.document.querySelector('section.main')"
-    ".scrollTo({top: window.parent.document.querySelector('section.main')"
-    ".scrollHeight, behavior: 'smooth'});</script>"
+    "<script>setTimeout(function(){"
+    "var el=window.parent.document.querySelector('section.main');"
+    "if(el)el.scrollTo({top:el.scrollHeight,behavior:'smooth'});"
+    "},300);</script>"
 )
 
 
