@@ -880,7 +880,6 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 "redirect_url": urlscan_result["redirect_url"],
                 "redirect_chain": redirect_chain or [],
                 "status_indicator": final_status,
-                "score": urlscan_result["score"],
                 "domain_age_days": domain_age_days,
                 "server_location": urlscan_result["server_location"],
                 "ip_address": urlscan_result["ip_address"],
