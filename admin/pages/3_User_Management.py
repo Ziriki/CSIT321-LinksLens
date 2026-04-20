@@ -3,7 +3,7 @@ from controllers import auth_controller, user_controller
 from controllers.auth_controller import ROLE_LABELS
 from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
-from utils import search_dataframe, render_pagination
+from utils import search_dataframe, render_pagination, scroll_to_bottom
 
 st.set_page_config(page_title="User Management", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 current_user = auth_controller.require_role(1)
@@ -19,16 +19,17 @@ if all_df.empty:
     st.stop()
 
 all_df["Role"] = all_df["RoleID"].map(ROLE_LABELS)
+all_df["Status"] = all_df["IsActive"].map({True: "Active", False: "Inactive"})
 
 search_query = st.text_input("Search", placeholder="Search by name, email, role...")
-all_df = search_dataframe(all_df, search_query, columns=["FullName", "EmailAddress", "Role"])
+all_df = search_dataframe(all_df, search_query, columns=["FullName", "EmailAddress", "Role", "Status"])
 
 total = len(all_df)
 start, end = render_pagination("user_page", total, PAGE_SIZE)
 page_df = all_df.iloc[start:end]
 
 event = st.dataframe(
-    page_df[["UserID", "FullName", "EmailAddress", "Role"]],
+    page_df[["UserID", "FullName", "EmailAddress", "Role", "Status"]],
     use_container_width=True,
     hide_index=True,
     on_select="rerun",
@@ -42,6 +43,7 @@ if not selected_rows:
 
 row_idx = selected_rows[0]
 uid = int(page_df.iloc[row_idx]["UserID"])
+scroll_to_bottom(f"user_{uid}")
 user_row = all_df[all_df["UserID"] == uid].iloc[0]
 
 details = api_client.fetch_user_detail(uid) or {}
@@ -120,22 +122,28 @@ with btn_col1:
 with btn_col2:
     if user_row["IsActive"]:
         if st.button("Deactivate", type="secondary", key="btn_deactivate"):
-            st.session_state["confirm_deactivate"] = uid
+            st.session_state["confirm_status_change"] = (uid, "deactivate")
+    else:
+        if st.button("Activate", type="secondary", key="btn_activate"):
+            st.session_state["confirm_status_change"] = (uid, "activate")
 
-if st.session_state.get("confirm_deactivate") == uid:
-    st.warning(f"Are you sure you want to deactivate User #{uid}?")
+pending = st.session_state.get("confirm_status_change")
+if pending and pending[0] == uid:
+    action = pending[1]
+    st.warning(f"Are you sure you want to {action} User #{uid}?")
     confirm_col1, confirm_col2 = st.columns(2)
     with confirm_col1:
-        if st.button("Yes, deactivate", key="confirm_yes"):
-            api_client.deactivate_user(uid)
-            api_client.log_action(
-                current_user["user_id"], "DEACTIVATED_USER",
-                f"Deactivated User #{uid}.",
-            )
-            st.session_state.pop("confirm_deactivate", None)
+        if st.button(f"Yes, {action}", key="confirm_yes"):
+            if action == "deactivate":
+                api_client.deactivate_user(uid)
+                api_client.log_action(current_user["user_id"], "DEACTIVATED_USER", f"Deactivated User #{uid}.")
+            else:
+                api_client.activate_user(uid)
+                api_client.log_action(current_user["user_id"], "ACTIVATED_USER", f"Activated User #{uid}.")
+            st.session_state.pop("confirm_status_change", None)
             st.cache_data.clear()
             st.rerun()
     with confirm_col2:
         if st.button("Cancel", key="confirm_no"):
-            st.session_state.pop("confirm_deactivate", None)
+            st.session_state.pop("confirm_status_change", None)
             st.rerun()

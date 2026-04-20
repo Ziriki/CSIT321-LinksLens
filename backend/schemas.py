@@ -1,13 +1,24 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 import enum
 from models import RequestStatus, ListTypeEnum, ScanStatusEnum, SuggestedStatusEnum
 
+
+_PASSWORD_FIELDS = {"Password", "NewPassword"}
+
+class TrimmedModel(BaseModel):
+    @model_validator(mode="before")
+    @classmethod
+    def strip_strings(cls, values):
+        if isinstance(values, dict):
+            return {k: v.strip() if isinstance(v, str) and k not in _PASSWORD_FIELDS else v for k, v in values.items()}
+        return values
+
 #########################################################
 # Base properties of UserRole (used for both Create and Update)
 #########################################################
-class UserRoleBase(BaseModel):
+class UserRoleBase(TrimmedModel):
     RoleName: str
     RoleDescription: Optional[str] = None
     IsActive: Optional[bool] = True
@@ -17,7 +28,7 @@ class UserRoleCreate(UserRoleBase):
     pass
 
 # Used for Updating (PUT) - Everything is optional
-class UserRoleUpdate(BaseModel):
+class UserRoleUpdate(TrimmedModel):
     RoleName: Optional[str] = None
     RoleDescription: Optional[str] = None
     IsActive: Optional[bool] = None
@@ -34,7 +45,7 @@ class UserRoleResponse(UserRoleBase):
 #########################################################
 # Base properties of UserAccount (used for both Create and Update)
 #########################################################
-class UserAccountBase(BaseModel):
+class UserAccountBase(TrimmedModel):
     EmailAddress: EmailStr
     RoleID: int
     IsActive: Optional[bool] = True
@@ -44,7 +55,7 @@ class UserAccountCreate(UserAccountBase):
     Password: str 
 
 # Used for Updating (Everything is optional, including password)
-class UserAccountUpdate(BaseModel):
+class UserAccountUpdate(TrimmedModel):
     EmailAddress: Optional[EmailStr] = None
     RoleID: Optional[int] = None
     Password: Optional[str] = None
@@ -62,7 +73,7 @@ class UserAccountResponse(UserAccountBase):
 #########################################################
 # Base properties of UserDetails (used for both Create and Update)
 #########################################################
-class UserDetailsBase(BaseModel):
+class UserDetailsBase(TrimmedModel):
     FullName: Optional[str] = None
     PhoneNumber: Optional[str] = None
     Address: Optional[str] = None
@@ -131,7 +142,7 @@ class ActionHistoryResponse(ActionHistoryBase):
 #########################################################
 # Base properties of AppFeedback (used for both Create and Update)
 #########################################################
-class AppFeedbackBase(BaseModel):
+class AppFeedbackBase(TrimmedModel):
     Feedback: str
 
 # Used for Creating
@@ -154,7 +165,7 @@ class AppFeedbackResponse(AppFeedbackBase):
 #########################################################
 # Base properties of BlacklistRequest (used for both Create and Update)
 #########################################################
-class BlacklistRequestBase(BaseModel):
+class BlacklistRequestBase(TrimmedModel):
     URLDomain: str
 
 # Used by standard users to submit a request
@@ -162,7 +173,7 @@ class BlacklistRequestCreate(BlacklistRequestBase):
     UserID: int
 
 # Used by Moderators to approve or reject the request
-class BlacklistRequestUpdate(BaseModel):
+class BlacklistRequestUpdate(TrimmedModel):
     Status: RequestStatus
     ReviewedBy: int # The ID of the moderator reviewing it
 
@@ -181,7 +192,7 @@ class BlacklistRequestResponse(BlacklistRequestBase):
 #########################################################
 # Base properties of URLRules (used for both Create and Update)
 #########################################################
-class URLRulesBase(BaseModel):
+class URLRulesBase(TrimmedModel):
     URLDomain: str
     ListType: ListTypeEnum
 
@@ -190,7 +201,7 @@ class URLRulesCreate(URLRulesBase):
     AddedBy: int
 
 # Used for Updating
-class URLRulesUpdate(BaseModel):
+class URLRulesUpdate(TrimmedModel):
     URLDomain: Optional[str] = None
     ListType: Optional[ListTypeEnum] = None
 
@@ -247,7 +258,7 @@ class ScanHistoryResponse(ScanHistoryBase):
 #########################################################
 # Base properties of ScanFeedback (used for both Create and Update)
 #########################################################
-class ScanFeedbackBase(BaseModel):
+class ScanFeedbackBase(TrimmedModel):
     SuggestedStatus: SuggestedStatusEnum
     Comments: Optional[str] = None
 
@@ -278,7 +289,7 @@ class ClientTypeEnum(str, enum.Enum):
     WEB = "web"
     MOBILE = "mobile"
 
-class UserLogin(BaseModel):
+class UserLogin(TrimmedModel):
     EmailAddress: str
     Password: str
     ClientType: ClientTypeEnum
@@ -291,17 +302,17 @@ class TokenResponse(BaseModel):
 #########################################################
 # Base properties of Password Reset Token
 #########################################################
-class ForgotPasswordRequest(BaseModel):
+class ForgotPasswordRequest(TrimmedModel):
     EmailAddress: EmailStr
 
-class ResetPasswordRequest(BaseModel):
+class ResetPasswordRequest(TrimmedModel):
     Token: str
     NewPassword: str = Field(..., min_length=8)
 
-class UserRegistrationRequest(BaseModel):
+class UserRegistrationRequest(TrimmedModel):
     EmailAddress: EmailStr
     Password: str = Field(..., min_length=8)
     FullName: str
 
-class VerifyEmailRequest(BaseModel):
+class VerifyEmailRequest(TrimmedModel):
     Token: str

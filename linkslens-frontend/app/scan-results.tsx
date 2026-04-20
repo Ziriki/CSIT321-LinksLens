@@ -37,9 +37,8 @@ import { useIconColor } from "../lib/theme"
 /**
  * Derives a confidence percentage (15–97) from how many independent signals
  * agree with the final verdict. Each signal is weighted by its authority:
- *   GSB (40) > urlscan score (35) > script analysis (15) > homograph (10)
- * Signals that contradict the verdict lower the score; missing signals
- * (script analysis unavailable, homograph N/A) reduce the denominator.
+ *   GSB (40) > script analysis (15) > homograph (10)
+ * Missing signals (script analysis unavailable, homograph N/A) reduce the denominator.
  */
 function computeConfidence(scan: ScanResponse): number {
   if (scan.status_indicator === "UNAVAILABLE") return 15
@@ -53,25 +52,6 @@ function computeConfidence(scan: ScanResponse): number {
   if (status === "SAFE" && !scan.gsb_flagged) earned += 40
   else if (status !== "SAFE" && scan.gsb_flagged) earned += 40
   else if (status !== "SAFE" && !scan.gsb_flagged) earned += 15
-
-  // urlscan.io score alignment (weight 35)
-  total += 35
-  const urlscanScore = scan.score ?? 0
-  if (status === "MALICIOUS") {
-    if (urlscanScore >= 70) earned += 35
-    else if (urlscanScore >= 50) earned += 25
-    else if (urlscanScore >= 30) earned += 15
-    else earned += 5
-  } else if (status === "SUSPICIOUS") {
-    if (urlscanScore >= 30 && urlscanScore < 70) earned += 30
-    else if (urlscanScore >= 15) earned += 20
-    else earned += 10
-  } else {
-    // SAFE
-    if (urlscanScore < 20) earned += 35
-    else if (urlscanScore < 40) earned += 20
-    else earned += 5
-  }
 
   // Script analysis (weight 15, only if the scan returned data)
   const sa = scan.script_analysis

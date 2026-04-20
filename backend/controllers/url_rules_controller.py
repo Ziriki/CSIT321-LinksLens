@@ -21,7 +21,14 @@ def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: 
 
     existing_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == rule.URLDomain).first()
     if existing_rule:
-        raise HTTPException(status_code=400, detail=f"Domain already exists in the {existing_rule.ListType.value}.")
+        if existing_rule.ListType == rule.ListType:
+            raise HTTPException(status_code=400, detail=f"Domain is already in the {existing_rule.ListType.value}.")
+        # Switching list type — update in place rather than requiring a delete-then-add
+        existing_rule.ListType = rule.ListType
+        existing_rule.AddedBy = rule.AddedBy
+        db.commit()
+        db.refresh(existing_rule)
+        return existing_rule
 
     db_rule = models.URLRules(**rule.model_dump())
     db.add(db_rule)
@@ -73,7 +80,7 @@ def list_rules(
     if search_domain:
         query = query.filter(models.URLRules.URLDomain.ilike(f"%{search_domain}%"))
 
-    results = query.offset(skip).limit(limit).all()
+    results = query.order_by(models.URLRules.RuleID.desc()).offset(skip).limit(limit).all()
 
     return [
         {

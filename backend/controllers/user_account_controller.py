@@ -97,7 +97,7 @@ def list_accounts(
 ):
     query = db.query(models.UserAccount).options(
         joinedload(models.UserAccount.details)
-    ).filter(models.UserAccount.IsActive == True)
+    )
 
     if search_email:
         query = query.filter(models.UserAccount.EmailAddress.ilike(f"%{search_email}%"))
@@ -147,8 +147,8 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
     email_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background-color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;padding:40px 16px;">
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:40px 16px;">
     <tr><td align="center">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 
@@ -156,14 +156,14 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
         <tr><td align="center" style="padding-bottom:28px;">
           <img src="https://linkslens.com/images/logo.svg" alt="LinksLens" width="44" height="44"
                style="background:#ffffff;border-radius:10px;display:block;">
-          <p style="margin:10px 0 0;font-size:20px;font-weight:700;color:#f1f5f9;letter-spacing:-0.3px;">LinksLens</p>
+          <p style="margin:10px 0 0;font-size:20px;font-weight:700;color:#1e293b;letter-spacing:-0.3px;">LinksLens</p>
         </td></tr>
 
         <!-- Card -->
-        <tr><td style="background-color:#1e293b;border-radius:16px;border:1px solid #334155;padding:40px 36px;">
+        <tr><td style="background-color:#ffffff;border-radius:16px;border:1px solid #e2e8f0;padding:40px 36px;">
 
-          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#f1f5f9;">Verify your email address</h1>
-          <p style="margin:0 0 24px;font-size:15px;color:#94a3b8;line-height:1.6;">
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1e293b;">Verify your email address</h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.6;">
             Hi {request.FullName}, welcome to LinksLens! Please confirm your email address to activate your account and start scanning links safely.
           </p>
 
@@ -178,13 +178,13 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
           </table>
 
           <!-- Fallback link -->
-          <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Or copy and paste this link into your browser:</p>
+          <p style="margin:0 0 6px;font-size:13px;color:#94a3b8;">Or copy and paste this link into your browser:</p>
           <p style="margin:0 0 28px;font-size:12px;word-break:break-all;">
-            <a href="{verify_link}" style="color:#60a5fa;text-decoration:none;">{verify_link}</a>
+            <a href="{verify_link}" style="color:#1d4ed8;text-decoration:none;">{verify_link}</a>
           </p>
 
           <!-- Divider -->
-          <hr style="border:none;border-top:1px solid #334155;margin:0 0 24px;">
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 24px;">
 
           <!-- Expiry notice -->
           <table cellpadding="0" cellspacing="0" width="100%">
@@ -192,8 +192,8 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
               <td width="18" valign="top" style="padding-top:1px;">
                 <span style="font-size:15px;">⏰</span>
               </td>
-              <td style="padding-left:8px;font-size:13px;color:#94a3b8;line-height:1.5;">
-                This link expires in <strong style="color:#f1f5f9;">15 minutes</strong>. After that you will need to register again.
+              <td style="padding-left:8px;font-size:13px;color:#64748b;line-height:1.5;">
+                This link expires in <strong style="color:#1e293b;">15 minutes</strong>. After that you will need to register again.
               </td>
             </tr>
             <tr><td colspan="2" style="padding-top:10px;"></td></tr>
@@ -201,7 +201,7 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
               <td width="18" valign="top" style="padding-top:1px;">
                 <span style="font-size:15px;">🔒</span>
               </td>
-              <td style="padding-left:8px;font-size:13px;color:#94a3b8;line-height:1.5;">
+              <td style="padding-left:8px;font-size:13px;color:#64748b;line-height:1.5;">
                 If you did not create a LinksLens account, you can safely ignore this email.
               </td>
             </tr>
@@ -211,12 +211,12 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
 
         <!-- Footer -->
         <tr><td align="center" style="padding-top:24px;">
-          <p style="margin:0 0 6px;font-size:12px;color:#475569;">
+          <p style="margin:0 0 6px;font-size:12px;color:#94a3b8;">
             This is an automated email — please do not reply to this message.
           </p>
-          <p style="margin:0;font-size:12px;color:#475569;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">
             &copy; 2026 LinksLens &nbsp;&bull;&nbsp;
-            <a href="https://linkslens.com" style="color:#60a5fa;text-decoration:none;">linkslens.com</a>
+            <a href="https://linkslens.com" style="color:#1d4ed8;text-decoration:none;">linkslens.com</a>
           </p>
         </td></tr>
 
@@ -301,8 +301,8 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
     email_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background-color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;padding:40px 16px;">
+<body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:40px 16px;">
     <tr><td align="center">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 
@@ -310,14 +310,14 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
         <tr><td align="center" style="padding-bottom:28px;">
           <img src="https://linkslens.com/images/logo.svg" alt="LinksLens" width="44" height="44"
                style="background:#ffffff;border-radius:10px;display:block;">
-          <p style="margin:10px 0 0;font-size:20px;font-weight:700;color:#f1f5f9;letter-spacing:-0.3px;">LinksLens</p>
+          <p style="margin:10px 0 0;font-size:20px;font-weight:700;color:#1e293b;letter-spacing:-0.3px;">LinksLens</p>
         </td></tr>
 
         <!-- Card -->
-        <tr><td style="background-color:#1e293b;border-radius:16px;border:1px solid #334155;padding:40px 36px;">
+        <tr><td style="background-color:#ffffff;border-radius:16px;border:1px solid #e2e8f0;padding:40px 36px;">
 
-          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#f1f5f9;">Reset your password</h1>
-          <p style="margin:0 0 24px;font-size:15px;color:#94a3b8;line-height:1.6;">
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1e293b;">Reset your password</h1>
+          <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.6;">
             We received a request to reset the password for your LinksLens account. Click the button below to choose a new password.
           </p>
 
@@ -332,13 +332,13 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
           </table>
 
           <!-- Fallback link -->
-          <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Or copy and paste this link into your browser:</p>
+          <p style="margin:0 0 6px;font-size:13px;color:#94a3b8;">Or copy and paste this link into your browser:</p>
           <p style="margin:0 0 28px;font-size:12px;word-break:break-all;">
-            <a href="{reset_link}" style="color:#60a5fa;text-decoration:none;">{reset_link}</a>
+            <a href="{reset_link}" style="color:#1d4ed8;text-decoration:none;">{reset_link}</a>
           </p>
 
           <!-- Divider -->
-          <hr style="border:none;border-top:1px solid #334155;margin:0 0 24px;">
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 24px;">
 
           <!-- Notices -->
           <table cellpadding="0" cellspacing="0" width="100%">
@@ -346,8 +346,8 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
               <td width="18" valign="top" style="padding-top:1px;">
                 <span style="font-size:15px;">⏰</span>
               </td>
-              <td style="padding-left:8px;font-size:13px;color:#94a3b8;line-height:1.5;">
-                This link expires in <strong style="color:#f1f5f9;">15 minutes</strong> and can only be used once.
+              <td style="padding-left:8px;font-size:13px;color:#64748b;line-height:1.5;">
+                This link expires in <strong style="color:#1e293b;">15 minutes</strong> and can only be used once.
               </td>
             </tr>
             <tr><td colspan="2" style="padding-top:10px;"></td></tr>
@@ -355,7 +355,7 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
               <td width="18" valign="top" style="padding-top:1px;">
                 <span style="font-size:15px;">🔒</span>
               </td>
-              <td style="padding-left:8px;font-size:13px;color:#94a3b8;line-height:1.5;">
+              <td style="padding-left:8px;font-size:13px;color:#64748b;line-height:1.5;">
                 If you did not request a password reset, your password has not been changed. You can safely ignore this email.
               </td>
             </tr>
@@ -365,12 +365,12 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
 
         <!-- Footer -->
         <tr><td align="center" style="padding-top:24px;">
-          <p style="margin:0 0 6px;font-size:12px;color:#475569;">
+          <p style="margin:0 0 6px;font-size:12px;color:#94a3b8;">
             This is an automated email — please do not reply to this message.
           </p>
-          <p style="margin:0;font-size:12px;color:#475569;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;">
             &copy; 2026 LinksLens &nbsp;&bull;&nbsp;
-            <a href="https://linkslens.com" style="color:#60a5fa;text-decoration:none;">linkslens.com</a>
+            <a href="https://linkslens.com" style="color:#1d4ed8;text-decoration:none;">linkslens.com</a>
           </p>
         </td></tr>
 

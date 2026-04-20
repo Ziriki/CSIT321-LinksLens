@@ -41,33 +41,11 @@ def fetch_system_health():
 
 # -- Blacklist Requests (Moderation) --
 
-def fetch_pending_requests():
-    """Return all pending blacklist requests."""
-    response = requests.get(
-        f"{BACKEND_URL}/api/blacklist-requests/?status=PENDING",
-        headers=_get_headers(),
-        timeout=_TIMEOUT,
-    )
-    return response.json() if response.status_code == 200 else []
-
-
-def update_request_status(request_id: int, status: str, moderator_id: int):
-    """Set the status of a blacklist request (APPROVED or REJECTED)."""
-    payload = {"Status": status, "ReviewedBy": moderator_id}
-    response = requests.put(
-        f"{BACKEND_URL}/api/blacklist-requests/{request_id}",
-        json=payload,
-        headers=_get_headers(),
-        timeout=_TIMEOUT,
-    )
-    return response.status_code == 200
-
-
 # -- User Accounts --
 
 def fetch_all_users():
     """Return all user accounts."""
-    response = requests.get(f"{BACKEND_URL}/api/accounts/", headers=_get_headers(), timeout=_TIMEOUT)
+    response = requests.get(f"{BACKEND_URL}/api/accounts/", params={"limit": 10000}, headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
@@ -76,6 +54,17 @@ def deactivate_user(user_id: int):
     response = requests.put(
         f"{BACKEND_URL}/api/accounts/{user_id}",
         json={"IsActive": False},
+        headers=_get_headers(),
+        timeout=_TIMEOUT,
+    )
+    return response.status_code == 200
+
+
+def activate_user(user_id: int):
+    """Set a user account to active."""
+    response = requests.put(
+        f"{BACKEND_URL}/api/accounts/{user_id}",
+        json={"IsActive": True},
         headers=_get_headers(),
         timeout=_TIMEOUT,
     )
@@ -147,7 +136,7 @@ def log_action(user_id: int, action_type: str, action: str):
 
 def fetch_url_rules():
     """Return all URL blacklist and whitelist rules."""
-    response = requests.get(f"{BACKEND_URL}/api/url-rules/", headers=_get_headers(), timeout=_TIMEOUT)
+    response = requests.get(f"{BACKEND_URL}/api/url-rules/", params={"limit": 10000}, headers=_get_headers(), timeout=_TIMEOUT)
     return response.json() if response.status_code == 200 else []
 
 
@@ -172,19 +161,16 @@ def delete_url_rule(rule_id: int):
 
 # -- Scan History --
 
-def fetch_scan_list(skip: int = 0, limit: int = 25, search_url: str = None,
-                    status_indicator: str = None, user_id: int = None,
-                    search_user: str = None):
+def fetch_scan_list(skip: int = 0, limit: int = 25, search: str = None,
+                    status_indicator: str = None, user_id: int = None):
     """Fetch paginated scan history with optional filters."""
     params = {"skip": skip, "limit": limit}
-    if search_url:
-        params["search_url"] = search_url
+    if search:
+        params["search"] = search
     if status_indicator:
         params["status_indicator"] = status_indicator
     if user_id:
         params["user_id"] = user_id
-    if search_user:
-        params["search_user"] = search_user
     response = requests.get(
         f"{BACKEND_URL}/api/scans/", params=params, headers=_get_headers(), timeout=_TIMEOUT
     )
