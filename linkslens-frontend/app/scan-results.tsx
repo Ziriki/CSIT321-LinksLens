@@ -289,7 +289,8 @@ export default function ScanResults() {
   }
 
   const sa = scanData.script_analysis;
-  const hasRedirects = (scanData.redirect_chain?.length ?? 0) > 0;
+  const hasRedirects = (scanData.redirect_chain?.length ?? 0) > 1;
+  const redirectCount = Math.max(0, (scanData.redirect_chain?.length ?? 0) - 1);
   const threatDescription = scanData.gsb_threat_types.length > 0
     ? `Threats: ${scanData.gsb_threat_types.join(", ")}`
     : scanData.tags.length > 0
@@ -356,11 +357,11 @@ export default function ScanResults() {
           <HighlightRow
             label="Redirects"
             value={
-              (scanData.redirect_chain?.length ?? 0) === 0
+              redirectCount === 0
                 ? "No redirects"
-                : `Redirects ${scanData.redirect_chain!.length} time${scanData.redirect_chain!.length > 1 ? "s" : ""}`
+                : `Redirects ${redirectCount} time${redirectCount > 1 ? "s" : ""}`
             }
-            ok={(scanData.redirect_chain?.length ?? 0) === 0}
+            ok={redirectCount === 0}
           />
           <HighlightRow
             label="Domain Age"
@@ -511,7 +512,7 @@ export default function ScanResults() {
               <DetailSectionHeader icon={<Link2 size={15} color="#6b7280" />} title="Redirects" />
               <InfoRow
                 label="Number of Redirects"
-                value={String(scanData.redirect_chain?.length ?? 0)}
+                value={String(redirectCount)}
               />
               {(scanData.redirect_chain?.length ?? 0) > 0 && (
                 <View className="mt-1">
@@ -732,7 +733,7 @@ export default function ScanResults() {
                 ["Domain Age", scanData.domain_age_days != null ? `${scanData.domain_age_days} days` : "Unknown", "#374151"],
                 ["Server Location", scanData.server_location ?? "Unknown", "#374151"],
                 ["IP Address", scanData.ip_address ?? "Unknown", "#374151"],
-                ["Redirects", hasRedirects ? `${scanData.redirect_chain!.length} hops` : "None", "#374151"],
+                ["Redirects", redirectCount > 0 ? `${redirectCount} hop${redirectCount > 1 ? "s" : ""}` : "None", "#374151"],
               ].map(([label, value, color], i) => (
                 <View key={label} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center",
                   paddingHorizontal: 10, paddingVertical: 7, backgroundColor: i % 2 === 0 ? "#ffffff" : "#f9fafb" }}>

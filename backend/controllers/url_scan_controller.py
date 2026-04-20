@@ -484,10 +484,9 @@ def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
         if chain and final_url not in chain:
             chain.append(final_url)
 
-        return chain if chain else [final_url]
+        return chain if chain else [initial_url, final_url]
     except Exception:
-        # Fallback: just the final URL so we always return something useful
-        return [final_url]
+        return [initial_url, final_url]
 
 
 #########################################################
@@ -562,17 +561,15 @@ def process_result(uuid: str | None, raw_result: dict | None) -> dict:
     else:
         urlscan_status = "SAFE"
 
-    # page.url = final destination after all redirects
-    # page.redirected = original URL that was submitted (only present when a redirect occurred)
-    final_url = page.get("url", "")
-    original_url = page.get("redirected") or final_url
+    initial_url = page.get("url", "")
+    redirect_url = page.get("redirected")
 
     return {
         "uuid": uuid,
         "urlscan_status": urlscan_status,
         "score": score,
-        "initial_url": original_url,
-        "redirect_url": final_url if final_url and final_url != original_url else None,
+        "initial_url": initial_url,
+        "redirect_url": redirect_url if redirect_url and redirect_url != initial_url and redirect_url.startswith("http") else None,
         "server_location": page.get("country"),
         "ip_address": page.get("ip"),
         "asn_name": page.get("asnname"),
@@ -826,7 +823,11 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 domain_info     = rdap_future.result()
 
             raw_result = urlscan_result.pop("_raw", None)
-            initial_url = urlscan_result["initial_url"] or url
+            # initial_url = what the user submitted (always correct)
+            # final_url   = page.url from urlscan (destination after all redirects)
+            initial_url = url
+            final_url   = urlscan_result["initial_url"] or url
+            redirect_url = final_url if final_url != url else None
 
             redirect_chain     = extract_redirect_chain(initial_url, raw_result)
             script_analysis    = analyze_scripts(raw_result, initial_url)
@@ -856,7 +857,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             scan_record = models.ScanHistory(
                 UserID=current_user["user_id"],
                 InitialURL=initial_url,
-                RedirectURL=urlscan_result["redirect_url"],
+                RedirectURL=redirect_url,
                 RedirectChain=redirect_chain or None,
                 StatusIndicator=models.ScanStatusEnum(final_status),
                 DomainAgeDays=domain_age_days,
@@ -879,7 +880,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 "user_id": current_user["user_id"],
                 "uuid": urlscan_result["uuid"],
                 "initial_url": initial_url,
-                "redirect_url": urlscan_result["redirect_url"],
+                "redirect_url": redirect_url,
                 "redirect_chain": redirect_chain or [],
                 "status_indicator": final_status,
                 "domain_age_days": domain_age_days,
