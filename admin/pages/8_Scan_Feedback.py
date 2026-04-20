@@ -3,7 +3,7 @@ import pandas as pd
 from controllers import auth_controller
 from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
-from utils import search_dataframe, render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander
+from utils import search_dataframe, render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander, scroll_to_bottom
 
 st.set_page_config(page_title="Scan Feedback", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 current_user = auth_controller.require_role(1, 2)
@@ -54,6 +54,7 @@ selected_rows = event.selection.rows if event.selection else []
 if selected_rows:
     row_idx = selected_rows[0]
     fb = raw_data[row_idx]
+    scroll_to_bottom(f"feedback_{fb['FeedbackID']}")
 
     st.markdown("---")
     st.subheader(f"Feedback #{fb['FeedbackID']} — Scan #{fb['ScanID']}")

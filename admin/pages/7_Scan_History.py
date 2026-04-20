@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils import render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander
+from utils import render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander, scroll_to_bottom
 from controllers import auth_controller
 from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
@@ -71,6 +71,7 @@ with col_next:
         st.rerun()
 
 if selected_scan_id:
+    scroll_to_bottom(f"scan_{selected_scan_id}")
     data = api_client.fetch_scan_details(selected_scan_id)
     if data:
         st.markdown("---")
