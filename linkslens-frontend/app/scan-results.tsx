@@ -662,21 +662,25 @@ export default function ScanResults() {
           </View>
         </Card>
 
+        {/* Export Screenshot — inside scroll so user scrolls down to find it */}
+        <View className="px-0 pb-6 pt-4">
+          <AppButton variant="outline" fullWidth onPress={handleExport}>
+            <View className="flex-row items-center justify-center gap-2">
+              <Camera size={16} color={iconColor} />
+              <Text className="text-foreground">Export Screenshot</Text>
+            </View>
+          </AppButton>
+          <Text className="mt-1 text-center text-xs text-muted-foreground">
+            Saves a screenshot of results to your gallery
+          </Text>
+        </View>
+
         </View>
 
       </ScrollView>
 
-      {/* Footer — outside ScrollView so it is not captured in the export */}
+      {/* Done — fixed footer, always visible */}
       <View className="border-t border-border px-4 pb-4 pt-3">
-        <AppButton variant="outline" fullWidth onPress={handleExport}>
-          <View className="flex-row items-center justify-center gap-2">
-            <Camera size={16} color={iconColor} />
-            <Text className="text-foreground">Export Screenshot</Text>
-          </View>
-        </AppButton>
-        <Text className="mb-3 mt-1 text-center text-xs text-muted-foreground">
-          Saves a screenshot of results to your gallery
-        </Text>
         <AppButton fullWidth onPress={() => router.push("/home")}>
           Done
         </AppButton>
