@@ -1,7 +1,26 @@
 import math
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from typing import Any
+
+
+_SCROLL_JS = (
+    "<script>window.parent.document.querySelector('section.main')"
+    ".scrollTo({top: window.parent.document.querySelector('section.main')"
+    ".scrollHeight, behavior: 'smooth'});</script>"
+)
+
+
+def scroll_to_bottom(state_key: str) -> None:
+    """Smooth-scroll the Streamlit main panel to the bottom once per new selection.
+
+    Pass a unique state_key tied to the selected item's ID so the scroll only
+    fires on the transition from no-selection → new selection, not on every rerun.
+    """
+    if st.session_state.get("_scroll_key") != state_key:
+        st.session_state["_scroll_key"] = state_key
+        components.html(_SCROLL_JS, height=0)
 
 
 def render_pagination(state_key: str, total: int, page_size: int = 20) -> tuple:
