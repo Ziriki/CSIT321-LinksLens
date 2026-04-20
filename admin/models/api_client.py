@@ -41,28 +41,6 @@ def fetch_system_health():
 
 # -- Blacklist Requests (Moderation) --
 
-def fetch_pending_requests():
-    """Return all pending blacklist requests."""
-    response = requests.get(
-        f"{BACKEND_URL}/api/blacklist-requests/?status=PENDING",
-        headers=_get_headers(),
-        timeout=_TIMEOUT,
-    )
-    return response.json() if response.status_code == 200 else []
-
-
-def update_request_status(request_id: int, status: str, moderator_id: int):
-    """Set the status of a blacklist request (APPROVED or REJECTED)."""
-    payload = {"Status": status, "ReviewedBy": moderator_id}
-    response = requests.put(
-        f"{BACKEND_URL}/api/blacklist-requests/{request_id}",
-        json=payload,
-        headers=_get_headers(),
-        timeout=_TIMEOUT,
-    )
-    return response.status_code == 200
-
-
 # -- User Accounts --
 
 def fetch_all_users():

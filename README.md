@@ -397,4 +397,7 @@ Pushing to `main` triggers a GitHub Actions workflow that:
 
 | Name | Role |
 |---|---|
-| Meng Zhi Chong | Full-Stack Developer |
+| Stephanie Yap Yen Yee | Team Leader |
+| Chong Meng Zhi | Full-Stack Developer |
+| Siow Wen Sheng Tobias Ezra | Frontend Developer |
+| Ryan Lim Ruiyan | Backend Developer |
