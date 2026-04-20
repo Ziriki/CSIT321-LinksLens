@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils import render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander
+from utils import render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander, scroll_to_bottom
 from controllers import auth_controller
 from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
@@ -15,11 +15,7 @@ PAGE_SIZE = 10
 
 status_filter = st.radio("Status", ["All", "SAFE", "SUSPICIOUS", "MALICIOUS"], horizontal=True)
 
-col_search, col_user = st.columns(2)
-with col_search:
-    search_url = st.text_input("Search by URL", placeholder="e.g. google.com")
-with col_user:
-    search_user = st.text_input("Search by User", placeholder="e.g. John Doe")
+search = st.text_input("Search", placeholder="Search by URL or user name...")
 
 if "scan_page" not in st.session_state:
     st.session_state["scan_page"] = 0
@@ -30,9 +26,8 @@ skip = page * PAGE_SIZE
 records = api_client.fetch_scan_list(
     skip=skip,
     limit=PAGE_SIZE + 1,
-    search_url=search_url if search_url else None,
+    search=search if search else None,
     status_indicator=status_filter if status_filter != "All" else None,
-    search_user=search_user if search_user else None,
 )
 
 has_next = len(records) > PAGE_SIZE
@@ -76,6 +71,7 @@ with col_next:
         st.rerun()
 
 if selected_scan_id:
+    scroll_to_bottom(f"scan_{selected_scan_id}")
     data = api_client.fetch_scan_details(selected_scan_id)
     if data:
         st.markdown("---")
