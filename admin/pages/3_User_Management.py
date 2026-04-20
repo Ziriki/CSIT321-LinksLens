@@ -3,7 +3,7 @@ from controllers import auth_controller, user_controller
 from controllers.auth_controller import ROLE_LABELS
 from models import api_client
 from config import LOGO_PATH, PAGE_LAYOUT
-from utils import search_dataframe, render_pagination
+from utils import search_dataframe, render_pagination, scroll_to_bottom
 
 st.set_page_config(page_title="User Management", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 current_user = auth_controller.require_role(1)
@@ -43,6 +43,7 @@ if not selected_rows:
 
 row_idx = selected_rows[0]
 uid = int(page_df.iloc[row_idx]["UserID"])
+scroll_to_bottom(f"user_{uid}")
 user_row = all_df[all_df["UserID"] == uid].iloc[0]
 
 details = api_client.fetch_user_detail(uid) or {}

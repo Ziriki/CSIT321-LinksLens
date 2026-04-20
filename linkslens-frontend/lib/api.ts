@@ -203,7 +203,6 @@ export interface ScanResponse {
   redirect_url: string | null;
   redirect_chain: string[] | null;
   status_indicator: "SAFE" | "SUSPICIOUS" | "MALICIOUS" | "UNAVAILABLE";
-  score: number;
   domain_age_days: number | null;
   server_location: string | null;
   ip_address: string | null;
@@ -266,7 +265,6 @@ export function scanHistoryToResponse(scan: ScanHistoryItem): ScanResponse {
     redirect_url: scan.RedirectURL,
     redirect_chain: scan.RedirectChain ?? null,
     status_indicator: (scan.StatusIndicator ?? "UNAVAILABLE") as ScanResponse["status_indicator"],
-    score: 0,
     domain_age_days: scan.DomainAgeDays ?? null,
     server_location: scan.ServerLocation,
     ip_address: scan.IpAddress ?? null,
