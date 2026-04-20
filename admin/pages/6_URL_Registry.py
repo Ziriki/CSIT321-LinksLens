@@ -10,23 +10,26 @@ auth_controller.render_sidebar()
 
 st.title("URL Registry")
 
-with st.expander("Submit a Domain to Blacklist / Whitelist", expanded=False):
+with st.expander("Submit a URL / Domain to Blacklist / Whitelist", expanded=False):
     with st.form("add_rule_form", clear_on_submit=True):
-        domain = st.text_input("Domain", placeholder="e.g. example.com")
-        list_type = st.selectbox("List Type", ["BLACKLIST", "WHITELIST"])
+        domain = st.text_input("URL / Domain", placeholder="e.g. example.com")
+        list_type = st.radio("List Type", ["BLACKLIST", "WHITELIST"], horizontal=True)
         submitted = st.form_submit_button("Submit")
 
     if submitted:
         domain = domain.strip().lower()
         if not domain:
-            st.warning("Please enter a domain.")
+            st.warning("Please enter a URL / domain.")
         else:
             if api_client.create_url_rule(domain, list_type, current_user["user_id"]):
-                api_client.log_action(current_user["user_id"], "URL Rule", f"Added {domain} to {list_type}")
-                st.success(f"{domain} added to {list_type} successfully.")
+                api_client.log_action(current_user["user_id"], "URL Rule", f"Set {domain} to {list_type}")
+                st.session_state["url_registry_toast"] = f"{domain} is now in the {list_type}."
                 st.rerun()
             else:
-                st.error("Failed to add rule. The domain may already exist.")
+                st.error(f"{domain} is already in the {list_type}.")
+
+if toast := st.session_state.pop("url_registry_toast", None):
+    st.success(toast)
 
 st.markdown("---")
 
@@ -42,7 +45,7 @@ filter_map = {"Blacklist": "BLACKLIST", "Whitelist": "WHITELIST"}
 if list_type_filter != "All":
     df = df[df["ListType"] == filter_map[list_type_filter]].reset_index(drop=True)
 
-search_query = st.text_input("Search", placeholder="Search by domain or added by...")
+search_query = st.text_input("Search", placeholder="Search by URL / domain or added by...")
 df = search_dataframe(df, search_query)
 
 total = len(df)
@@ -54,7 +57,7 @@ start, end = render_pagination("rules_page", total, PAGE_SIZE)
 page_df = df.iloc[start:end].reset_index(drop=True)
 
 col_headers = st.columns([2, 2, 3, 2, 1])
-for col, label in zip(col_headers, ["List Type", "Domain", "Added By", "Created At", "Action"]):
+for col, label in zip(col_headers, ["List Type", "URL / Domain", "Added By", "Created At", "Action"]):
     col.markdown(f"**{label}**")
 
 for _, row in page_df.iterrows():
