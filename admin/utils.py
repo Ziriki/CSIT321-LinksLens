@@ -7,9 +7,11 @@ from typing import Any
 
 _SCROLL_JS = (
     "<script>setTimeout(function(){"
-    "var el=window.parent.document.querySelector('section.main');"
-    "if(el)el.scrollTo({top:el.scrollHeight,behavior:'smooth'});"
-    "},300);</script>"
+    "var el=window.parent.document.querySelector('[data-testid=\"stMain\"]')"
+    "||window.parent.document.querySelector('section.main')"
+    "||window.parent.document.documentElement;"
+    "el.scrollTo({top:el.scrollHeight,behavior:'smooth'});"
+    "},500);</script>"
 )
 
 
