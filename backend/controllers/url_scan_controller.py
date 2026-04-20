@@ -561,15 +561,17 @@ def process_result(uuid: str | None, raw_result: dict | None) -> dict:
     else:
         urlscan_status = "SAFE"
 
-    initial_url = page.get("url", "")
-    redirect_url = page.get("redirected")
+    # page.url = final destination after all redirects
+    # page.redirected = original URL that was submitted (only present when a redirect occurred)
+    final_url = page.get("url", "")
+    original_url = page.get("redirected") or final_url
 
     return {
         "uuid": uuid,
         "urlscan_status": urlscan_status,
         "score": score,
-        "initial_url": initial_url,
-        "redirect_url": redirect_url if redirect_url and redirect_url != initial_url and redirect_url.startswith("http") else None,
+        "initial_url": original_url,
+        "redirect_url": final_url if final_url and final_url != original_url else None,
         "server_location": page.get("country"),
         "ip_address": page.get("ip"),
         "asn_name": page.get("asnname"),
