@@ -85,9 +85,9 @@ def login(credentials: schemas.UserLogin, http_request: Request, response: Respo
     is_staff = user.RoleID in (1, 2)
     is_web   = credentials.ClientType == schemas.ClientTypeEnum.WEB
     if is_staff and not is_web:
-        raise HTTPException(status_code=403, detail="Staff accounts must log in via the web portal.")
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
     if not is_staff and is_web:
-        raise HTTPException(status_code=403, detail="User accounts must log in via the mobile app.")
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
 
     token_data = {"sub": str(user.UserID), "role": user.RoleID}
     token = create_access_token(token_data)

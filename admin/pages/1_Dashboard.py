@@ -41,12 +41,10 @@ st.markdown("---")
 st.subheader("Pending Work")
 
 pending = health.get("pending_work", {})
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
-    st.metric("Blacklist Requests Pending Review", pending.get("blacklist_requests_pending_review", 0))
-with col2:
     st.metric("Scan Feedback Pending Review", pending.get("scan_feedback_pending_review", 0))
-with col3:
+with col2:
     st.metric("App Feedback Unreviewed", pending.get("app_feedback_unreviewed", 0))
 
 st.markdown("---")
