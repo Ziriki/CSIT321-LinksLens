@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator, field_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
+import tldextract
 import enum
 from models import RequestStatus, ListTypeEnum, ScanStatusEnum, SuggestedStatusEnum
 
@@ -195,6 +196,16 @@ class BlacklistRequestResponse(BlacklistRequestBase):
 class URLRulesBase(TrimmedModel):
     URLDomain: str
     ListType: ListTypeEnum
+
+    @field_validator("URLDomain", mode="before")
+    @classmethod
+    def normalize_url_domain(cls, v):
+        if isinstance(v, str):
+            extracted = tldextract.extract(v.strip())
+            registered = extracted.registered_domain
+            if registered:
+                return registered
+        return v
 
 # Used when an Admin manually adds a rule
 class URLRulesCreate(URLRulesBase):
