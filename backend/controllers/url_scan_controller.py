@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, literal, or_
 from sqlalchemy.orm import Session
+import tldextract
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import requests
@@ -605,24 +605,17 @@ def check_blacklist_db(url: str) -> dict:
     Uses get_db() manually for thread safety — does not share the request session.
     Returns: { domain, url_rule_type, is_approved_blacklist }
     """
-    domain = urlparse(url).netloc
+    extracted = tldextract.extract(url)
+    domain = extracted.registered_domain or extracted.netloc or urlparse(url).netloc
     db_gen = get_db()
     db = next(db_gen)
     try:
-        # Match exact domain or any subdomain (e.g. "www.mom.gov.sg" matches stored "mom.gov.sg")
-        # The CONCAT check uses "%.domain" so "evil-mom.gov.sg" does NOT match "mom.gov.sg"
-        domain_match = or_(
-            models.URLRules.URLDomain == domain,
-            literal(domain).like(func.concat("%.", models.URLRules.URLDomain))
-        )
-        url_rule = db.query(models.URLRules).filter(domain_match).first()
+        url_rule = db.query(models.URLRules).filter(
+            models.URLRules.URLDomain == domain
+        ).first()
 
-        bl_domain_match = or_(
-            models.BlacklistRequest.URLDomain == domain,
-            literal(domain).like(func.concat("%.", models.BlacklistRequest.URLDomain))
-        )
         approved_blacklist = db.query(models.BlacklistRequest).filter(
-            bl_domain_match,
+            models.BlacklistRequest.URLDomain == domain,
             models.BlacklistRequest.Status == models.RequestStatus.APPROVED
         ).first()
 
@@ -832,6 +825,17 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             ssl_info           = extract_ssl_info(raw_result)
 
             final_status = compare_async_results(gsb, urlscan_result, blacklist_check)
+
+            # Also check every URL in the redirect chain against URLRules.
+            # The concurrent blacklist_check only covered the initial URL; a blacklisted
+            # redirect target (e.g. the final destination after a short-link hop) would
+            # otherwise be missed.
+            if final_status != "MALICIOUS" and redirect_chain:
+                for hop_url in redirect_chain:
+                    hop_check = check_blacklist_db(hop_url)
+                    if hop_check.get("url_rule_type") == "BLACKLIST" or hop_check.get("is_approved_blacklist"):
+                        final_status = "MALICIOUS"
+                        break
 
             # Escalation — only applied when DB rules haven't already set MALICIOUS
             if final_status != "MALICIOUS":
