@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-from urllib.parse import urlparse
+import tldextract
 
 from utils import get_fullname, get_or_404, apply_updates
 import models
@@ -94,7 +94,8 @@ def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Sessio
 
     new_status = scan_update.StatusIndicator
     if new_status in (models.ScanStatusEnum.MALICIOUS, models.ScanStatusEnum.SAFE):
-        domain = urlparse(db_scan.InitialURL).netloc
+        extracted = tldextract.extract(db_scan.InitialURL)
+        domain = extracted.registered_domain or extracted.netloc
         target_list_type = (
             models.ListTypeEnum.BLACKLIST if new_status == models.ScanStatusEnum.MALICIOUS
             else models.ListTypeEnum.WHITELIST
