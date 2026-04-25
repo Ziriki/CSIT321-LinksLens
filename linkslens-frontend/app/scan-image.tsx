@@ -110,7 +110,7 @@ export default function ScanImage() {
         {/* Crop hint */}
         <Text className="mt-3 text-xs text-muted-foreground text-center">
           For best results, crop tightly around the URL.
-          OCR captures all visible text — extra words may prevent detection.
+          OCR captures all visible text, extra words may prevent detection.
         </Text>
 
         {/* Results */}
