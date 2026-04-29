@@ -6,6 +6,7 @@ import {
   Shield,
   Image as ImageIcon,
   Link2,
+  QrCode,
   ChevronRight,
   ScanLine,
   Clock,
@@ -96,21 +97,29 @@ export default function HomePage() {
         {/* Scan Options */}
         <SectionHeader title="Start Scanning" className="mt-6" />
 
-        <View className="mt-2 flex-row">
+        <View className="mt-2 flex-row gap-2">
           <View className="flex-1">
             <Card className="items-center py-5" onPress={() => router.push("/scan-image")}>
               <View className="mb-2 h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <ImageIcon size={24} color="#2563eb" />
               </View>
-              <Text className="text-sm font-medium text-foreground">Select photo</Text>
+              <Text className="text-xs font-medium text-foreground text-center">Scan Image</Text>
             </Card>
           </View>
           <View className="flex-1">
-            <Card className="items-center py-5 ml-2" onPress={() => router.push("/scan-link")}>
+            <Card className="items-center py-5" onPress={() => router.push("/scan-qr")}>
+              <View className="mb-2 h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <QrCode size={24} color="#2563eb" />
+              </View>
+              <Text className="text-xs font-medium text-foreground text-center">Scan QR</Text>
+            </Card>
+          </View>
+          <View className="flex-1">
+            <Card className="items-center py-5" onPress={() => router.push("/scan-link")}>
               <View className="mb-2 h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                 <Link2 size={24} color="#2563eb" />
               </View>
-              <Text className="text-sm font-medium text-foreground">Enter link</Text>
+              <Text className="text-xs font-medium text-foreground text-center">Enter Link</Text>
             </Card>
           </View>
         </View>
