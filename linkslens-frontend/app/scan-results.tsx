@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from "react"
-import { View, Text, ScrollView, Image, Linking, Pressable, Modal, Animated, Alert, Share } from "react-native"
+import React, { useState, useEffect, useMemo } from "react"
+import { View, Text, ScrollView, Image, Linking, Pressable, Modal, Alert } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import {
   CheckCircle,
@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ChevronDown,
   Flag,
-  Camera,
   XCircle,
   AlertTriangle,
   ImageIcon,
@@ -148,26 +147,6 @@ export default function ScanResults() {
   const [showRedirects, setShowRedirects] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [browser, setBrowser] = useState<BrowserId>("system");
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const toastOpacity = useRef(new Animated.Value(0)).current;
-  const runningAnim = useRef<Animated.CompositeAnimation | null>(null);
-
-  function showToast(message: string, type: "success" | "error") {
-    runningAnim.current?.stop();
-    toastOpacity.setValue(0);
-    setToast({ message, type });
-    runningAnim.current = Animated.sequence([
-      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.delay(2200),
-      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-    ]);
-    runningAnim.current.start(() => setToast(null));
-  }
-
-  useEffect(() => {
-    return () => { runningAnim.current?.stop(); };
-  }, []);
-
   useEffect(() => {
     getCurrentUserId().then((id) => {
       if (id) fetchPreferences(id).then((p) => { if (p.browser) setBrowser(p.browser as BrowserId) }).catch(() => {})
@@ -214,29 +193,6 @@ export default function ScanResults() {
       await Linking.openURL(url).catch(() => {
         Alert.alert("Cannot open link", "Could not open this URL.")
       })
-    }
-  }
-
-  async function handleShare() {
-    if (!scanData) return;
-    const lines = [
-      "── LinksLens Scan Report ──",
-      `Status:     ${scanData.status_indicator}`,
-      `Confidence: ${confidence}%`,
-      `URL:        ${scanData.initial_url}`,
-      scanData.redirect_url && scanData.redirect_url !== scanData.initial_url
-        ? `Final URL:  ${scanData.redirect_url}` : null,
-      `Connection: ${scanData.initial_url.startsWith("https") ? "Secure (HTTPS)" : "Not Secure (HTTP)"}`,
-      `GSB:        ${scanData.gsb_flagged ? "Flagged" : "Clean"}`,
-      `Domain Age: ${formatDomainAge(scanData.domain_age_days)}`,
-      `Location:   ${scanData.server_location ?? "Unknown"}`,
-      scanData.scanned_at ? `Scanned:    ${new Date(scanData.scanned_at).toLocaleString()}` : null,
-      "linkslens.com",
-    ].filter(Boolean).join("\n");
-    try {
-      await Share.share({ message: lines, title: "LinksLens Scan Report" });
-    } catch {
-      showToast("Could not open share sheet.", "error");
     }
   }
 
@@ -642,18 +598,6 @@ export default function ScanResults() {
           </View>
         </Card>
 
-        <View className="px-0 pb-6 pt-4">
-          <AppButton variant="outline" fullWidth onPress={handleShare}>
-            <View className="flex-row items-center justify-center gap-2">
-              <Camera size={16} color={iconColor} />
-              <Text className="text-foreground">Share Report</Text>
-            </View>
-          </AppButton>
-          <Text className="mt-1 text-center text-xs text-muted-foreground">
-            Share scan results via messages, email, or other apps
-          </Text>
-        </View>
-
         </View>
 
       </ScrollView>
@@ -665,20 +609,6 @@ export default function ScanResults() {
         </AppButton>
       </View>
 
-      {/* Toast notification */}
-      {toast && (
-        <Animated.View
-          style={{ opacity: toastOpacity }}
-          className={`absolute bottom-28 left-6 right-6 flex-row items-center gap-3 rounded-2xl px-4 py-3 shadow-lg ${
-            toast.type === "success" ? "bg-green-600" : "bg-red-600"
-          }`}
-        >
-          {toast.type === "success"
-            ? <CheckCircle size={18} color="#fff" />
-            : <XCircle size={18} color="#fff" />}
-          <Text className="flex-1 text-sm font-medium text-white">{toast.message}</Text>
-        </Animated.View>
-      )}
     </View>
   )
 }
