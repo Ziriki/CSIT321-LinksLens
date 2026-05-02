@@ -96,7 +96,7 @@ if selected_rows:
     scan_id = fb["ScanID"]
     feedback_id = fb["FeedbackID"]
 
-    all_statuses = ["SAFE", "SUSPICIOUS", "MALICIOUS"]
+    all_statuses = ["SAFE", "MALICIOUS"]
     options = [f"Remain {current.title()}"] + [f"Mark as {s.title()}" for s in all_statuses if s != current]
 
     st.markdown("### Verdict")
