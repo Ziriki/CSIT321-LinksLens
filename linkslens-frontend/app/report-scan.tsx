@@ -1,21 +1,20 @@
 import { useState } from "react"
 import { View, Text, ScrollView, TextInput, Pressable, Alert } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
-import { CheckCircle, AlertTriangle, XCircle, Flag } from "lucide-react-native"
+import { CheckCircle, XCircle, Flag } from "lucide-react-native"
 import { AppButton, ScreenHeader } from "../components/ui-components"
 import { submitScanFeedback, getCurrentUserId } from "../lib/api"
 
-type SuggestedStatus = "SAFE" | "SUSPICIOUS" | "MALICIOUS"
+type SuggestedStatus = "SAFE" | "MALICIOUS"
 
 const OPTIONS: { value: SuggestedStatus; label: string; icon: React.ReactNode }[] = [
   { value: "SAFE", label: "Safe", icon: <CheckCircle size={16} color="#16a34a" /> },
-  { value: "SUSPICIOUS", label: "Suspicious", icon: <AlertTriangle size={16} color="#f59e0b" /> },
   { value: "MALICIOUS", label: "Malicious", icon: <XCircle size={16} color="#dc2626" /> },
 ]
 
 export default function ReportScan() {
   const { scanId } = useLocalSearchParams<{ scanId?: string }>()
-  const [selected, setSelected] = useState<SuggestedStatus>("SUSPICIOUS")
+  const [selected, setSelected] = useState<SuggestedStatus>("MALICIOUS")
   const [comments, setComments] = useState("")
   const [loading, setLoading] = useState(false)
 
