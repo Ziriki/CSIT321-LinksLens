@@ -90,21 +90,19 @@ export default function ScanImage() {
 
         {/* Source buttons */}
         <View className="mt-4 flex-row gap-3">
-          <Pressable
-            className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card py-3"
-            onPress={handleTakePhoto}
-          >
-            <Camera size={20} color="#6b7280" />
-            <Text className="text-sm font-medium text-foreground">Take Photo</Text>
-          </Pressable>
+          <AppButton className="flex-1" onPress={handleTakePhoto}>
+            <View className="flex-row items-center justify-center gap-2">
+              <Camera size={20} color="#ffffff" />
+              <Text className="text-sm font-medium text-primary-foreground">Take Photo</Text>
+            </View>
+          </AppButton>
 
-          <Pressable
-            className="flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-card py-3"
-            onPress={handlePickImage}
-          >
-            <Upload size={20} color="#6b7280" />
-            <Text className="text-sm font-medium text-foreground">Upload Photo</Text>
-          </Pressable>
+          <AppButton className="flex-1" onPress={handlePickImage}>
+            <View className="flex-row items-center justify-center gap-2">
+              <Upload size={20} color="#ffffff" />
+              <Text className="text-sm font-medium text-primary-foreground">Upload Photo</Text>
+            </View>
+          </AppButton>
         </View>
 
         {/* Crop hint */}
