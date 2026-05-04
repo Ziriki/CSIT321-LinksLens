@@ -1,7 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from "react"
-import { View, Text, ScrollView, Image, Linking, Pressable, Modal, Animated, Alert } from "react-native"
-import { captureRef } from "react-native-view-shot"
-import * as MediaLibrary from "expo-media-library"
+import React, { useState, useEffect, useMemo } from "react"
+import { View, Text, ScrollView, Image, Linking, Pressable, Modal, Alert } from "react-native"
 import { router, useLocalSearchParams } from "expo-router"
 import {
   CheckCircle,
@@ -10,7 +8,6 @@ import {
   ChevronRight,
   ChevronDown,
   Flag,
-  Camera,
   XCircle,
   AlertTriangle,
   ImageIcon,
@@ -150,28 +147,6 @@ export default function ScanResults() {
   const [showRedirects, setShowRedirects] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [browser, setBrowser] = useState<BrowserId>("system");
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const exportCardRef = useRef<View>(null);
-  const toastOpacity = useRef(new Animated.Value(0)).current;
-  const runningAnim = useRef<Animated.CompositeAnimation | null>(null);
-
-  function showToast(message: string, type: "success" | "error") {
-    runningAnim.current?.stop();
-    toastOpacity.setValue(0);
-    setToast({ message, type });
-    runningAnim.current = Animated.sequence([
-      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.delay(2200),
-      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-    ]);
-    runningAnim.current.start(() => setToast(null));
-  }
-
-  useEffect(() => {
-    return () => { runningAnim.current?.stop(); };
-  }, []);
-
   useEffect(() => {
     getCurrentUserId().then((id) => {
       if (id) fetchPreferences(id).then((p) => { if (p.browser) setBrowser(p.browser as BrowserId) }).catch(() => {})
@@ -221,46 +196,6 @@ export default function ScanResults() {
     }
   }
 
-  async function handleExport() {
-    try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
-        showToast("Allow photo library access to save the report.", "error");
-        return;
-      }
-      setIsExporting(true);
-    } catch (e: any) {
-      showToast(`Export failed: ${e?.message ?? String(e)}`, "error");
-    }
-  }
-
-  useEffect(() => {
-    if (!isExporting) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        // Wait for the Modal's View to be committed to the native tree
-        await new Promise(r => setTimeout(r, 300));
-        if (cancelled || !exportCardRef.current) {
-          setIsExporting(false);
-          return;
-        }
-        const uri = await captureRef(exportCardRef.current, { format: "png", quality: 0.95, result: "tmpfile" });
-        await MediaLibrary.createAssetAsync(uri);
-        if (!cancelled) {
-          setIsExporting(false);
-          showToast("Scan report saved to your gallery.", "success");
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          setIsExporting(false);
-          showToast(`Export failed: ${e?.message ?? String(e)}`, "error");
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isExporting]);
-
   let scanData: ScanResponse | null = null;
   try { if (result) scanData = JSON.parse(result); } catch { /* corrupted param */ }
   const confidence = useMemo(() => scanData ? computeConfidence(scanData) : 15, [scanData]);
@@ -289,7 +224,8 @@ export default function ScanResults() {
   }
 
   const sa = scanData.script_analysis;
-  const hasRedirects = (scanData.redirect_chain?.length ?? 0) > 0;
+  const hasRedirects = (scanData.redirect_chain?.length ?? 0) > 1;
+  const redirectCount = Math.max(0, (scanData.redirect_chain?.length ?? 0) - 1);
   const threatDescription = scanData.gsb_threat_types.length > 0
     ? `Threats: ${scanData.gsb_threat_types.join(", ")}`
     : scanData.tags.length > 0
@@ -514,7 +450,7 @@ export default function ScanResults() {
               <DetailSectionHeader icon={<Link2 size={15} color="#6b7280" />} title="Redirects" />
               <InfoRow
                 label="Number of Redirects"
-                value={String(scanData.redirect_chain?.length ?? 0)}
+                value={String(redirectCount)}
               />
               {(scanData.redirect_chain?.length ?? 0) > 0 && (
                 <View className="mt-1">
@@ -675,131 +611,13 @@ export default function ScanResults() {
 
       </ScrollView>
 
-      {/* Footer — outside ScrollView so it is not captured in the export */}
+      {/* Done — fixed footer, always visible */}
       <View className="border-t border-border px-4 pb-4 pt-3">
-        <AppButton variant="outline" fullWidth onPress={handleExport}>
-          <View className="flex-row items-center justify-center gap-2">
-            <Camera size={16} color={iconColor} />
-            <Text className="text-foreground">Export Screenshot</Text>
-          </View>
-        </AppButton>
-        <Text className="mb-3 mt-1 text-center text-xs text-muted-foreground">
-          Saves a screenshot of results to your gallery
-        </Text>
         <AppButton fullWidth onPress={() => router.push("/home")}>
           Done
         </AppButton>
       </View>
 
-      {/* Export card — absolute overlay in the MAIN activity window (not a Dialog/Modal) so PixelCopy works */}
-      {isExporting && (
-        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", zIndex: 999 }}>
-          <View
-            ref={exportCardRef}
-            collapsable={false}
-            style={{ width: 340, backgroundColor: "#ffffff", borderRadius: 16, padding: 20 }}
-          >
-            {/* Header */}
-            <Text style={{ fontSize: 10, color: "#9ca3af", marginBottom: 12, textAlign: "center", letterSpacing: 1 }}>LINKSLENS SCAN REPORT</Text>
-
-            {/* Status badge + confidence */}
-            <View style={{ alignItems: "center", marginBottom: 12 }}>
-              <View style={{ paddingHorizontal: 20, paddingVertical: 8, borderRadius: 100, marginBottom: 6,
-                backgroundColor: isSafe ? "#dcfce7" : isSuspicious ? "#fef9c3" : isUnavailable ? "#f3f4f6" : "#fee2e2" }}>
-                <Text style={{ fontWeight: "700", fontSize: 18,
-                  color: isSafe ? "#16a34a" : isSuspicious ? "#ca8a04" : isUnavailable ? "#6b7280" : "#dc2626" }}>
-                  {scanData.status_indicator}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 11, color: "#6b7280" }}>Confidence: {confidence}%</Text>
-            </View>
-
-            {/* Scanned URL */}
-            <View style={{ backgroundColor: "#f9fafb", borderRadius: 8, padding: 10, marginBottom: 12 }}>
-              <Text style={{ fontSize: 10, color: "#9ca3af", marginBottom: 2 }}>SCANNED URL</Text>
-              <Text style={{ fontSize: 11, color: "#111827" }}>{scanData.initial_url}</Text>
-              {scanData.redirect_url && scanData.redirect_url !== scanData.initial_url && (
-                <>
-                  <Text style={{ fontSize: 10, color: "#9ca3af", marginTop: 6, marginBottom: 2 }}>FINAL URL</Text>
-                  <Text style={{ fontSize: 11, color: "#374151" }}>{scanData.redirect_url}</Text>
-                </>
-              )}
-            </View>
-
-            {/* Security section */}
-            <Text style={{ fontSize: 10, fontWeight: "700", color: "#374151", marginBottom: 6, letterSpacing: 0.5 }}>SECURITY HIGHLIGHTS</Text>
-            <View style={{ borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
-              {[
-                ["Connection", scanData.initial_url.startsWith("https") ? "Secure (HTTPS)" : "Not Secure (HTTP)",
-                  scanData.initial_url.startsWith("https") ? "#16a34a" : "#dc2626"],
-                ["Safe Browsing", scanData.gsb_flagged ? `Flagged: ${scanData.gsb_threat_types[0] ?? "threat"}` : "Not flagged",
-                  scanData.gsb_flagged ? "#dc2626" : "#16a34a"],
-                ["Domain Age", scanData.domain_age_days != null ? `${scanData.domain_age_days} days` : "Unknown", "#374151"],
-                ["Server Location", scanData.server_location ?? "Unknown", "#374151"],
-                ["IP Address", scanData.ip_address ?? "Unknown", "#374151"],
-                ["Redirects", hasRedirects ? `${scanData.redirect_chain!.length} hops` : "None", "#374151"],
-              ].map(([label, value, color], i) => (
-                <View key={label} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-                  paddingHorizontal: 10, paddingVertical: 7, backgroundColor: i % 2 === 0 ? "#ffffff" : "#f9fafb" }}>
-                  <Text style={{ fontSize: 11, color: "#6b7280", flex: 1 }}>{label}</Text>
-                  <Text style={{ fontSize: 11, fontWeight: "600", color: color as string, flex: 1, textAlign: "right" }}>{value}</Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Script analysis */}
-            {sa && (
-              <>
-                <Text style={{ fontSize: 10, fontWeight: "700", color: "#374151", marginBottom: 6, letterSpacing: 0.5 }}>SCRIPT ANALYSIS</Text>
-                <View style={{ borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8, overflow: "hidden", marginBottom: 12 }}>
-                  {[
-                    ["Total Scripts", String(sa.total ?? 0), "#374151"],
-                    ["Trusted", String(sa.trusted_count ?? 0), "#16a34a"],
-                    ["Ad Scripts", String(sa.ad_count ?? 0), sa.ad_heavy ? "#ca8a04" : "#374151"],
-                    ["Script Risk Score", `${sa.script_risk_score ?? 0}/100`, sa.script_risk_score >= 50 ? "#dc2626" : sa.script_risk_score >= 25 ? "#ca8a04" : "#16a34a"],
-                    ...(sa.crypto_miners?.length ? [["Crypto Miners", sa.crypto_miners.join(", "), "#dc2626"]] : []),
-                    ...(sa.malicious_scripts?.length ? [["Malicious Scripts", String(sa.malicious_scripts.length), "#dc2626"]] : []),
-                    ...(sa.tech_stack?.length ? [["Tech Stack", sa.tech_stack.slice(0, 3).join(", "), "#374151"]] : []),
-                  ].map(([label, value, color], i) => (
-                    <View key={label} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-                      paddingHorizontal: 10, paddingVertical: 7, backgroundColor: i % 2 === 0 ? "#ffffff" : "#f9fafb" }}>
-                      <Text style={{ fontSize: 11, color: "#6b7280", flex: 1 }}>{label}</Text>
-                      <Text style={{ fontSize: 11, fontWeight: "600", color: color as string, flex: 1, textAlign: "right" }} numberOfLines={1}>{value}</Text>
-                    </View>
-                  ))}
-                </View>
-              </>
-            )}
-
-            {/* Homograph warning */}
-            {scanData.homograph_analysis?.is_homograph && (
-              <View style={{ backgroundColor: "#fef3c7", borderRadius: 8, padding: 10, marginBottom: 12, flexDirection: "row", gap: 6 }}>
-                <Text style={{ fontSize: 11, color: "#92400e" }}>⚠ IDN Homograph detected — domain may be spoofed (risk score: {scanData.homograph_analysis.risk_score})</Text>
-              </View>
-            )}
-
-            {/* Footer */}
-            <Text style={{ fontSize: 10, color: "#9ca3af", textAlign: "center" }}>
-              {scanData.scanned_at ? new Date(scanData.scanned_at).toLocaleString() : ""}  •  linkslens.com
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Toast notification */}
-      {toast && (
-        <Animated.View
-          style={{ opacity: toastOpacity }}
-          className={`absolute bottom-28 left-6 right-6 flex-row items-center gap-3 rounded-2xl px-4 py-3 shadow-lg ${
-            toast.type === "success" ? "bg-green-600" : "bg-red-600"
-          }`}
-        >
-          {toast.type === "success"
-            ? <CheckCircle size={18} color="#fff" />
-            : <XCircle size={18} color="#fff" />}
-          <Text className="flex-1 text-sm font-medium text-white">{toast.message}</Text>
-        </Animated.View>
-      )}
     </View>
   )
 }
