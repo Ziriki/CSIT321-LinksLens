@@ -603,7 +603,7 @@ export default function ScanResults() {
         </Card>
         )}
 
-        <Text className="mt-6 mb-2 px-1 text-center text-xs text-muted-foreground leading-5">
+        <Text className="mt-6 mb-12 px-1 text-center text-xs text-muted-foreground leading-5">
           This scan result is for advisory purposes only. LinksLens uses third-party services to assess URLs and does not guarantee complete accuracy. Always exercise caution before visiting any link.
         </Text>
 
