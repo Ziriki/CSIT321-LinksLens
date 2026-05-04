@@ -1,12 +1,9 @@
 import streamlit as st
 from controllers import auth_controller, rules_controller
 from models import api_client
-from config import LOGO_PATH, PAGE_LAYOUT
 from utils import search_dataframe, render_pagination
 
-st.set_page_config(page_title="URL Registry", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 current_user = auth_controller.require_role(1, 2)
-auth_controller.render_sidebar()
 
 st.title("URL Registry")
 

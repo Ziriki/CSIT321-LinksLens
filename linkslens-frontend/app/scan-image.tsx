@@ -1,7 +1,7 @@
 import { recognizeText } from "@infinitered/react-native-mlkit-text-recognition";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
-import { Camera, ChevronDown, ChevronUp, Upload } from "lucide-react-native";
+import { AlertCircle, Camera, ChevronDown, ChevronUp, Upload } from "lucide-react-native";
 import React, { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { AppButton, ScreenHeader } from "../components/ui-components";
@@ -157,13 +157,16 @@ export default function ScanImage() {
                 <Text className="mt-1 text-xs text-green-500">✓ URL extracted — edit above if needed</Text>
               </View>
             ) : (
-              <View className="p-4 rounded-xl bg-secondary/20">
-                <Text className="text-xs uppercase text-muted-foreground font-bold mb-2">No URL Detected</Text>
+              <View className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                <View className="flex-row items-center gap-2 mb-2">
+                  <AlertCircle size={14} color="#f59e0b" />
+                  <Text className="text-xs uppercase text-amber-600 font-bold">No URL Detected</Text>
+                </View>
                 <Text className="text-sm text-muted-foreground mb-3">
-                  No URL was found. Try cropping tighter around the link, or enter it manually below.
+                  No URL was found in this image. Try cropping tighter around the link, or enter the URL manually below.
                 </Text>
                 <TextInput
-                  className="text-base text-foreground border border-border rounded-lg px-3 py-2"
+                  className="text-base text-foreground border border-amber-500/40 rounded-lg px-3 py-2"
                   value={selectedUrl}
                   onChangeText={setSelectedUrl}
                   autoCapitalize="none"
@@ -208,6 +211,11 @@ export default function ScanImage() {
           >
             {loading ? "Scanning image…" : "Scan URL"}
           </AppButton>
+          {!loading && !selectedUrl.trim() && rawOcrText !== "" && extractedUrls.length === 0 && (
+            <Text className="mt-2 text-xs text-center text-amber-500">
+              No URL detected — type one in the field above to continue
+            </Text>
+          )}
         </View>
 
       </ScrollView>
