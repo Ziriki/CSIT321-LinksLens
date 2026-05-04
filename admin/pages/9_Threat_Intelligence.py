@@ -4,8 +4,6 @@ import folium
 from streamlit_folium import st_folium
 from controllers import auth_controller
 from models import api_client
-from config import LOGO_PATH, PAGE_LAYOUT
-
 # ISO-2 country code → (latitude, longitude) centroids for major countries
 COUNTRY_COORDS = {
     "AF": (33.94, 67.71), "AL": (41.15, 20.17), "DZ": (28.03, 1.66),
@@ -43,9 +41,7 @@ COUNTRY_COORDS = {
     "ZW": (-19.02, 29.15),
 }
 
-st.set_page_config(page_title="Threat Intelligence", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 auth_controller.require_role(1, 2)
-auth_controller.render_sidebar()
 
 st.title("Threat Intelligence")
 

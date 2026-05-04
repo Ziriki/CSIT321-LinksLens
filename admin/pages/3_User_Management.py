@@ -2,12 +2,9 @@ import streamlit as st
 from controllers import auth_controller, user_controller
 from controllers.auth_controller import ROLE_LABELS
 from models import api_client
-from config import LOGO_PATH, PAGE_LAYOUT
 from utils import search_dataframe, render_pagination, scroll_to_bottom
 
-st.set_page_config(page_title="User Management", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 current_user = auth_controller.require_role(1)
-auth_controller.render_sidebar()
 
 st.title("User Management")
 
