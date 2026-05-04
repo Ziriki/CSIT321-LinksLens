@@ -1,11 +1,8 @@
 import streamlit as st
 from controllers import auth_controller, feedback_controller
-from config import LOGO_PATH, PAGE_LAYOUT
 from utils import search_dataframe, render_pagination
 
-st.set_page_config(page_title="App Feedback", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 auth_controller.require_role(1)
-auth_controller.render_sidebar()
 
 st.title("App Feedback")
 

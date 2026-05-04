@@ -3,11 +3,7 @@ import pandas as pd
 from utils import render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander, scroll_to_bottom
 from controllers import auth_controller
 from models import api_client
-from config import LOGO_PATH, PAGE_LAYOUT
-
-st.set_page_config(page_title="Scan History", page_icon=LOGO_PATH, layout=PAGE_LAYOUT)
 auth_controller.require_role(1, 2)
-auth_controller.render_sidebar()
 
 st.title("Scan History")
 

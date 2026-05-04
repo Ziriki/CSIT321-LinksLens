@@ -281,35 +281,37 @@ export default function ScanResults() {
           </Text>
         </View>
 
-        {/* Key Highlights — plain-English security signals for layman users */}
-        <Card className="mt-2">
-          <Text className="mb-1 text-sm font-semibold text-foreground">Security Highlights</Text>
-          <HighlightRow
-            label="Connection"
-            value={scanData.initial_url.startsWith("https://") ? "Secure (HTTPS)" : "Not Secure (HTTP)"}
-            ok={scanData.initial_url.startsWith("https://")}
-          />
-          <HighlightRow
-            label="Redirects"
-            value={
-              redirectCount === 0
-                ? "No redirects"
-                : `Redirects ${redirectCount} time${redirectCount > 1 ? "s" : ""}`
-            }
-            ok={redirectCount === 0}
-          />
-          <HighlightRow
-            label="Domain Age"
-            value={formatDomainAge(scanData.domain_age_days)}
-            ok={scanData.domain_age_days == null ? null : scanData.domain_age_days >= 90}
-          />
-          <HighlightRow
-            label="Safety Databases"
-            value={scanData.gsb_flagged ? "Flagged as threat" : "Not flagged"}
-            ok={!scanData.gsb_flagged}
-            noBorder
-          />
-        </Card>
+        {/* Key Highlights — hidden for UNAVAILABLE scans (no reliable data to show) */}
+        {!isUnavailable && (
+          <Card className="mt-2">
+            <Text className="mb-1 text-sm font-semibold text-foreground">Security Highlights</Text>
+            <HighlightRow
+              label="Connection"
+              value={scanData.initial_url.startsWith("https://") ? "Secure (HTTPS)" : "Not Secure (HTTP)"}
+              ok={scanData.initial_url.startsWith("https://")}
+            />
+            <HighlightRow
+              label="Redirects"
+              value={
+                (scanData.redirect_chain?.length ?? 0) === 0
+                  ? "No redirects"
+                  : `Redirects ${scanData.redirect_chain!.length} time${scanData.redirect_chain!.length > 1 ? "s" : ""}`
+              }
+              ok={(scanData.redirect_chain?.length ?? 0) === 0}
+            />
+            <HighlightRow
+              label="Domain Age"
+              value={formatDomainAge(scanData.domain_age_days)}
+              ok={scanData.domain_age_days == null ? null : scanData.domain_age_days >= 90}
+            />
+            <HighlightRow
+              label="Safety Databases"
+              value={scanData.gsb_flagged ? "Flagged as threat" : "Not flagged"}
+              ok={!scanData.gsb_flagged}
+              noBorder
+            />
+          </Card>
+        )}
 
         {/* Screenshot */}
         {scanData.screenshot_url && (
@@ -383,7 +385,7 @@ export default function ScanResults() {
           </View>
         </Card>
 
-        {/* Technical Details toggle */}
+        {!isUnavailable && (
         <Card className="mt-4" onPress={() => setShowAdvanced(!showAdvanced)}>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-3">
@@ -400,8 +402,9 @@ export default function ScanResults() {
             </Text>
           )}
         </Card>
+        )}
 
-        {showAdvanced && (
+        {!isUnavailable && showAdvanced && (
           <Card className="mt-1">
 
             {/* ── Analysis Confidence ── */}
@@ -573,6 +576,7 @@ export default function ScanResults() {
         )}
 
         {/* Report incorrect */}
+        {!isUnavailable && (
         <Card
           className="mt-4"
           onPress={() =>
@@ -597,6 +601,11 @@ export default function ScanResults() {
             <ChevronRight size={20} color={iconColor} />
           </View>
         </Card>
+        )}
+
+        <Text className="mt-6 mb-2 px-1 text-center text-xs text-muted-foreground leading-5">
+          This scan result is for advisory purposes only. LinksLens uses third-party services to assess URLs and does not guarantee complete accuracy. Always exercise caution before visiting any link.
+        </Text>
 
         </View>
 
