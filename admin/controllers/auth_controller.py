@@ -28,7 +28,7 @@ def _expire_session():
     st.session_state["access_token"] = None
     st.session_state.pop("_decoded_user", None)
     st.session_state["session_expired"] = True
-    st.switch_page("app.py")
+    st.rerun()
 
 
 def require_auth():
@@ -109,7 +109,7 @@ def render_sidebar():
                 st.session_state["access_token"] = None
                 st.session_state.pop("_decoded_user", None)
                 st.session_state.pop("confirm_logout", None)
-                st.switch_page("app.py")
+                st.rerun()
         with col2:
             if st.button("No", key="confirm_logout_no"):
                 st.session_state.pop("confirm_logout", None)
