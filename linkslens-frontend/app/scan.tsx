@@ -32,11 +32,11 @@ export default function scan() {
 
             <View className="flex-1">
               <Text className="font-semibold text-foreground">
-                Select photo
+                Scan Image
               </Text>
 
               <Text className="text-sm text-muted-foreground">
-                Upload an image with a link
+                Take or Upload an image with a link
               </Text>
             </View>
           </Card>
