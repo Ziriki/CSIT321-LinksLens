@@ -40,10 +40,11 @@ URLSCAN_SCREENSHOT_URL = "https://urlscan.io/screenshots/{uuid}.png"
 GSB_LOOKUP_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 _GSB_DEFAULT_PORTS: dict[str, int] = {"http": 80, "https": 443}
 
-# Polling configuration: wait 10s before first poll, then every 5s, up to 12 attempts (70s total)
+# Polling: 10s initial wait + progressive per-attempt intervals = 69s max total
+# Requires Nginx proxy_read_timeout ≥ 120s to avoid premature connection kill
 INITIAL_WAIT_SECONDS = 10
-POLL_INTERVAL_SECONDS = 5
-MAX_POLL_ATTEMPTS = 12
+POLL_INTERVALS: list[int] = [2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5]
+MAX_POLL_ATTEMPTS = len(POLL_INTERVALS)  # 12 attempts, 59s additional = 69s total
 
 # GSB threat type → LinksLens status mapping
 _MALICIOUS_THREATS = {"MALWARE", "SOCIAL_ENGINEERING"}
@@ -401,7 +402,8 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
 #########################################################
 def submit_scan(url: str) -> dict | None:
     """Returns the submission JSON on success, or None if urlscan.io is unreachable/rejects."""
-    safe_url = quote(url, safe='/:?=&')
+    parsed = urlparse(url)
+    safe_url = quote(urlunparse(parsed._replace(netloc=parsed.netloc.lower())), safe='/:?=&')
     headers = {
         "API-Key": URLSCAN_API_KEY,
         "Content-Type": "application/json",
@@ -431,7 +433,7 @@ def poll_result(uuid: str) -> dict | None:
     # urlscan.io recommends waiting at least 10 seconds before the first poll
     time.sleep(INITIAL_WAIT_SECONDS)
 
-    for attempt in range(MAX_POLL_ATTEMPTS):
+    for attempt, interval in enumerate(POLL_INTERVALS):
         try:
             response = requests.get(result_url, timeout=15)
         except requests.RequestException:
@@ -441,9 +443,9 @@ def poll_result(uuid: str) -> dict | None:
             return response.json()
 
         if response.status_code == 404:
-            # Scan still in progress — keep polling
+            # Scan still in progress — wait progressive interval before next attempt
             if attempt < MAX_POLL_ATTEMPTS - 1:
-                time.sleep(POLL_INTERVAL_SECONDS)
+                time.sleep(interval)
             continue
 
         # Any other unexpected status — give up non-fatally
