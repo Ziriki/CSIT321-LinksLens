@@ -196,8 +196,9 @@ export default function ScanResults() {
     }
   }
 
-  let scanData: ScanResponse | null = null;
-  try { if (result) scanData = JSON.parse(result); } catch { /* corrupted param */ }
+  const scanData = useMemo<ScanResponse | null>(() => {
+    try { return result ? (JSON.parse(result) as ScanResponse) : null; } catch { return null; }
+  }, [result]);
   const confidence = useMemo(() => scanData ? computeConfidence(scanData) : 15, [scanData]);
   const riskLevel: RiskLevel = scanData ? statusToRisk(scanData.status_indicator) : "safe";
   const isSafe = riskLevel === "safe";
@@ -226,6 +227,8 @@ export default function ScanResults() {
   const sa = scanData.script_analysis;
   const hasRedirects = (scanData.redirect_chain?.length ?? 0) > 1;
   const redirectCount = Math.max(0, (scanData.redirect_chain?.length ?? 0) - 1);
+  const resolvedUrl = scanData.redirect_url ?? scanData.initial_url;
+  const isHttps = resolvedUrl.toLowerCase().startsWith("https://");
   const threatDescription = scanData.gsb_threat_types.length > 0
     ? `Threats: ${scanData.gsb_threat_types.join(", ")}`
     : scanData.tags.length > 0
@@ -287,8 +290,8 @@ export default function ScanResults() {
             <Text className="mb-1 text-sm font-semibold text-foreground">Security Highlights</Text>
             <HighlightRow
               label="Connection"
-              value={scanData.initial_url.startsWith("https://") ? "Secure (HTTPS)" : "Not Secure (HTTP)"}
-              ok={scanData.initial_url.startsWith("https://")}
+              value={isHttps ? "Secure (HTTPS)" : "Not Secure (HTTP)"}
+              ok={isHttps}
             />
             <HighlightRow
               label="Redirects"
@@ -438,7 +441,7 @@ export default function ScanResults() {
                 </>
               ) : (
                 <Text className="text-sm text-muted-foreground">
-                  {scanData.initial_url.startsWith("https://")
+                  {isHttps
                     ? "SSL details not available for this scan."
                     : "Site does not use HTTPS."}
                 </Text>
