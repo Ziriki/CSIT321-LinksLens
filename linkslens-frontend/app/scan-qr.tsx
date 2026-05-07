@@ -4,7 +4,7 @@ import { ShieldAlert } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { AppButton, ScreenHeader } from "../components/ui-components";
-import { URL_PATTERN } from "../lib/url-validation";
+import { URL_PATTERN, normalizeUrl } from "../lib/url-validation";
 
 type QRScanState = "idle" | "found" | "invalid";
 
@@ -31,9 +31,10 @@ export default function ScanQR() {
     if (URL_PATTERN.test(url)) {
       scanned.current = true;
       setStatus("found");
+      const normalized = normalizeUrl(url);
       timersRef.current.push(
         setTimeout(() => {
-          router.push({ pathname: "/scan-processing", params: { url } });
+          router.push({ pathname: "/scan-processing", params: { url: normalized } });
         }, 400)
       );
     } else {

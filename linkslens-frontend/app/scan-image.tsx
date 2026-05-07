@@ -5,6 +5,7 @@ import { AlertCircle, Camera, ChevronDown, ChevronUp, Upload } from "lucide-reac
 import React, { useState } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { AppButton, ScreenHeader } from "../components/ui-components";
+import { normalizeUrl } from "../lib/url-validation";
 
 function extractUrlsFromText(rawText: string): string[] {
   const httpMatches = rawText.match(/https?:\/\/[^\s\n\r<>"'`\]|\\]+/gi) ?? [];
@@ -67,8 +68,6 @@ export default function ScanImage() {
     if (!result.canceled) await processImage(result.assets[0].uri);
   };
 
-  const normalise = (url: string) =>
-    /^https?:\/\//i.test(url) ? url : `http://${url}`;
 
   return (
     <View className="flex-1 bg-background">
@@ -206,7 +205,7 @@ export default function ScanImage() {
             disabled={!selectedUrl.trim() || loading}
             onPress={() => router.push({
               pathname: "/scan-processing",
-              params: { url: normalise(selectedUrl.trim()) },
+              params: { url: normalizeUrl(selectedUrl.trim()) },
             })}
           >
             {loading ? "Scanning image…" : "Scan URL"}
