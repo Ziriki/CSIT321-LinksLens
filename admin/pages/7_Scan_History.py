@@ -16,13 +16,11 @@ st.title("Scan History")
 
 PAGE_SIZE = 10
 
-# Session state defaults
 st.session_state.setdefault("scanner_result_id", None)
 st.session_state.setdefault("scan_running", False)
-st.session_state.setdefault("scan_result_pending", None)
 st.session_state.setdefault("scan_start_time", None)
 st.session_state.setdefault("scan_url_in_progress", "")
-st.session_state.setdefault("scanner_error", False)
+st.session_state.setdefault("scanner_error", None)
 st.session_state.setdefault("scan_page", 0)
 
 _SCAN_STEPS = [
@@ -39,43 +37,44 @@ _SCAN_STEPS = [
     (85, "Wrapping up…",                              97),
 ]
 
-# ── Scan state machine ───────────────────────────────────────────────────────
 
-# Phase 1: result just arrived from background thread → process and rerun
-if st.session_state["scan_running"] and st.session_state["scan_result_pending"] is not None:
-    result = st.session_state["scan_result_pending"]
-    st.session_state["scan_result_pending"] = None
+def _do_scan(url: str) -> None:
+    try:
+        result = api_client.scan_url(url)
+        if result and result.get("scan_id"):
+            st.session_state["scanner_result_id"] = result["scan_id"]
+            st.session_state["scan_page"] = 0
+        else:
+            st.session_state["scanner_error"] = "Scan failed. Check the URL and try again."
+    except Exception:
+        st.session_state["scanner_error"] = "Scan failed. Check the URL and try again."
     st.session_state["scan_running"] = False
     st.session_state["scan_start_time"] = None
-    if isinstance(result, dict) and result.get("scan_id"):
-        st.session_state["scanner_result_id"] = result["scan_id"]
-        st.session_state["scan_page"] = 0
-    else:
-        st.session_state["scanner_error"] = True
-    st.rerun()
 
-# Phase 2: scan in progress → show step-by-step progress, poll every 2 s
+
+# ── Scan state machine ───────────────────────────────────────────────────────
+
 if st.session_state["scan_running"]:
     elapsed = time.time() - st.session_state["scan_start_time"]
 
-    current_msg = _SCAN_STEPS[0][1]
-    current_progress = _SCAN_STEPS[0][2]
+    current_msg, current_progress = _SCAN_STEPS[0][1], _SCAN_STEPS[0][2]
     for at, msg, prog in _SCAN_STEPS:
         if elapsed >= at:
-            current_msg = msg
-            current_progress = prog
+            current_msg, current_progress = msg, prog
+        else:
+            break
 
     st.markdown(f"**Scanning:** `{st.session_state['scan_url_in_progress']}`")
     st.progress(current_progress / 100, text=current_msg)
     time.sleep(2)
     st.rerun()
 
-# ── Phase 3: normal page ─────────────────────────────────────────────────────
+# ── URL Scanner ──────────────────────────────────────────────────────────────
 
 with st.expander("Scan a URL", expanded=False):
-    if st.session_state["scanner_error"]:
-        st.error("Scan failed. Check the URL and try again.")
-        st.session_state["scanner_error"] = False
+    if error_msg := st.session_state.get("scanner_error"):
+        st.error(error_msg)
+        st.session_state["scanner_error"] = None
 
     scan_input = st.text_input("URL to scan", placeholder="https://example.com", key="scanner_url_input")
     if st.button("Scan", key="scanner_submit") and scan_input.strip():
@@ -83,17 +82,12 @@ with st.expander("Scan a URL", expanded=False):
         st.session_state["scan_running"] = True
         st.session_state["scan_start_time"] = time.time()
         st.session_state["scan_url_in_progress"] = url_to_scan
-        st.session_state["scan_result_pending"] = None
-        st.session_state["scanner_error"] = False
-
-        def _do_scan(url):
-            result = api_client.scan_url(url)
-            st.session_state["scan_result_pending"] = result if result else "FAILED"
-
+        st.session_state["scanner_error"] = None
         threading.Thread(target=_do_scan, args=(url_to_scan,), daemon=True).start()
         st.rerun()
 
 # ── Filters ──────────────────────────────────────────────────────────────────
+
 status_filter = st.radio("Status", ["All", "SAFE", "SUSPICIOUS", "MALICIOUS"], horizontal=True)
 
 search = st.text_input("Search", placeholder="Search by URL or user name...")
@@ -128,10 +122,8 @@ else:
             return ["background-color: #d1fae5"] * len(row)
         return [""] * len(row)
 
-    styled = df[available].style.apply(_highlight_new, axis=1)
-
     event = st.dataframe(
-        styled,
+        df[available].style.apply(_highlight_new, axis=1),
         use_container_width=True,
         hide_index=True,
         on_select="rerun",
