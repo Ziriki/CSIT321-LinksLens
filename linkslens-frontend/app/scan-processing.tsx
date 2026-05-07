@@ -9,17 +9,19 @@ import { notifyScanComplete } from "../lib/notifications"
 import type { ScanStatus } from "../lib/types"
 
 // Timings mirror the real backend pipeline so messages stay accurate.
-// Extra steps beyond 21s cover slow urlscan.io responses (max ~69s).
+// Extra steps beyond 21s cover slow urlscan.io responses (max ~89s).
 const STEPS = [
   { at: 0,  message: "Checking Google Safe Browsing database...", progress: 10 },
   { at: 2,  message: "Submitting URL to security scanner...",      progress: 22 },
   { at: 4,  message: "Waiting for scan analysis to complete...",   progress: 35 },
-  { at: 14, message: "Retrieving server location...",              progress: 55 },
-  { at: 17, message: "Checking domain registration age...",        progress: 68 },
-  { at: 19, message: "Analysing redirect chain...",                progress: 78 },
-  { at: 21, message: "Finalising verdict...",                      progress: 86 },
-  { at: 35, message: "Still analysing, almost there...",           progress: 93 },
-  { at: 55, message: "Wrapping up...",                             progress: 97 },
+  { at: 14, message: "Retrieving server location...",              progress: 50 },
+  { at: 17, message: "Checking domain registration age...",        progress: 60 },
+  { at: 19, message: "Analysing redirect chain...",                progress: 68 },
+  { at: 21, message: "Analysing page scripts...",                  progress: 75 },
+  { at: 35, message: "Finalising verdict...",                      progress: 83 },
+  { at: 55, message: "Still analysing, almost there...",           progress: 90 },
+  { at: 75, message: "Completing script analysis...",              progress: 95 },
+  { at: 85, message: "Wrapping up...",                             progress: 97 },
 ]
 
 export default function ScanProcessing() {
