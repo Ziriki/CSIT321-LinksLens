@@ -496,62 +496,67 @@ export default function ScanResults() {
               <PillRow label="Threat Types" items={scanData.gsb_threat_types} pillBg="bg-red-500/10" pillText="font-medium text-red-500" />
             </View>
 
-            {/* ── Script Analysis ── */}
-            {sa && (
-              <View className="mb-5">
-                <DetailSectionHeader icon={<Info size={15} color="#6b7280" />} title="Script Analysis" />
-
-                <View className="mb-4">
-                  <Text className="mb-2 text-sm text-muted-foreground">Script Risk Score</Text>
-                  <View className="flex-row items-center gap-3">
-                    <View className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-                      <View
-                        style={{ width: `${sa.script_risk_score}%` }}
-                        className={`h-full rounded-full ${
-                          sa.script_risk_score >= 50 ? "bg-red-500"
-                            : sa.script_risk_score >= 25 ? "bg-yellow-500"
-                            : "bg-green-500"
-                        }`}
-                      />
+            {/* ── Script Analysis ── always shown; data may be unavailable if urlscan.io did not complete */}
+            <View className="mb-5">
+              <DetailSectionHeader icon={<Info size={15} color="#6b7280" />} title="Script Analysis" />
+              {sa ? (
+                <>
+                  <View className="mb-4">
+                    <Text className="mb-2 text-sm text-muted-foreground">Script Risk Score</Text>
+                    <View className="flex-row items-center gap-3">
+                      <View className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
+                        <View
+                          style={{ width: `${sa.script_risk_score}%` }}
+                          className={`h-full rounded-full ${
+                            sa.script_risk_score >= 50 ? "bg-red-500"
+                              : sa.script_risk_score >= 25 ? "bg-yellow-500"
+                              : "bg-green-500"
+                          }`}
+                        />
+                      </View>
+                      <Text className="w-12 text-right text-sm font-medium text-foreground">
+                        {sa.script_risk_score}/100
+                      </Text>
                     </View>
-                    <Text className="w-12 text-right text-sm font-medium text-foreground">
-                      {sa.script_risk_score}/100
-                    </Text>
                   </View>
-                </View>
 
-                <InfoRow label="Total Scripts" value={String(sa.total)} />
-                <InfoRow label="Trusted CDN Scripts" value={String(sa.trusted_count)} />
-                <InfoRow label="Ad Scripts" value={`${sa.ad_count}${sa.ad_heavy ? " (ad-heavy)" : ""}`} />
+                  <InfoRow label="Total Scripts" value={String(sa.total)} />
+                  <InfoRow label="Trusted CDN Scripts" value={String(sa.trusted_count)} />
+                  <InfoRow label="Ad Scripts" value={`${sa.ad_count}${sa.ad_heavy ? " (ad-heavy)" : ""}`} />
 
-                {sa.tech_stack.length > 0 && (
-                  <View className="mb-3 mt-1">
-                    <Text className="mb-2 text-sm text-muted-foreground">Technologies Detected</Text>
-                    <View className="flex-row flex-wrap gap-1">
-                      {sa.tech_stack.map((tech, i) => (
-                        <View key={i} className="rounded-full bg-secondary px-2 py-1">
-                          <Text className="text-xs text-foreground">{tech.name}</Text>
+                  {sa.tech_stack.length > 0 && (
+                    <View className="mb-3 mt-1">
+                      <Text className="mb-2 text-sm text-muted-foreground">Technologies Detected</Text>
+                      <View className="flex-row flex-wrap gap-1">
+                        {sa.tech_stack.map((tech, i) => (
+                          <View key={i} className="rounded-full bg-secondary px-2 py-1">
+                            <Text className="text-xs text-foreground">{tech.name}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  <ThreatList title="Crypto Miners Detected" items={sa.crypto_miners} color="text-red-600" />
+                  <ThreatList title="Malicious Scripts" items={sa.malicious_scripts} color="text-red-600" />
+                  {sa.suspicious_patterns.length > 0 && (
+                    <View className="mb-4">
+                      <Text className="text-xs font-semibold text-yellow-600">Suspicious Patterns</Text>
+                      {sa.suspicious_patterns.map((p, i) => (
+                        <View key={i} className="mt-1">
+                          <Text className="text-xs text-foreground">{p.reason}</Text>
+                          <Text className="text-xs text-muted-foreground" numberOfLines={1}>{p.url}</Text>
                         </View>
                       ))}
                     </View>
-                  </View>
-                )}
-
-                <ThreatList title="Crypto Miners Detected" items={sa.crypto_miners} color="text-red-600" />
-                <ThreatList title="Malicious Scripts" items={sa.malicious_scripts} color="text-red-600" />
-                {sa.suspicious_patterns.length > 0 && (
-                  <View className="mb-4">
-                    <Text className="text-xs font-semibold text-yellow-600">Suspicious Patterns</Text>
-                    {sa.suspicious_patterns.map((p, i) => (
-                      <View key={i} className="mt-1">
-                        <Text className="text-xs text-foreground">{p.reason}</Text>
-                        <Text className="text-xs text-muted-foreground" numberOfLines={1}>{p.url}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
+                  )}
+                </>
+              ) : (
+                <Text className="text-sm text-muted-foreground">
+                  Script analysis unavailable — the page scanner did not complete in time.
+                </Text>
+              )}
+            </View>
 
             {/* ── Homograph / IDN Risk ── */}
             {scanData.homograph_analysis?.is_homograph && (
