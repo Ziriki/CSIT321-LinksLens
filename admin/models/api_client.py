@@ -161,6 +161,24 @@ def delete_url_rule(rule_id: int):
 
 # -- Scan History --
 
+def scan_url(url: str) -> dict | None:
+    """Submit a URL to the scan pipeline and return the result, or None on failure.
+    Timeout is 120 s — the scan pipeline can take up to ~90 s."""
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/scan",
+            json={"urls": url},
+            headers=_get_headers(),
+            timeout=120,
+        )
+        if response.status_code == 200:
+            results = response.json()
+            return results[0] if results else None
+    except Exception:
+        pass
+    return None
+
+
 def fetch_scan_list(skip: int = 0, limit: int = 25, search: str = None,
                     status_indicator: str = None, user_id: int = None):
     """Fetch paginated scan history with optional filters."""
