@@ -857,13 +857,15 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
 
             # Escalation — only applied when DB rules haven't already set MALICIOUS
             if final_status != "MALICIOUS":
-                if script_analysis and script_analysis["malicious_scripts"]:
-                    final_status = "MALICIOUS"
-                elif (
-                    (script_analysis and script_analysis["crypto_miners"])
-                    or homograph_analysis["is_homograph"]
-                    or (script_analysis and script_analysis["script_risk_score"] >= 70)
-                ) and final_status == "SAFE":
+                if script_analysis:
+                    if script_analysis["malicious_scripts"]:
+                        final_status = "MALICIOUS"
+                    elif final_status == "SAFE" and (
+                        script_analysis["crypto_miners"]
+                        or script_analysis["script_risk_score"] >= 70
+                    ):
+                        final_status = "SUSPICIOUS"
+                if final_status == "SAFE" and homograph_analysis["is_homograph"]:
                     final_status = "SUSPICIOUS"
 
             # If urlscan.io couldn't reach the URL (domain unreachable / doesn't exist)

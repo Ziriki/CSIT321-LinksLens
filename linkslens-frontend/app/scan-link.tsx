@@ -6,6 +6,7 @@ import {
   ScreenHeader,
   AppButton
 } from "../components/ui-components"
+import { normalizeUrl } from "../lib/url-validation"
 
 export default function ScanLink() {
   const { url: sharedUrl } = useLocalSearchParams<{ url?: string }>()
@@ -38,9 +39,7 @@ export default function ScanLink() {
             size="lg"
             disabled={!url.trim()}
             onPress={() => {
-              const raw = url.trim()
-              const normalized = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`
-              router.push({ pathname: "/scan-processing", params: { url: normalized } })
+              router.push({ pathname: "/scan-processing", params: { url: normalizeUrl(url.trim()) } })
             }}
           >
             Scan URL
