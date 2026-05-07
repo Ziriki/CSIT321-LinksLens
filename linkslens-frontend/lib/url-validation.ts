@@ -6,3 +6,7 @@ export const URL_PATTERN = new RegExp(
   '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
   '(\\#[-a-z\\d%_.~+=-]*)?$', 'i' // fragment locator
 );
+
+export function normalizeUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `http://${url}`;
+}
