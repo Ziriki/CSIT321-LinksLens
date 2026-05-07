@@ -1,20 +1,102 @@
-import streamlit as st
+import threading
+import time
+
 import pandas as pd
-from utils import render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander, scroll_to_bottom
+import streamlit as st
+
 from controllers import auth_controller
 from models import api_client
+from utils import (render_homograph_expander, render_redirect_chain_expander,
+                   render_script_analysis_expander, render_ssl_expander,
+                   scroll_to_bottom)
+
 auth_controller.require_role(1, 2)
 
 st.title("Scan History")
 
 PAGE_SIZE = 10
 
+# Session state defaults
+st.session_state.setdefault("scanner_result_id", None)
+st.session_state.setdefault("scan_running", False)
+st.session_state.setdefault("scan_result_pending", None)
+st.session_state.setdefault("scan_start_time", None)
+st.session_state.setdefault("scan_url_in_progress", "")
+st.session_state.setdefault("scanner_error", False)
+st.session_state.setdefault("scan_page", 0)
+
+_SCAN_STEPS = [
+    (0,  "Checking Google Safe Browsing database…",  10),
+    (2,  "Submitting URL to security scanner…",       22),
+    (4,  "Waiting for scan analysis to complete…",    35),
+    (14, "Retrieving server location…",               50),
+    (17, "Checking domain registration age…",         60),
+    (19, "Analysing redirect chain…",                 68),
+    (21, "Analysing page scripts…",                   75),
+    (35, "Finalising verdict…",                       83),
+    (55, "Still analysing, almost there…",            90),
+    (75, "Completing script analysis…",               95),
+    (85, "Wrapping up…",                              97),
+]
+
+# ── Scan state machine ───────────────────────────────────────────────────────
+
+# Phase 1: result just arrived from background thread → process and rerun
+if st.session_state["scan_running"] and st.session_state["scan_result_pending"] is not None:
+    result = st.session_state["scan_result_pending"]
+    st.session_state["scan_result_pending"] = None
+    st.session_state["scan_running"] = False
+    st.session_state["scan_start_time"] = None
+    if isinstance(result, dict) and result.get("scan_id"):
+        st.session_state["scanner_result_id"] = result["scan_id"]
+        st.session_state["scan_page"] = 0
+    else:
+        st.session_state["scanner_error"] = True
+    st.rerun()
+
+# Phase 2: scan in progress → show step-by-step progress, poll every 2 s
+if st.session_state["scan_running"]:
+    elapsed = time.time() - st.session_state["scan_start_time"]
+
+    current_msg = _SCAN_STEPS[0][1]
+    current_progress = _SCAN_STEPS[0][2]
+    for at, msg, prog in _SCAN_STEPS:
+        if elapsed >= at:
+            current_msg = msg
+            current_progress = prog
+
+    st.markdown(f"**Scanning:** `{st.session_state['scan_url_in_progress']}`")
+    st.progress(current_progress / 100, text=current_msg)
+    time.sleep(2)
+    st.rerun()
+
+# ── Phase 3: normal page ─────────────────────────────────────────────────────
+
+with st.expander("Scan a URL", expanded=False):
+    if st.session_state["scanner_error"]:
+        st.error("Scan failed. Check the URL and try again.")
+        st.session_state["scanner_error"] = False
+
+    scan_input = st.text_input("URL to scan", placeholder="https://example.com", key="scanner_url_input")
+    if st.button("Scan", key="scanner_submit") and scan_input.strip():
+        url_to_scan = scan_input.strip()
+        st.session_state["scan_running"] = True
+        st.session_state["scan_start_time"] = time.time()
+        st.session_state["scan_url_in_progress"] = url_to_scan
+        st.session_state["scan_result_pending"] = None
+        st.session_state["scanner_error"] = False
+
+        def _do_scan(url):
+            result = api_client.scan_url(url)
+            st.session_state["scan_result_pending"] = result if result else "FAILED"
+
+        threading.Thread(target=_do_scan, args=(url_to_scan,), daemon=True).start()
+        st.rerun()
+
+# ── Filters ──────────────────────────────────────────────────────────────────
 status_filter = st.radio("Status", ["All", "SAFE", "SUSPICIOUS", "MALICIOUS"], horizontal=True)
 
 search = st.text_input("Search", placeholder="Search by URL or user name...")
-
-if "scan_page" not in st.session_state:
-    st.session_state["scan_page"] = 0
 
 page = st.session_state["scan_page"]
 skip = page * PAGE_SIZE
@@ -29,7 +111,8 @@ records = api_client.fetch_scan_list(
 has_next = len(records) > PAGE_SIZE
 display_records = records[:PAGE_SIZE]
 
-selected_scan_id = None
+scanner_id = st.session_state.get("scanner_result_id")
+effective_scan_id = None
 
 if not display_records:
     st.info("No scan records found.")
@@ -37,11 +120,18 @@ else:
     df = pd.DataFrame(display_records)
     df.rename(columns={"FullName": "User"}, inplace=True)
     columns = ["ScanID", "User", "InitialURL", "StatusIndicator",
-                "DomainAgeDays", "ServerLocation", "ScannedAt"]
+               "DomainAgeDays", "ServerLocation", "ScannedAt"]
     available = [c for c in columns if c in df.columns]
 
+    def _highlight_new(row):
+        if scanner_id and row["ScanID"] == scanner_id:
+            return ["background-color: #d1fae5"] * len(row)
+        return [""] * len(row)
+
+    styled = df[available].style.apply(_highlight_new, axis=1)
+
     event = st.dataframe(
-        df[available],
+        styled,
         use_container_width=True,
         hide_index=True,
         on_select="rerun",
@@ -50,7 +140,9 @@ else:
 
     selected_rows = event.selection.rows if event.selection else []
     if selected_rows:
-        selected_scan_id = int(df.iloc[selected_rows[0]]["ScanID"])
+        effective_scan_id = int(df.iloc[selected_rows[0]]["ScanID"])
+    elif scanner_id and any(r["ScanID"] == scanner_id for r in display_records):
+        effective_scan_id = scanner_id
 
 col_prev, col_info, col_next = st.columns([1, 4, 1])
 with col_prev:
@@ -66,10 +158,13 @@ with col_next:
         st.session_state["scan_page"] = page + 1
         st.rerun()
 
-if selected_scan_id:
-    scroll_to_bottom(f"scan_{selected_scan_id}")
-    data = api_client.fetch_scan_details(selected_scan_id)
+if effective_scan_id:
+    scroll_to_bottom(f"scan_{effective_scan_id}")
+    data = api_client.fetch_scan_details(effective_scan_id)
     if data:
+        if scanner_id == effective_scan_id:
+            st.success(f"Scan complete — result for `{data['InitialURL']}` is **{data['StatusIndicator']}**")
+
         st.markdown("---")
         st.subheader(f"Scan #{data['ScanID']} Details")
 
