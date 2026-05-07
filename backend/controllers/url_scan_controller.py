@@ -47,8 +47,9 @@ INITIAL_WAIT_SECONDS = 3
 # Progressive back-off between poll attempts.
 # Front-loaded with short intervals to catch fast scans; longer waits later
 # to avoid hammering the API on slow pages.
-# NOTE: Nginx proxy_read_timeout must be ≥ sum(POLL_INTERVALS) + INITIAL_WAIT_SECONDS + margin.
-POLL_INTERVALS: list[int] = [1, 1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5]
+# Total max wait: INITIAL_WAIT_SECONDS + sum(POLL_INTERVALS) ≈ 89s.
+# Nginx proxy_read_timeout is set to 120s — do not exceed that budget.
+POLL_INTERVALS: list[int] = [1, 1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
 MAX_POLL_ATTEMPTS = len(POLL_INTERVALS)
 
 # GSB threat type → LinksLens status mapping
@@ -108,20 +109,18 @@ def _reg_domain(netloc: str) -> str:
 #########################################################
 # Helper: Analyse scripts using urlscan.io result data
 #########################################################
-def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict:
+def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict | None:
     """
     Parse urlscan.io result data to classify scripts loaded by the page.
 
     Uses data.lists.scripts (pre-extracted by urlscan.io) — same sandboxed
     browser visit urlscan already performed, no second visit needed.
     Tech stack is sourced from meta.processors.wappa (Wappalyzer).
+    Returns None when raw_result is absent so callers can distinguish
+    "urlscan did not complete" from "page genuinely has zero scripts".
     """
     if not raw_result:
-        return {
-            "total": 0, "trusted_count": 0, "ad_count": 0, "ad_heavy": False,
-            "crypto_miners": [], "malicious_scripts": [],
-            "suspicious_patterns": [], "tech_stack": [], "script_risk_score": 0,
-        }
+        return None
 
     data = raw_result.get("data", {})
     page_url = raw_result.get("page", {}).get("url", "") or initial_url
@@ -858,12 +857,12 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
 
             # Escalation — only applied when DB rules haven't already set MALICIOUS
             if final_status != "MALICIOUS":
-                if script_analysis["malicious_scripts"]:
+                if script_analysis and script_analysis["malicious_scripts"]:
                     final_status = "MALICIOUS"
                 elif (
-                    script_analysis["crypto_miners"]
+                    (script_analysis and script_analysis["crypto_miners"])
                     or homograph_analysis["is_homograph"]
-                    or script_analysis["script_risk_score"] >= 70
+                    or (script_analysis and script_analysis["script_risk_score"] >= 70)
                 ) and final_status == "SAFE":
                     final_status = "SUSPICIOUS"
 
