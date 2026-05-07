@@ -40,11 +40,16 @@ URLSCAN_SCREENSHOT_URL = "https://urlscan.io/screenshots/{uuid}.png"
 GSB_LOOKUP_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 _GSB_DEFAULT_PORTS: dict[str, int] = {"http": 80, "https": 443}
 
-# Polling: 10s initial wait + progressive per-attempt intervals = 69s max total
-# Requires Nginx proxy_read_timeout ≥ 120s to avoid premature connection kill
-INITIAL_WAIT_SECONDS = 10
-POLL_INTERVALS: list[int] = [2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5]
-MAX_POLL_ATTEMPTS = len(POLL_INTERVALS)  # 12 attempts, 59s additional = 69s total
+# Initial sleep before first poll. urlscan.io recommends 10s, but 3s is safe —
+# early polls that return 404 are harmless and let us catch fast scans sooner.
+INITIAL_WAIT_SECONDS = 3
+
+# Progressive back-off between poll attempts.
+# Front-loaded with short intervals to catch fast scans; longer waits later
+# to avoid hammering the API on slow pages.
+# NOTE: Nginx proxy_read_timeout must be ≥ sum(POLL_INTERVALS) + INITIAL_WAIT_SECONDS + margin.
+POLL_INTERVALS: list[int] = [1, 1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5]
+MAX_POLL_ATTEMPTS = len(POLL_INTERVALS)
 
 # GSB threat type → LinksLens status mapping
 _MALICIOUS_THREATS = {"MALWARE", "SOCIAL_ENGINEERING"}
@@ -430,7 +435,6 @@ def poll_result(uuid: str) -> dict | None:
     """Returns the raw result JSON on success, or None on timeout or unexpected error."""
     result_url = URLSCAN_RESULT_URL.format(uuid=uuid)
 
-    # urlscan.io recommends waiting at least 10 seconds before the first poll
     time.sleep(INITIAL_WAIT_SECONDS)
 
     for attempt, interval in enumerate(POLL_INTERVALS):
@@ -443,7 +447,6 @@ def poll_result(uuid: str) -> dict | None:
             return response.json()
 
         if response.status_code == 404:
-            # Scan still in progress — wait progressive interval before next attempt
             if attempt < MAX_POLL_ATTEMPTS - 1:
                 time.sleep(interval)
             continue
@@ -451,7 +454,6 @@ def poll_result(uuid: str) -> dict | None:
         # Any other unexpected status — give up non-fatally
         return None
 
-    # All attempts exhausted
     return None
 
 
@@ -663,7 +665,7 @@ def check_domain_rdap(url: str) -> dict:
         response = requests.get(
             f"https://rdap.org/domain/{domain}",
             headers={"Accept": "application/json"},
-            timeout=15,
+            timeout=8,
         )
     except requests.RequestException as e:
         return _fail(f"RDAP request failed: {str(e)}")
@@ -834,13 +836,25 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             # Also check every URL in the redirect chain against URLRules.
             # The concurrent blacklist_check only covered the initial URL; a blacklisted
             # redirect target (e.g. the final destination after a short-link hop) would
-            # otherwise be missed.
+            # otherwise be missed. Batch both queries to avoid N+1 per hop.
             if final_status != "MALICIOUS" and redirect_chain:
+                hop_domains = []
                 for hop_url in redirect_chain:
-                    hop_check = check_blacklist_db(hop_url)
-                    if hop_check.get("url_rule_type") == "BLACKLIST" or hop_check.get("is_approved_blacklist"):
+                    extracted = tldextract.extract(hop_url)
+                    hop_domains.append(
+                        extracted.registered_domain or extracted.netloc or urlparse(hop_url).netloc
+                    )
+                if hop_domains:
+                    hop_blacklisted = db.query(models.URLRules).filter(
+                        models.URLRules.URLDomain.in_(hop_domains),
+                        models.URLRules.ListType == models.ListTypeEnum.BLACKLIST,
+                    ).first()
+                    hop_approved = db.query(models.BlacklistRequest).filter(
+                        models.BlacklistRequest.URLDomain.in_(hop_domains),
+                        models.BlacklistRequest.Status == models.RequestStatus.APPROVED,
+                    ).first()
+                    if hop_blacklisted or hop_approved:
                         final_status = "MALICIOUS"
-                        break
 
             # Escalation — only applied when DB rules haven't already set MALICIOUS
             if final_status != "MALICIOUS":
