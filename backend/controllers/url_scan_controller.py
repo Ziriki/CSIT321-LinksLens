@@ -122,10 +122,9 @@ def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict | No
     if not raw_result:
         return None
 
-    data = raw_result.get("data", {})
     page_url = raw_result.get("page", {}).get("url", "") or initial_url
     page_scheme = urlparse(page_url).scheme.lower()
-    scripts: list[str] = data.get("lists", {}).get("scripts", [])
+    scripts: list[str] = raw_result.get("lists", {}).get("scripts", [])
 
     ad_scripts: list[str] = []
     crypto_miners: list[str] = []
@@ -159,7 +158,7 @@ def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict | No
         elif _OBFUSCATED_NAME_RE.search(parsed.path):
             suspicious_patterns.append({"url": script_url, "reason": "Obfuscated script filename"})
 
-    wappa_data = data.get("meta", {}).get("processors", {}).get("wappa", {}).get("data", [])
+    wappa_data = raw_result.get("meta", {}).get("processors", {}).get("wappa", {}).get("data", [])
     tech_stack = [
         {"name": t.get("app", ""), "categories": [c.get("name", "") for c in t.get("categories", [])]}
         for t in wappa_data if t.get("app")
