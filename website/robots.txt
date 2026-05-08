@@ -1,4 +1,0 @@
-User-agent: *
-Disallow: /forgot-password.html
-Disallow: /reset-password.html
-Disallow: /verify-email.html
