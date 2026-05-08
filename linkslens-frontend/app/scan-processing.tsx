@@ -29,10 +29,13 @@ export default function ScanProcessing() {
 
   const [stepIndex, setStepIndex] = useState(0)
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const isMountedRef = useRef(true)
 
   const { message, progress } = STEPS[stepIndex]
 
   useEffect(() => {
+    isMountedRef.current = true
+
     if (!url) {
       router.back()
       return
@@ -47,6 +50,7 @@ export default function ScanProcessing() {
 
     scanUrl(url)
       .then((result) => {
+        if (!isMountedRef.current) return
         timersRef.current.forEach(clearTimeout)
         setStepIndex(STEPS.length - 1)
         const status = result.status_indicator as ScanStatus
@@ -66,6 +70,7 @@ export default function ScanProcessing() {
         })
       })
       .catch((err) => {
+        if (!isMountedRef.current) return
         console.error("Scan error:", err?.message ?? err)
         timersRef.current.forEach(clearTimeout)
         router.replace({
@@ -74,7 +79,10 @@ export default function ScanProcessing() {
         })
       })
 
-    return () => timersRef.current.forEach(clearTimeout)
+    return () => {
+      isMountedRef.current = false
+      timersRef.current.forEach(clearTimeout)
+    }
   }, [url])
 
   return (

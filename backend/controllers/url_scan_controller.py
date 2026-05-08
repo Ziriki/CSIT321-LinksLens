@@ -868,10 +868,16 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 if final_status == "SAFE" and homograph_analysis["is_homograph"]:
                     final_status = "SUSPICIOUS"
 
-            # If urlscan.io couldn't reach the URL (domain unreachable / doesn't exist)
-            # and no other signal flagged it, the result is genuinely unknown — not SAFE.
+            # Classify why urlscan.io couldn't complete so the frontend can show
+            # a scenario-specific message instead of a generic "unavailable".
+            unavailable_reason = None
             if raw_result is None and final_status == "SAFE":
+                rdap_ok = (
+                    not domain_info.get("error")
+                    and (domain_info.get("total_days") or 0) > 365
+                )
                 final_status = "UNAVAILABLE"
+                unavailable_reason = "scanner_blocked" if rdap_ok else "domain_unreachable"
 
             domain_age_days = domain_info.get("total_days")
 
@@ -920,6 +926,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 "script_analysis": script_analysis,
                 "homograph_analysis": homograph_analysis,
                 "ssl_info": ssl_info,
+                "unavailable_reason": unavailable_reason,
             })
 
     except HTTPException:

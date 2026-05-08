@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
 import { Alert } from "react-native";
+import type { UnavailableReason } from "./types";
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ?? "https://api.linkslens.com";
@@ -203,6 +204,7 @@ export interface ScanResponse {
   redirect_url: string | null;
   redirect_chain: string[] | null;
   status_indicator: "SAFE" | "SUSPICIOUS" | "MALICIOUS" | "UNAVAILABLE";
+  unavailable_reason: UnavailableReason;
   domain_age_days: number | null;
   server_location: string | null;
   ip_address: string | null;
@@ -257,6 +259,7 @@ export interface ScanHistoryItem {
 }
 
 export function scanHistoryToResponse(scan: ScanHistoryItem): ScanResponse {
+  const screenshotUuid = scan.ScreenshotURL?.match(/screenshots\/([^.]+)\.png/)?.[1] ?? null
   return {
     scan_id: scan.ScanID,
     user_id: scan.UserID,
@@ -274,7 +277,10 @@ export function scanHistoryToResponse(scan: ScanHistoryItem): ScanResponse {
     screenshot_url: scan.ScreenshotURL,
     brands: [],
     tags: [],
-    result_url: "",
+    result_url: screenshotUuid ? `https://urlscan.io/result/${screenshotUuid}/` : "",
+    unavailable_reason: scan.StatusIndicator === "UNAVAILABLE"
+      ? (scan.DomainAgeDays != null && scan.DomainAgeDays > 365 ? "scanner_blocked" : "domain_unreachable")
+      : null,
     gsb_flagged: false,
     gsb_threat_types: [],
     script_analysis: scan.ScriptAnalysis ?? null,

@@ -279,7 +279,9 @@ export default function ScanResults() {
             {isSafe
               ? "This URL appears to be safe. No security threats detected."
               : isUnavailable
-                ? "Scan analysis could not be completed for this URL."
+                ? scanData.unavailable_reason === "scanner_blocked"
+                  ? "This site blocks automated security scanners. No threats were detected by Google Safe Browsing and the domain has a long registration history."
+                  : "This URL could not be reached or scanned. It may be a typo, an expired domain, or temporarily unavailable."
                 : threatDescription}
           </Text>
         </View>
