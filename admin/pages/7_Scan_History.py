@@ -122,7 +122,16 @@ if effective_scan_id:
                 st.markdown(f"**Page Title:** {data['PageTitle']}")
             if data.get("ApexDomain"):
                 st.markdown(f"**Registered Domain:** `{data['ApexDomain']}`")
-            st.markdown(f"**Final Verdict:** `{data['StatusIndicator']}`")
+            _verdict_color = {
+                "MALICIOUS": "#dc2626",
+                "SUSPICIOUS": "#d97706",
+                "SAFE": "#16a34a",
+                "UNAVAILABLE": "#6b7280",
+            }.get(data["StatusIndicator"], "#6b7280")
+            st.markdown(
+                f"**Final Verdict:** <span style='color:{_verdict_color};font-weight:600'>{data['StatusIndicator']}</span>",
+                unsafe_allow_html=True,
+            )
             st.markdown(f"**Scanned At:** {data.get('ScannedAt', 'N/A')}")
         with col2:
             st.markdown(f"**IP Address:** {data.get('IpAddress') or 'N/A'}")
