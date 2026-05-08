@@ -70,13 +70,33 @@ _SUSPICIOUS_THRESHOLD = 30   # weighted score ≥ 30 → SUSPICIOUS
 # Script analysis: domain classification lists
 #########################################################
 _AD_DOMAINS = {
-    "doubleclick.net", "googlesyndication.com", "amazon-adsystem.com",
-    "adnxs.com", "advertising.com", "taboola.com", "outbrain.com",
-    "criteo.com", "rubiconproject.com", "pubmatic.com", "openx.net",
-    "moatads.com", "scorecardresearch.com", "adsafeprotected.com",
-    "sharethrough.com", "33across.com", "appnexus.com", "smartadserver.com",
-    "facebook.net", "facebook.com", "googletagmanager.com", "google-analytics.com",
-    "hotjar.com", "clarity.ms", "tiktok.com", "ads-twitter.com",
+    # Google
+    "doubleclick.net", "googlesyndication.com", "googletagmanager.com",
+    "google-analytics.com", "googletagservices.com", "googleadservices.com",
+    "google.com",
+    # Meta / Facebook
+    "facebook.net", "facebook.com",
+    # Amazon
+    "amazon-adsystem.com",
+    # Trade desk / programmatic
+    "adnxs.com", "appnexus.com", "rubiconproject.com", "pubmatic.com",
+    "openx.net", "33across.com", "sharethrough.com", "smartadserver.com",
+    "advertising.com", "adsafeprotected.com", "moatads.com",
+    "scorecardresearch.com", "criteo.com",
+    # Content recommendation
+    "taboola.com", "outbrain.com", "revcontent.com", "mgid.com",
+    # Analytics / heatmaps / session recording
+    "hotjar.com", "clarity.ms", "mouseflow.com", "fullstory.com",
+    "logrocket.com", "heap.io", "mixpanel.com", "segment.com",
+    "amplitude.com", "optimizely.com",
+    # Social / pixel trackers
+    "tiktok.com", "ads-twitter.com", "twitter.com", "pinterest.com",
+    "snapchat.com", "linkedin.com",
+    # Other ad networks
+    "adroll.com", "quantserve.com", "adsystem.com", "bidswitch.net",
+    "casalemedia.com", "contextweb.com", "districtm.net", "emxdgt.com",
+    "indexexchange.com", "lijit.com", "media.net", "sovrn.com",
+    "spotxchange.com", "triplelift.com", "undertone.com", "yieldmo.com",
 }
 _CRYPTO_MINER_DOMAINS = {
     "coinhive.com", "coin-hive.com", "cryptoloot.pro", "webmine.pro",
@@ -87,12 +107,34 @@ _MALICIOUS_SCRIPT_DOMAINS = {
     "greatbigstuff.net", "trackyoudown.net", "blackhatseo.tech",
 }
 _TRUSTED_CDN_DOMAINS = {
-    "cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com",
-    "ajax.googleapis.com", "code.jquery.com", "stackpath.bootstrapcdn.com",
-    "maxcdn.bootstrapcdn.com", "cdn.tailwindcss.com", "cdn.ampproject.org",
-    "static.cloudflareinsights.com", "challenges.cloudflare.com",
+    # Cloudflare
+    "cdnjs.cloudflare.com", "static.cloudflareinsights.com",
+    "challenges.cloudflare.com",
+    # jsDelivr / unpkg / popular OSS CDNs
+    "cdn.jsdelivr.net", "unpkg.com",
+    # Google
+    "ajax.googleapis.com", "fonts.googleapis.com", "fonts.gstatic.com",
+    "apis.google.com", "www.google.com",
+    # jQuery
+    "code.jquery.com",
+    # Bootstrap
+    "stackpath.bootstrapcdn.com", "maxcdn.bootstrapcdn.com",
+    "cdn.bootstrapcdn.com",
+    # Tailwind / AMP
+    "cdn.tailwindcss.com", "cdn.ampproject.org",
+    # Microsoft
+    "ajax.aspnetcdn.com", "az416426.vo.msecnd.net",
+    # Payment processors (legitimate embedded JS)
+    "js.stripe.com", "js.braintreegateway.com", "js.paypal.com",
+    "checkout.razorpay.com",
+    # E-commerce platforms
     "cdn.shopify.com", "assets.squarespace.com", "static.parastorage.com",
-    "cdn.wix.com", "js.stripe.com", "js.braintreegateway.com",
+    "cdn.wix.com", "cdn.bigcommerce.com",
+    # Common UI / utility libraries
+    "cdn.auth0.com", "cdn.segment.com", "browser.sentry-cdn.com",
+    "cdn.onesignal.com", "cdn.rawgit.com",
+    # WordPress / Drupal infra
+    "s0.wp.com", "s1.wp.com", "s2.wp.com",
 }
 _FREE_HOSTING_DOMAINS = {
     "pastebin.com", "paste.ee", "hastebin.com", "ghostbin.com",
