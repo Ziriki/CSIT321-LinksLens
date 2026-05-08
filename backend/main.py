@@ -41,7 +41,7 @@ while retries > 0:
 if retries == 0:
     print("FATAL ERROR: Could not connect to the database after 5 attempts.")
 
-app = FastAPI(title="LinksLens API", docs_url=None, redoc_url=None)
+app = FastAPI(title="LinksLens API", docs_url=None, redoc_url=None, openapi_url=None)
 
 # Allow the static marketing site to call the password reset endpoints from the browser
 app.add_middleware(
