@@ -3,6 +3,8 @@ export type RiskLevel = 'safe' | 'suspicious' | 'malicious' | 'unavailable'
 
 export type ScanStatus = 'SAFE' | 'SUSPICIOUS' | 'MALICIOUS' | 'UNAVAILABLE'
 
+export type UnavailableReason = 'scanner_blocked' | 'domain_unreachable' | null
+
 export function statusToRisk(status: string | null): RiskLevel {
   if (status === "SAFE") return "safe"
   if (status === "SUSPICIOUS") return "suspicious"
