@@ -75,6 +75,8 @@ _AD_DOMAINS = {
     "criteo.com", "rubiconproject.com", "pubmatic.com", "openx.net",
     "moatads.com", "scorecardresearch.com", "adsafeprotected.com",
     "sharethrough.com", "33across.com", "appnexus.com", "smartadserver.com",
+    "facebook.net", "facebook.com", "googletagmanager.com", "google-analytics.com",
+    "hotjar.com", "clarity.ms", "tiktok.com", "ads-twitter.com",
 }
 _CRYPTO_MINER_DOMAINS = {
     "coinhive.com", "coin-hive.com", "cryptoloot.pro", "webmine.pro",
@@ -88,6 +90,9 @@ _TRUSTED_CDN_DOMAINS = {
     "cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com",
     "ajax.googleapis.com", "code.jquery.com", "stackpath.bootstrapcdn.com",
     "maxcdn.bootstrapcdn.com", "cdn.tailwindcss.com", "cdn.ampproject.org",
+    "static.cloudflareinsights.com", "challenges.cloudflare.com",
+    "cdn.shopify.com", "assets.squarespace.com", "static.parastorage.com",
+    "cdn.wix.com", "js.stripe.com", "js.braintreegateway.com",
 }
 _FREE_HOSTING_DOMAINS = {
     "pastebin.com", "paste.ee", "hastebin.com", "ghostbin.com",
@@ -125,6 +130,15 @@ def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict | No
     page_url = raw_result.get("page", {}).get("url", "") or initial_url
     page_scheme = urlparse(page_url).scheme.lower()
     scripts: list[str] = raw_result.get("lists", {}).get("scripts", [])
+    if not scripts:
+        seen: set[str] = set()
+        for req in raw_result.get("data", {}).get("requests", []):
+            resp = req.get("response", {}).get("response", {})
+            url = resp.get("url", "") or req.get("request", {}).get("url", "")
+            mime = resp.get("mimeType", "")
+            if url and "javascript" in mime.lower() and url not in seen:
+                seen.add(url)
+                scripts.append(url)
 
     ad_scripts: list[str] = []
     crypto_miners: list[str] = []
