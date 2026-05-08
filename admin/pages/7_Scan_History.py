@@ -127,7 +127,11 @@ if effective_scan_id:
             st.markdown(f"**Country:** {data.get('ServerLocation') or 'N/A'}")
             st.markdown(f"**Hosting Provider:** {data.get('AsnName') or 'N/A'}")
             st.markdown(f"**Domain Age:** {data.get('DomainAgeDays') or 'N/A'} days")
-            st.markdown(f"**User ID:** {data.get('UserID', 'N/A')}")
+            user_name = next(
+                (r.get("FullName") for r in display_records if r["ScanID"] == effective_scan_id),
+                None,
+            )
+            st.markdown(f"**User:** {user_name or data.get('UserID', 'N/A')}")
 
         render_ssl_expander(data.get("SslInfo") or {})
 
