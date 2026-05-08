@@ -470,7 +470,7 @@ def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
         return []
 
     final_url = raw_result.get("page", {}).get("url", "")
-    if not final_url or final_url == initial_url:
+    if not final_url or final_url.rstrip("/") == initial_url.rstrip("/"):
         return []
 
     try:
