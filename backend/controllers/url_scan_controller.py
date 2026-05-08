@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 import tldextract
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import ipaddress
 import requests
+import socket
 import time
 import os
 import re
@@ -22,6 +24,25 @@ router = APIRouter(
     prefix="/scan",
     tags=["URL Scanner"]
 )
+
+
+def _is_ssrf_safe(url: str) -> bool:
+    """Return False if the URL resolves to a private, loopback, or link-local IP (SSRF guard)."""
+    try:
+        hostname = urlparse(url).hostname
+        if not hostname:
+            return False
+        ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+        return not any([
+            ip.is_private,
+            ip.is_loopback,
+            ip.is_link_local,
+            ip.is_multicast,
+            ip.is_reserved,
+            ip.is_unspecified,
+        ])
+    except Exception:
+        return False
 
 URLSCAN_API_KEY = os.getenv("URLSCAN_API_KEY")
 if not URLSCAN_API_KEY:
@@ -859,6 +880,8 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
         for url in urls:
             parsed = urlparse(url)
             if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise HTTPException(status_code=400, detail=f"Invalid URL: {url}")
+            if not _is_ssrf_safe(url):
                 raise HTTPException(status_code=400, detail=f"Invalid URL: {url}")
 
         for url in urls:
