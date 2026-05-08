@@ -1,7 +1,3 @@
-import threading
-import time
-import uuid
-
 import pandas as pd
 import streamlit as st
 
@@ -17,74 +13,9 @@ st.title("Scan History")
 
 PAGE_SIZE = 10
 
-# Module-level dict for thread → main-thread communication.
-# st.session_state is not safely writable from background threads;
-# this dict is shared memory accessible from any thread.
-# Key: scan_uuid  Value: result dict (success) | False (failure)
-# Absent key means scan is still in progress.
-_SCAN_RESULTS: dict[str, dict | bool] = {}
-
 st.session_state.setdefault("scanner_result_id", None)
-st.session_state.setdefault("scan_running", False)
-st.session_state.setdefault("scan_start_time", None)
-st.session_state.setdefault("scan_url_in_progress", "")
 st.session_state.setdefault("scanner_error", None)
 st.session_state.setdefault("scan_page", 0)
-st.session_state.setdefault("scan_key", None)
-
-_SCAN_STEPS = [
-    (0,  "Checking Google Safe Browsing database…",  10),
-    (2,  "Submitting URL to security scanner…",       22),
-    (4,  "Waiting for scan analysis to complete…",    35),
-    (14, "Retrieving server location…",               50),
-    (17, "Checking domain registration age…",         60),
-    (19, "Analysing redirect chain…",                 68),
-    (21, "Analysing page scripts…",                   75),
-    (35, "Finalising verdict…",                       83),
-    (55, "Still analysing, almost there…",            90),
-    (75, "Completing script analysis…",               95),
-    (85, "Wrapping up…",                              97),
-]
-
-
-def _do_scan(scan_key: str, url: str) -> None:
-    try:
-        result = api_client.scan_url(url)
-        _SCAN_RESULTS[scan_key] = result if (result and result.get("scan_id")) else False
-    except Exception:
-        _SCAN_RESULTS[scan_key] = False
-
-
-# ── Scan state machine ───────────────────────────────────────────────────────
-
-if st.session_state["scan_running"]:
-    scan_key = st.session_state["scan_key"]
-
-    if scan_key in _SCAN_RESULTS:
-        # Scan completed — move result into session state and clear
-        outcome = _SCAN_RESULTS.pop(scan_key)
-        st.session_state["scan_running"] = False
-        st.session_state["scan_key"] = None
-        if outcome:
-            st.session_state["scanner_result_id"] = outcome["scan_id"]
-            st.session_state["scan_page"] = 0
-        else:
-            st.session_state["scanner_error"] = "Scan failed. Check the URL and try again."
-        st.rerun()
-    else:
-        elapsed = time.time() - st.session_state["scan_start_time"]
-
-        current_msg, current_progress = _SCAN_STEPS[0][1], _SCAN_STEPS[0][2]
-        for at, msg, prog in _SCAN_STEPS:
-            if elapsed >= at:
-                current_msg, current_progress = msg, prog
-            else:
-                break
-
-        st.markdown(f"**Scanning:** `{st.session_state['scan_url_in_progress']}`")
-        st.progress(current_progress / 100, text=current_msg)
-        time.sleep(2)
-        st.rerun()
 
 # ── URL Scanner ──────────────────────────────────────────────────────────────
 
@@ -95,15 +26,16 @@ with st.expander("Scan a URL", expanded=False):
 
     scan_input = st.text_input("URL to scan", placeholder="https://example.com", key="scanner_url_input")
     if st.button("Scan", key="scanner_submit") and scan_input.strip():
-        scan_key = str(uuid.uuid4())
         url_to_scan = scan_input.strip()
-        st.session_state["scan_running"] = True
-        st.session_state["scan_start_time"] = time.time()
-        st.session_state["scan_url_in_progress"] = url_to_scan
-        st.session_state["scan_key"] = scan_key
-        st.session_state["scanner_error"] = None
-        threading.Thread(target=_do_scan, args=(scan_key, url_to_scan), daemon=True).start()
-        st.rerun()
+        with st.spinner(f"Scanning `{url_to_scan}` — this may take up to 90 seconds…"):
+            result = api_client.scan_url(url_to_scan)
+        if result and result.get("scan_id"):
+            st.session_state["scanner_result_id"] = result["scan_id"]
+            st.session_state["scan_page"] = 0
+            st.rerun()
+        else:
+            st.session_state["scanner_error"] = "Scan failed. Check the URL and try again."
+            st.rerun()
 
 # ── Filters ──────────────────────────────────────────────────────────────────
 
