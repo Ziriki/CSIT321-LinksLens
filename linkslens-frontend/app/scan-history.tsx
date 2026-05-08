@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { View, Text, ScrollView, Pressable, Alert, TextInput } from "react-native"
-import { router } from "expo-router"
+import { router, useFocusEffect } from "expo-router"
 import {
   Search,
   ScanLine,
@@ -49,7 +49,7 @@ export default function ScanHistory() {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
 
-  useEffect(() => { loadScans() }, [])
+  useFocusEffect(useCallback(() => { loadScans() }, []))
 
   async function loadScans() {
     setLoading(true)
