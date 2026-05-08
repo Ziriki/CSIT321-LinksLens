@@ -41,7 +41,7 @@ while retries > 0:
 if retries == 0:
     print("FATAL ERROR: Could not connect to the database after 5 attempts.")
 
-app = FastAPI(title="LinksLens API")
+app = FastAPI(title="LinksLens API", docs_url=None, redoc_url=None)
 
 # Allow the static marketing site to call the password reset endpoints from the browser
 app.add_middleware(
@@ -66,11 +66,7 @@ app.include_router(url_scan_router)
 
 @app.get("/")
 def read_root():
-    return {
-        "status": "Online",
-        "service": "LinkLens Backend API",
-        "documentation": "/docs"
-    }
+    return {"status": "Online"}
 
 def _check_component(name: str, check_fn: Callable[[], None]) -> dict:
     try:
