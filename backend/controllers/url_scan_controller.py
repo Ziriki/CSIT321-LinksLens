@@ -874,7 +874,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             if raw_result is None and final_status == "SAFE":
                 rdap_ok = (
                     not domain_info.get("error")
-                    and (domain_info.get("total_days") or 0) > 365
+                    and domain_info.get("total_days") is not None
                 )
                 final_status = "UNAVAILABLE"
                 unavailable_reason = "scanner_blocked" if rdap_ok else "domain_unreachable"
