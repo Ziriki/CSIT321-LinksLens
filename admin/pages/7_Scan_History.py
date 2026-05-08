@@ -64,6 +64,8 @@ if not display_records:
 else:
     df = pd.DataFrame(display_records)
     df.rename(columns={"FullName": "User"}, inplace=True)
+    if "DomainAgeDays" in df.columns:
+        df["DomainAgeDays"] = df["DomainAgeDays"].astype("Int64")
     columns = ["ScanID", "User", "InitialURL", "StatusIndicator",
                "DomainAgeDays", "ServerLocation", "ScannedAt"]
     available = [c for c in columns if c in df.columns]
