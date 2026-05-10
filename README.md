@@ -24,7 +24,6 @@
   - [Admin Portal (Streamlit)](#admin-portal-streamlit)
   - [Mobile App (React Native + Expo)](#mobile-app-react-native--expo)
   - [Docker (Full Stack)](#docker-full-stack)
-  - [Database Initialisation](#database-initialisation)
 - [Live Environments](#live-environments)
 - [User Roles](#user-roles)
 - [Scan Pipeline](#scan-pipeline)
@@ -123,7 +122,7 @@ CSIT321-LinksLens/
 │   └── Dockerfile
 │
 ├── admin/                     # Streamlit admin/moderator portal
-│   ├── pages/                 # 9 Streamlit pages (Dashboard → Threat Intelligence)
+│   ├── pages/                 # 8 Streamlit pages (Dashboard → Threat Intelligence)
 │   ├── controllers/           # Business logic per page
 │   ├── models/api_client.py   # HTTP client wrapping the backend API
 │   ├── app.py                 # Entry point (login page)
@@ -148,7 +147,6 @@ CSIT321-LinksLens/
 │   └── style.css
 │
 ├── docker-compose.yml         # Orchestrates backend + db + admin
-├── DB_Creation_Script.sql     # Full MySQL schema
 └── .github/workflows/
     └── deploy.yml             # GitHub Actions CI/CD pipeline to AWS EC2
 ```
@@ -276,18 +274,6 @@ docker compose down
 
 # Tail backend logs
 docker compose logs -f backend
-```
-
----
-
-### Database Initialisation
-
-```bash
-# Create schema
-mysql -u root -p LinksLens-DB < DB_Creation_Script.sql
-
-# Seed initial roles and test users
-python backend/seed_data.py
 ```
 
 ---

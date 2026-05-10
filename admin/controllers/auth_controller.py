@@ -56,7 +56,7 @@ def require_auth():
 
 
 # Streamlit uses the page filename as the sidebar link href — match on filename substrings.
-_MODERATOR_HIDDEN_PAGES = ["1_Dashboard", "3_User_Management", "4_App_Feedback", "5_Action_History_Log"]
+_MODERATOR_HIDDEN_PAGES = ["1_Dashboard", "2_User_Management", "3_App_Feedback", "4_Action_History_Log"]
 
 
 ############################################

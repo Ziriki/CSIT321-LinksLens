@@ -32,15 +32,15 @@ else:
 
     _ADMIN_PAGES = [
         st.Page("pages/1_Dashboard.py", title="Dashboard"),
-        st.Page("pages/3_User_Management.py", title="User Management"),
-        st.Page("pages/4_App_Feedback.py", title="App Feedback"),
-        st.Page("pages/5_Action_History_Log.py", title="Action History Log"),
+        st.Page("pages/2_User_Management.py", title="User Management"),
+        st.Page("pages/3_App_Feedback.py", title="App Feedback"),
+        st.Page("pages/4_Action_History_Log.py", title="Action History Log"),
     ]
     _SHARED_PAGES = [
-        st.Page("pages/6_URL_Registry.py", title="URL Registry"),
-        st.Page("pages/7_Scan_History.py", title="Scan History"),
-        st.Page("pages/8_Scan_Feedback.py", title="Scan Feedback"),
-        st.Page("pages/9_Threat_Intelligence.py", title="Threat Intelligence"),
+        st.Page("pages/5_URL_Registry.py", title="URL Registry"),
+        st.Page("pages/6_Scan_History.py", title="Scan History"),
+        st.Page("pages/7_Scan_Feedback.py", title="Scan Feedback"),
+        st.Page("pages/8_Threat_Intelligence.py", title="Threat Intelligence"),
     ]
 
     pages = (_ADMIN_PAGES + _SHARED_PAGES) if role_id == 1 else _SHARED_PAGES
