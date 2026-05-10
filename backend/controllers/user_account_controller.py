@@ -20,6 +20,11 @@ router = APIRouter(
     tags=["User Accounts"]
 )
 
+############################################
+# This function is to create a new user account with a hashed password
+# after validating that the email is not already registered and the
+# role ID exists.
+############################################
 @router.post("/", response_model=schemas.UserAccountResponse, status_code=status.HTTP_201_CREATED)
 def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get_db)):
     if db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == account.EmailAddress).first():
@@ -40,6 +45,10 @@ def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get
     db.refresh(db_account)
     return db_account
 
+############################################
+# This function is to retrieve a single user account by ID,
+# enforcing that non-admin users can only view their own account.
+############################################
 @router.get("/{account_id}", response_model=schemas.UserAccountResponse)
 def read_account(account_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role_id"] not in (1, 2) and account_id != current_user["user_id"]:
@@ -47,6 +56,10 @@ def read_account(account_id: int, db: Session = Depends(get_db), current_user: d
     account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
     return account
 
+############################################
+# This function is to update fields on a user account, enforcing that
+# only administrators can change roles or account active status.
+############################################
 @router.put("/{account_id}", response_model=schemas.UserAccountResponse)
 def update_account(account_id: int, account_update: schemas.UserAccountUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role_id"] not in (1, 2) and account_id != current_user["user_id"]:
@@ -78,14 +91,22 @@ def update_account(account_id: int, account_update: schemas.UserAccountUpdate, d
     db.refresh(db_account)
     return db_account
 
+############################################
+# This function is to soft-deactivate a user account by setting
+# IsActive to False, restricted to administrators.
+############################################
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def delete_account(account_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     db_account = get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == account_id).first(), "Account not found")
 
     db_account.IsActive = False
     db.commit()
     return None
 
+############################################
+# This function is to retrieve a filtered and paginated list of user
+# accounts with their full name, restricted to administrators.
+############################################
 @router.get("/", response_model=None)
 def list_accounts(
     search_email: Optional[str] = None,
@@ -118,6 +139,11 @@ def list_accounts(
         for acc in results
     ]
 
+############################################
+# This function is to register a new user account with IsActive=False,
+# create associated UserDetails, generate a 15-minute email verification
+# token, and send a verification email via Resend.
+############################################
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get_db)):
     if db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == request.EmailAddress).first():
@@ -236,6 +262,10 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
     return {"message": "Account created. Please check your email to verify your account."}
 
 
+############################################
+# This function is to validate an email verification token and activate
+# the user account, marking the token as used on success.
+############################################
 @router.post("/verify-email")
 def verify_email(request: schemas.VerifyEmailRequest, db: Session = Depends(get_db)):
     token_record = db.query(models.EmailVerificationToken).filter(
@@ -258,6 +288,12 @@ def verify_email(request: schemas.VerifyEmailRequest, db: Session = Depends(get_
     return {"message": "Email verified successfully. You can now log in."}
 
 
+############################################
+# This function is to initiate the password reset flow by checking
+# per-email (3/hr) and per-IP (10/hr) rate limits, generating a
+# 15-minute reset token, and sending a reset email via Resend.
+# Always returns a generic message to prevent account enumeration.
+############################################
 @router.post("/forgot-password")
 def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Request, db: Session = Depends(get_db)):
     generic_message = {"message": "If that email exists in our system, a password reset link has been sent."}
@@ -389,6 +425,11 @@ def forgot_password(request: schemas.ForgotPasswordRequest, http_request: Reques
     db.commit()
     return generic_message
 
+############################################
+# This function is to validate a password reset token, update the
+# user's password, mark the submitted token as used, and sweep-invalidate
+# all remaining unused tokens for that user.
+############################################
 @router.post("/reset-password")
 def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
     token_record = db.query(models.PasswordResetToken).filter(

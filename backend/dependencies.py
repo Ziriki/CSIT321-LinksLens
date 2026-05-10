@@ -11,11 +11,12 @@ if not SECRET_KEY:
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 
+############################################
+# This function is to extract and verify the JWT from an HttpOnly cookie
+# (web) or Authorization header (mobile), returning a dict with user_id
+# and role_id on success, or raising 401 if the token is absent or invalid.
+############################################
 def get_current_user(request: Request) -> dict:
-    """Extract and verify the JWT from an HttpOnly cookie (web) or Authorization header (mobile).
-
-    Returns {'user_id': int, 'role_id': int}.
-    """
     token = None
 
     cookie_value = request.cookies.get("access_token")
@@ -55,13 +56,17 @@ def get_current_user(request: Request) -> dict:
         )
 
 
+############################################
+# This function is to return a FastAPI dependency factory that enforces
+# one of the allowed role IDs, raising 403 if the current user's role is
+# not in the permitted list.
+# Role IDs: 1 = Administrator, 2 = Moderator, 3 = User
+############################################
 def require_role(*role_ids: int):
-    """
-    Factory that returns a FastAPI dependency enforcing one of the given role IDs.
-    Usage: Depends(require_role(1))          # admin only
-           Depends(require_role(1, 2))       # admin or moderator
-    Role IDs: 1 = Administrator, 2 = Moderator, 3 = User
-    """
+    ############################################
+    # This function is to validate that the current user's role matches
+    # one of the required role IDs and raise 403 if it does not.
+    ############################################
     def checker(current_user: dict = Depends(get_current_user)) -> dict:
         if current_user["role_id"] not in role_ids:
             raise HTTPException(
