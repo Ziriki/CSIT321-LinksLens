@@ -7,8 +7,12 @@ from models import api_client
 ROLE_LABELS = {1: "Administrator", 2: "Moderator", 3: "User"}
 
 
+############################################
+# This function is to decode the JWT stored in session state and return
+# a dict with user_id and role_id. Result is cached for the current
+# rerun to avoid repeated decoding on the same page load.
+############################################
 def _decode_token():
-    """Decode the stored JWT to extract user_id and role_id (cached per rerun)."""
     if "_decoded_user" in st.session_state:
         return st.session_state["_decoded_user"]
     token = st.session_state.get("access_token")
@@ -23,23 +27,29 @@ def _decode_token():
         return None
 
 
+############################################
+# This function is to clear the auth state and trigger a rerun so the
+# user is redirected to the login page with a session-expired flag set.
+############################################
 def _expire_session():
-    """Clear auth state and redirect to the login page with an expiry flag."""
     st.session_state["access_token"] = None
     st.session_state.pop("_decoded_user", None)
     st.session_state["session_expired"] = True
     st.rerun()
 
 
+############################################
+# This function is to stop page rendering if the user has no valid token
+# or if the session has expired, redirecting them back to the login page.
+############################################
 def require_auth():
-    """Redirect unauthenticated or expired-session users back to the login page."""
     token = st.session_state.get("access_token")
     if not token:
         st.error("Please log in first.")
         st.stop()
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
-        if payload.get("exp", 0) < time.time():
+        if payload.get("exp", 0) < time.time():  # exp = JWT expiry timestamp (Unix)
             _expire_session()
     except Exception:
         _expire_session()
@@ -49,10 +59,13 @@ def require_auth():
 _MODERATOR_HIDDEN_PAGES = ["1_Dashboard", "3_User_Management", "4_App_Feedback", "5_Action_History_Log"]
 
 
+############################################
+# This function is to inject CSS that hides admin-only sidebar links
+# from users with the Moderator role.
+############################################
 def _hide_pages_for_moderator():
-    """Inject CSS to hide admin-only pages from the moderator sidebar."""
     user = _decode_token()
-    if user and user["role_id"] == 2:
+    if user and user["role_id"] == 2:  # 2 = Moderator
         css_selectors = ", ".join(
             f'[data-testid="stSidebarNav"] a[href*="{name}"]'
             for name in _MODERATOR_HIDDEN_PAGES
@@ -69,8 +82,11 @@ def _hide_pages_for_moderator():
         )
 
 
+############################################
+# This function is to enforce role-based access control for a page.
+# Stops rendering and shows an error if the user's role is not in allowed_roles.
+############################################
 def require_role(*allowed_roles: int):
-    """Block users whose role is not in the allowed list."""
     require_auth()
     user = _decode_token()
     _hide_pages_for_moderator()
@@ -80,13 +96,19 @@ def require_role(*allowed_roles: int):
     return user
 
 
+############################################
+# This function is to return the currently logged-in user's decoded
+# token data, or None if no valid session exists.
+############################################
 def get_current_user():
-    """Return the current user's decoded token data, or None."""
     return _decode_token()
 
 
+############################################
+# This function is to render the role label and logout button in the
+# sidebar, including a confirmation step before logging out.
+############################################
 def render_sidebar():
-    """Show role label and logout button in the sidebar."""
     _hide_pages_for_moderator()
     user = _decode_token()
     if user:
@@ -116,6 +138,10 @@ def render_sidebar():
                 st.rerun()
 
 
+############################################
+# This function is to handle the login form submission — authenticates
+# the user, validates their role, stores the JWT, and logs the login action.
+############################################
 def handle_login(email, password):
     if not email or not password:
         st.error("Please fill in both fields.")
@@ -124,14 +150,13 @@ def handle_login(email, password):
     st.session_state.pop("_decoded_user", None)
     with st.spinner("Authenticating..."):
         response = api_client.authenticate_user(email, password)
-        if response.status_code == 200:
+        if response.status_code == 200:  # 200 = OK
             data = response.json()
             token = data["access_token"]
-            # Block regular users (RoleID 3) from accessing the admin portal
             try:
                 payload = jwt.decode(token, options={"verify_signature": False})
                 role_id = int(payload.get("role", 0))
-                if role_id not in (1, 2):
+                if role_id not in (1, 2):  # 1 = Administrator, 2 = Moderator; block all others
                     st.error("Login failed. Check credentials.")
                     return
             except Exception:

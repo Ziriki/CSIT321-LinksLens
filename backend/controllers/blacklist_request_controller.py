@@ -17,6 +17,11 @@ router = APIRouter(
 
 _BLACKLIST_DAILY_LIMIT = 5
 
+############################################
+# This function is to submit a new blacklist request after verifying
+# the user exists, checking for duplicate pending requests, and
+# enforcing a daily submission limit of 5 per user.
+############################################
 @router.post("/", response_model=schemas.BlacklistRequestResponse, status_code=status.HTTP_201_CREATED)
 def create_request(request: schemas.BlacklistRequestCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == request.UserID).first()
@@ -47,13 +52,22 @@ def create_request(request: schemas.BlacklistRequestCreate, db: Session = Depend
     db.refresh(db_request)
     return db_request
 
+############################################
+# This function is to retrieve a single blacklist request by ID,
+# restricted to administrators and moderators.
+############################################
 @router.get("/{request_id}", response_model=schemas.BlacklistRequestResponse)
-def read_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
+def read_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
     req = get_or_404(db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first(), "Request not found")
     return req
 
+############################################
+# This function is to update the status of a blacklist request and
+# automatically create a URLRules BLACKLIST entry when the request
+# is approved, restricted to administrators and moderators.
+############################################
 @router.put("/{request_id}", response_model=schemas.BlacklistRequestResponse)
-def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
+def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
     db_request = get_or_404(db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first(), "Request not found")
 
     get_or_404(db.query(models.UserAccount).filter(models.UserAccount.UserID == review_data.ReviewedBy).first(), "Moderator Account not found")
@@ -79,14 +93,23 @@ def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate,
     
     return db_request
 
+############################################
+# This function is to permanently delete a blacklist request record,
+# restricted to administrators.
+############################################
 @router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def delete_request(request_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     db_request = get_or_404(db.query(models.BlacklistRequest).filter(models.BlacklistRequest.RequestID == request_id).first(), "Request not found")
 
     db.delete(db_request)
     db.commit()
     return None
 
+############################################
+# This function is to retrieve a filtered and paginated list of
+# blacklist requests with requester and reviewer details, restricted
+# to administrators and moderators.
+############################################
 @router.get("/", response_model=None)
 def list_requests(
     status: Optional[models.RequestStatus] = None,

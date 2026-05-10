@@ -26,8 +26,12 @@ router = APIRouter(
 )
 
 
+############################################
+# This function is to resolve the URL's hostname to an IP address and
+# return False if it maps to a private, loopback, link-local, multicast,
+# reserved, or unspecified range to prevent SSRF attacks.
+############################################
 def _is_ssrf_safe(url: str) -> bool:
-    """Return False if the URL resolves to a private, loopback, or link-local IP (SSRF guard)."""
     try:
         hostname = urlparse(url).hostname
         if not hostname:
@@ -168,25 +172,23 @@ _IP_RE = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 _CONFUSABLE_SCRIPTS = {"CYRILLIC", "GREEK", "ARMENIAN", "CHEROKEE", "GEORGIAN"}
 
 
+############################################
+# This function is to extract the registrable domain from a netloc
+# string by taking the last two dot-separated labels.
+############################################
 def _reg_domain(netloc: str) -> str:
-    """Return the registrable domain (last two labels) from a netloc string."""
     parts = netloc.removeprefix("www.").split(".")
     return ".".join(parts[-2:]) if len(parts) >= 2 else netloc
 
 
-#########################################################
-# Helper: Analyse scripts using urlscan.io result data
-#########################################################
+############################################
+# This function is to parse urlscan.io result data to classify all
+# scripts loaded by the scanned page into ad, crypto miner, malicious,
+# trusted, and suspicious categories, and return a composite risk score.
+# Returns None when raw_result is absent so callers can distinguish
+# "urlscan did not complete" from "page genuinely has zero scripts".
+############################################
 def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict | None:
-    """
-    Parse urlscan.io result data to classify scripts loaded by the page.
-
-    Uses data.lists.scripts (pre-extracted by urlscan.io) — same sandboxed
-    browser visit urlscan already performed, no second visit needed.
-    Tech stack is sourced from meta.processors.wappa (Wappalyzer).
-    Returns None when raw_result is absent so callers can distinguish
-    "urlscan did not complete" from "page genuinely has zero scripts".
-    """
     if not raw_result:
         return None
 
@@ -264,16 +266,14 @@ def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict | No
     }
 
 
-#########################################################
-# Helper: Detect IDN homograph attacks (stdlib only)
-#########################################################
+############################################
+# This function is to detect IDN homograph attacks by analysing each
+# character in the domain using Python's unicodedata module, flagging
+# domains that mix Latin with visually confusable scripts (Cyrillic,
+# Greek, Armenian, Cherokee, Georgian). Never raises — failures return
+# safe defaults so the scan pipeline is never aborted.
+############################################
 def detect_homograph_risk(url: str) -> dict:
-    """
-    Detect IDN homograph attacks using only Python stdlib unicodedata.
-    Flags domains that mix Latin with visually confusable scripts (Cyrillic,
-    Greek, Armenian, Cherokee, Georgian). Never raises — failures return safe
-    defaults so the scan pipeline is never aborted.
-    """
     result: dict = {
         "is_homograph": False, "risk_score": 0, "punycode": None,
         "mixed_scripts": [], "confusable_chars": [], "details": None,
@@ -348,13 +348,12 @@ def detect_homograph_risk(url: str) -> dict:
     return result
 
 
+############################################
+# This function is to normalise a URL to the canonical form that Google
+# Safe Browsing uses internally — stripping the fragment and default
+# ports — so that lookup results map back correctly to the original URLs.
+############################################
 def _normalize_for_gsb(url: str) -> str:
-    """
-    Normalize a URL to match GSB's canonical form before lookup.
-    Mirrors the normalization Chrome applies: strip fragment, lowercase hostname,
-    remove default ports (80/443). Without this, GSB may return a match for the
-    normalized form that doesn't key back to the original URL in our results dict.
-    """
     try:
         parsed = urlparse(url.strip())
         host = (parsed.hostname or "").lower()
@@ -366,21 +365,13 @@ def _normalize_for_gsb(url: str) -> str:
         return url
 
 
-#########################################################
-# Helper: Check URLs against Google Safe Browsing v4
-#########################################################
+############################################
+# This function is to batch-check a list of URLs against the GSB v4
+# threatMatches:find endpoint with exponential backoff on rate limits.
+# Returns a per-URL dict without raising on API failure — falls back
+# to SUSPICIOUS so the urlscan.io pipeline still runs.
+############################################
 def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
-    """
-    Batch-check a list of URLs via the GSB v4 threatMatches:find endpoint.
-
-    Uses a POST request with a JSON body containing client info and all threat types.
-    Supports up to 500 URLs per request. Returns a dict keyed by URL:
-    { flagged, threat_types, gsb_status }.
-
-    On API failure the function does NOT raise — it returns SUSPICIOUS defaults so the
-    urlscan.io pipeline still runs. SUSPICIOUS is used rather than SAFE so that an
-    unreachable GSB API never silently passes a potentially harmful URL.
-    """
     results = {
         url: {"flagged": False, "threat_types": [], "gsb_status": "SUSPICIOUS"}
         for url in urls
@@ -477,11 +468,12 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
     return results
 
 
-#########################################################
-# Helper: Submit a single URL to urlscan.io
-#########################################################
+############################################
+# This function is to submit a single URL to the urlscan.io scanning
+# API and return the submission JSON containing the scan UUID, or None
+# if urlscan.io is unreachable or rejects the request.
+############################################
 def submit_scan(url: str) -> dict | None:
-    """Returns the submission JSON on success, or None if urlscan.io is unreachable/rejects."""
     parsed = urlparse(url)
     safe_url = quote(urlunparse(parsed._replace(netloc=parsed.netloc.lower())), safe='/:?=&')
     headers = {
@@ -503,11 +495,12 @@ def submit_scan(url: str) -> dict | None:
     return data if data.get("uuid") else None
 
 
-#########################################################
-# Helper: Poll urlscan.io until the result is ready
-#########################################################
+############################################
+# This function is to poll the urlscan.io result endpoint at progressive
+# intervals until the scan result is available or the maximum wait time
+# is reached, returning None on timeout or unexpected errors.
+############################################
 def poll_result(uuid: str) -> dict | None:
-    """Returns the raw result JSON on success, or None on timeout or unexpected error."""
     result_url = URLSCAN_RESULT_URL.format(uuid=uuid)
 
     time.sleep(INITIAL_WAIT_SECONDS)
@@ -532,16 +525,13 @@ def poll_result(uuid: str) -> dict | None:
     return None
 
 
-#########################################################
-# Helper: Extract the full redirect chain from urlscan.io result
-#########################################################
+############################################
+# This function is to build an ordered list of redirect URLs from the
+# urlscan.io result data by parsing 3xx responses in the request log.
+# Returns an empty list if there were no redirects or data is missing.
+# Non-blocking — failures must never abort the scan pipeline.
+############################################
 def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
-    """
-    Build an ordered list of redirect URLs from urlscan.io result data.
-    Parses data.requests for 3xx responses to reconstruct the chain.
-    Returns an empty list if there were no redirects or the data is unavailable.
-    Non-blocking — failures must never abort the scan pipeline.
-    """
     if not raw_result:
         return []
 
@@ -568,16 +558,13 @@ def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
         return [initial_url, final_url]
 
 
-#########################################################
-# Helper: Extract SSL/TLS certificate info from urlscan
-#########################################################
+############################################
+# This function is to extract SSL/TLS certificate details from the first
+# HTTPS request in the urlscan.io result that contains securityDetails.
+# Returns None when SSL info is unavailable (HTTP site or scan timeout).
+# Non-blocking — failures must never abort the scan pipeline.
+############################################
 def extract_ssl_info(raw_result: dict | None) -> dict | None:
-    """
-    Extract SSL/TLS certificate details from the first HTTPS request in the
-    urlscan.io raw result that contains securityDetails.
-    Returns None when SSL info is unavailable (HTTP site or scan timeout).
-    Non-blocking — failures must never abort the scan pipeline.
-    """
     if not raw_result:
         return None
     try:
@@ -603,9 +590,11 @@ def extract_ssl_info(raw_result: dict | None) -> dict | None:
     return None
 
 
-#########################################################
-# Helper: Map urlscan.io raw result to a structured dict
-#########################################################
+############################################
+# This function is to map the urlscan.io raw result JSON to a structured
+# dict, deriving the urlscan status from the malicious flag and score
+# field, falling back to safe empty values if the result is absent.
+############################################
 def process_result(uuid: str | None, raw_result: dict | None) -> dict:
     # If the 2 scanning APIs returned nothing, fall back to safe empty values
     if not raw_result or not uuid:
@@ -661,11 +650,12 @@ def process_result(uuid: str | None, raw_result: dict | None) -> dict:
     }
 
 
-#########################################################
-# Helper: Run the full urlscan.io pipeline for one URL
-#########################################################
+############################################
+# This function is to run the full urlscan.io pipeline for a single URL
+# by submitting, polling, and processing the result, returning a fallback
+# dict on any failure.
+############################################
 def run_urlscan(url: str) -> dict:
-    """Submit, poll and process a single URL through urlscan.io. Returns fallback on any failure."""
     submission = submit_scan(url)
     uuid = submission.get("uuid") if submission else None
     raw_result = poll_result(uuid) if uuid else None
@@ -674,15 +664,12 @@ def run_urlscan(url: str) -> dict:
     return result
 
 
-#########################################################
-# Helper: Query DB blacklist/whitelist for a URL domain
-#########################################################
+############################################
+# This function is to check the URL's registered domain against the
+# URLRules and BlacklistRequest tables using a dedicated DB session
+# for thread safety — does not share the request's session.
+############################################
 def check_blacklist_db(url: str) -> dict:
-    """
-    Check the URL domain against URLRules and BlacklistRequest tables.
-    Uses get_db() manually for thread safety — does not share the request session.
-    Returns: { domain, url_rule_type, is_approved_blacklist }
-    """
     extracted = tldextract.extract(url)
     domain = extracted.registered_domain or extracted.netloc or urlparse(url).netloc
     db_gen = get_db()
@@ -706,26 +693,21 @@ def check_blacklist_db(url: str) -> dict:
         next(db_gen, None)
 
 
-#########################################################
-# Helper: Query rdap.org for domain registration info
-#########################################################
+############################################
+# This function is to query rdap.org for the registration details of
+# the URL's domain and calculate the domain age in years, months, and
+# days since registration.
+############################################
 def check_domain_rdap(url: str) -> dict:
-    """
-    Query rdap.org for the registration details of the URL's domain.
-
-    Returns:
-        domain        — bare hostname (port stripped)
-        registration  — ISO-8601 registration date or None
-        expiration    — ISO-8601 expiration date or None
-        last_changed  — ISO-8601 last-changed date or None
-        age           — { years, months, days } since registration, or None
-        error         — human-readable reason when the lookup could not complete
-    """
     domain = urlparse(url).netloc.split(":")[0]
     # RDAP operates on registrable domains — strip the leading www. if present
     if domain.startswith("www."):
         domain = domain[4:]
 
+    ############################################
+    # This function is to return a standardised failure response dict
+    # for RDAP lookup errors with all date fields set to None.
+    ############################################
     def _fail(reason: str) -> dict:
         return {
             "domain": domain,
@@ -790,33 +772,13 @@ def check_domain_rdap(url: str) -> dict:
     }
 
 
-#########################################################
-# Helper: Compare GSB, urlscan and DB results
-#########################################################
+############################################
+# This function is to derive a final scan status by combining GSB and
+# urlscan.io weighted scores (GSB 55%, urlscan 45%), then applying DB
+# rule overrides as the authoritative final verdict.
+# MALICIOUS_THRESHOLD >= 50, SUSPICIOUS_THRESHOLD >= 30.
+############################################
 def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict) -> str:
-    """
-    Derive a final_status by weighing all three verdict sources.
-
-    Step 1 — Convert raw signals to 0-100 scores:
-      GSB score:
-        Any MALWARE / SOCIAL_ENGINEERING threat type  → 100
-        Any UNWANTED_SOFTWARE / POTENTIALLY_HARMFUL   → 60
-        No threats flagged                            → 0
-
-      urlscan score: numeric field from result (0-100)
-
-    Step 2 — Weighted combination:
-      weighted_score = (gsb_score × 0.55) + (urlscan_score × 0.45)
-
-    Step 3 — Map to api_status:
-      weighted_score ≥ 50 → MALICIOUS
-      weighted_score ≥ 30 → SUSPICIOUS
-      weighted_score < 30 → SAFE
-
-    Step 4 — DB rule override (authoritative — admin/moderator has final say):
-      URLRules BLACKLIST or approved BlacklistRequest → MALICIOUS
-      URLRules WHITELIST                              → SAFE
-    """
     # Step 1: derive scores
     threat_types = gsb.get("threat_types", [])
     if any(t in _MALICIOUS_THREATS for t in threat_types):
@@ -853,23 +815,14 @@ def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict
     return final_status
 
 
-#########################################################
-# POST /scan — Submit one or more URLs and return results
-#########################################################
+############################################
+# This function is to process one or more URLs through the full scan
+# pipeline: GSB, urlscan.io, DB blacklist, and RDAP run concurrently,
+# then redirect chain, script analysis, homograph detection, and verdict
+# merging are applied before saving each result to the database.
+############################################
 @router.post("")
 def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """
-    For each URL:
-      1. GSB, urlscan.io (with raw), DB blacklist, RDAP — concurrent
-      2. extract_redirect_chain()    — from raw result, ~0ms
-      3. analyze_scripts()           — urlscan.io-based, ~0ms
-      4. detect_homograph_risk()     — stdlib unicodedata, ~0ms
-      5. compare_async_results()     — weighted GSB + urlscan + DB override
-      6. Escalation rules            — crypto miners / homograph / malicious scripts
-      7. domain_age_days             — from RDAP age breakdown
-      8. Save all fields to DB
-      9. Return response
-    """
     scan_results = []
     try:
         urls = request.urls
