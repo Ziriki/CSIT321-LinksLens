@@ -141,7 +141,6 @@ def handle_login(email, password):
             user_info = _decode_token()
             if user_info:
                 api_client.log_action(user_info["user_id"], "LOGIN", "Logged in to admin portal.")
-            st.success("Login successful!")
             st.rerun()
         else:
             st.error("Login failed. Check credentials.")
