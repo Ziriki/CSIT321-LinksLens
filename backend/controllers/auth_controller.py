@@ -31,8 +31,11 @@ except ValueError:
     print("Warning: ACCESS_TOKEN_EXPIRE_MINUTES is not a valid integer. Defaulting to 120.")
     ACCESS_TOKEN_EXPIRE_MINUTES = 120
 
+############################################
+# This function is to sign and return a JWT with the given payload,
+# appending an expiry timestamp derived from ACCESS_TOKEN_EXPIRE_MINUTES.
+############################################
 def create_access_token(data: dict):
-    """Sign and return a JWT with an expiry claim appended to the payload."""
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
@@ -42,6 +45,11 @@ def create_access_token(data: dict):
 _LOGIN_MAX_FAILURES = 10
 _LOGIN_WINDOW_MINUTES = 15
 
+############################################
+# This function is to authenticate a user's credentials, enforce
+# client type restrictions (staff = web only, users = mobile only),
+# apply brute-force rate limiting, and issue a JWT token on success.
+############################################
 @router.post("/login", response_model=schemas.TokenResponse)
 def login(credentials: schemas.UserLogin, http_request: Request, response: Response, db: Session = Depends(get_db)):
     client_ip = get_client_ip(http_request)
@@ -112,6 +120,11 @@ def login(credentials: schemas.UserLogin, http_request: Request, response: Respo
             "message": "Mobile login successful"
         }
 
+############################################
+# This function is to clear the access token cookie for web clients
+# or confirm mobile logout — mobile tokens are cleared client-side
+# as the backend holds no session.
+############################################
 @router.post("/logout")
 def logout(client_type: schemas.ClientTypeEnum, response: Response):
     if client_type == schemas.ClientTypeEnum.WEB:

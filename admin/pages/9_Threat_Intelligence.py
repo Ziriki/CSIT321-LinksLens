@@ -93,7 +93,6 @@ st.subheader("Global Threat Heatmap")
 if not stats and not threats:
     st.info("No threat data available yet.")
 else:
-    # If a row is selected and its location is known, zoom the map to it
     selected_location = selected_threat.get("location") if selected_threat else None
     pin_coords = COUNTRY_COORDS.get(selected_location) if selected_location else None
 

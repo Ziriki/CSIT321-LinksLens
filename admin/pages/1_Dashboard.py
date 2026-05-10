@@ -21,15 +21,12 @@ else:
 st.markdown("---")
 st.subheader("Component Status")
 
-STATUS_ICON = {"operational": "🟢", "degraded": "🟡", "outage": "🔴"}
-
 components = health.get("components", [])
 cols = st.columns(len(components)) if components else []
 for col, component in zip(cols, components):
-    icon = STATUS_ICON.get(component["status"], "⚪")
     detail = component.get("detail", "")
     with col:
-        st.metric(component["name"], f"{icon} {component['status'].capitalize()}")
+        st.metric(component["name"], component["status"].capitalize())
         if detail:
             st.caption(detail)
 

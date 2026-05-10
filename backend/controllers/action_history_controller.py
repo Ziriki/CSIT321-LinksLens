@@ -13,6 +13,10 @@ router = APIRouter(
     tags=["Action History"]
 )
 
+############################################
+# This function is to create a new action history log entry,
+# enforcing that non-admin users can only log their own actions.
+############################################
 @router.post("/", response_model=schemas.ActionHistoryResponse, status_code=status.HTTP_201_CREATED)
 def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role_id"] not in (1, 2) and log.UserID != current_user["user_id"]:
@@ -28,11 +32,19 @@ def create_log(log: schemas.ActionHistoryCreate, db: Session = Depends(get_db), 
     db.refresh(db_log)
     return db_log
 
+############################################
+# This function is to retrieve a single action history log entry by ID,
+# restricted to administrators.
+############################################
 @router.get("/{log_id}", response_model=schemas.ActionHistoryResponse)
-def read_log(log_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def read_log(log_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     log = get_or_404(db.query(models.ActionHistory).filter(models.ActionHistory.LogID == log_id).first(), "Log entry not found")
     return log
 
+############################################
+# This function is to retrieve a filtered and paginated list of action
+# history entries with user details, restricted to administrators.
+############################################
 @router.get("/", response_model=None)
 def list_logs(
     user_id: Optional[int] = None,

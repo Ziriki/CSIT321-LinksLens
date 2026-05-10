@@ -13,6 +13,10 @@ router = APIRouter(
     tags=["App Feedback"]
 )
 
+############################################
+# This function is to create a new app feedback entry after verifying
+# the referenced user account exists.
+############################################
 @router.post("/", response_model=schemas.AppFeedbackResponse, status_code=status.HTTP_201_CREATED)
 def create_feedback(feedback: schemas.AppFeedbackCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     account = db.query(models.UserAccount).filter(models.UserAccount.UserID == feedback.UserID).first()
@@ -28,25 +32,41 @@ def create_feedback(feedback: schemas.AppFeedbackCreate, db: Session = Depends(g
     db.refresh(db_feedback)
     return db_feedback
 
+############################################
+# This function is to retrieve a single app feedback entry by ID,
+# restricted to administrators.
+############################################
 @router.get("/{feedback_id}", response_model=schemas.AppFeedbackResponse)
-def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     feedback = get_or_404(db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
     return feedback
 
+############################################
+# This function is to update an app feedback entry, restricted to
+# administrators.
+############################################
 @router.put("/{feedback_id}", response_model=schemas.AppFeedbackResponse)
-def update_feedback(feedback_id: int, feedback_update: schemas.AppFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def update_feedback(feedback_id: int, feedback_update: schemas.AppFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     db_feedback = get_or_404(db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
     apply_updates(db, db_feedback, feedback_update)
     return db_feedback
 
+############################################
+# This function is to permanently delete an app feedback entry,
+# restricted to administrators.
+############################################
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     db_feedback = get_or_404(db.query(models.AppFeedback).filter(models.AppFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
 
     db.delete(db_feedback)
     db.commit()
     return None
 
+############################################
+# This function is to retrieve a filtered and paginated list of app
+# feedback entries with user details, restricted to administrators.
+############################################
 @router.get("/", response_model=None)
 def list_feedback(
     user_id: Optional[int] = None,

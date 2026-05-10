@@ -3,8 +3,12 @@ import streamlit as st
 from models import api_client
 
 
+############################################
+# This function is to retrieve scan feedback submissions from the
+# backend and return them as a display-ready DataFrame. Optionally
+# filtered by whether each entry has been resolved.
+############################################
 def get_scan_feedback_dataframe(is_resolved: bool = None):
-    """Return scan feedback as a display-ready DataFrame, optionally filtered by resolution status."""
     raw_data = api_client.fetch_scan_feedback(is_resolved)
     if not raw_data:
         return pd.DataFrame()
@@ -17,8 +21,11 @@ def get_scan_feedback_dataframe(is_resolved: bool = None):
     return df[available]
 
 
+############################################
+# This function is to mark a scan feedback entry as resolved and rerun
+# the page to reflect the updated state.
+############################################
 def handle_resolve(feedback_id: int):
-    """Mark a scan feedback entry as resolved and refresh the page."""
     success = api_client.resolve_scan_feedback(feedback_id)
     if success:
         st.success(f"Feedback #{feedback_id} marked as resolved!")
