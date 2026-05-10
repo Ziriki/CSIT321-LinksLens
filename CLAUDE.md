@@ -25,7 +25,7 @@ The official project spec (CSIT-26-S1-05) lists these key functionalities. All m
 | Comprehensive security analysis based on script level inspection | ✅ Done | `analyze_scripts()` in `url_scan_controller.py` — classifies scripts from urlscan.io result |
 | Potentially reduce Ad intensive websites | ✅ Done | `ad_heavy` flag + `ad_count` in `ScriptAnalysis` — surfaced in scan response |
 | Homograph / IDN attack detection | ✅ Done | `detect_homograph_risk()` in `url_scan_controller.py` — Unicode script mixing, confusable chars, Punycode analysis |
-| Community threat heatmap | ✅ Done | `9_Threat_Intelligence.py` admin page — Folium world map + recent threats feed |
+| Community threat heatmap | ✅ Done | `8_Threat_Intelligence.py` admin page — Folium world map + recent threats feed |
 
 ## Architecture
 
@@ -191,16 +191,15 @@ The backend is **flat** — all models are in `backend/models.py`, all Pydantic 
 | Page | Admin | Moderator |
 |---|:---:|:---:|
 | `1_Dashboard.py` — System health | ✅ | ❌ hidden |
-| `2_Blacklist_Requests.py` — Review blacklist requests | ✅ | ✅ |
-| `3_User_Management.py` — Manage user accounts | ✅ | ❌ hidden |
-| `4_App_Feedback.py` — View app feedback | ✅ | ❌ hidden |
-| `5_Action_History_Log.py` — Audit log | ✅ | ❌ hidden |
-| `6_URL_Registry.py` — Blacklist/whitelist domains | ✅ | ✅ |
-| `7_Scan_History.py` — All scan records | ✅ | ✅ |
-| `8_Scan_Feedback.py` — Resolve scan disputes | ✅ | ✅ |
-| `9_Threat_Intelligence.py` — Global threat heatmap + recent threats feed | ✅ | ✅ |
+| `2_User_Management.py` — Manage user accounts | ✅ | ❌ hidden |
+| `3_App_Feedback.py` — View app feedback | ✅ | ❌ hidden |
+| `4_Action_History_Log.py` — Audit log | ✅ | ❌ hidden |
+| `5_URL_Registry.py` — Blacklist/whitelist domains | ✅ | ✅ |
+| `6_Scan_History.py` — All scan records | ✅ | ✅ |
+| `7_Scan_Feedback.py` — Resolve scan disputes | ✅ | ✅ |
+| `8_Threat_Intelligence.py` — Global threat heatmap + recent threats feed | ✅ | ✅ |
 
-**Sidebar hiding:** `_hide_pages_for_moderator()` in `admin/controllers/auth_controller.py` injects CSS to hide admin-only pages. Called from both `require_role()` and `render_sidebar()` so it applies on every page including the home page. Selectors match on filename substrings (`1_Dashboard`, `3_User_Management`, etc.) — list stored in `_MODERATOR_HIDDEN_PAGES` module-level constant.
+**Sidebar hiding:** `_hide_pages_for_moderator()` in `admin/controllers/auth_controller.py` injects CSS to hide admin-only pages. Called from both `require_role()` and `render_sidebar()` so it applies on every page including the home page. Selectors match on filename substrings (`1_Dashboard`, `2_User_Management`, etc.) — list stored in `_MODERATOR_HIDDEN_PAGES` module-level constant.
 
 **Session state:** Auth stores `"_decoded_user"` dict (not `"user_id"`). `require_role()` return value must be captured as `current_user`. `_decoded_user` is cleared at the start of every `handle_login()` call to prevent stale cache from previous sessions.
 
