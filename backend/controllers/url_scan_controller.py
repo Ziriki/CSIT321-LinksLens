@@ -444,6 +444,10 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
             # Non-JSON body (e.g. HTML error page from invalid/unenabled API key) — non-blocking
             return results
 
+        # TEMPORARY DEBUG — remove after confirming GSB response format
+        print(f"[GSB DEBUG] sent={list(norm_to_original.keys())}")
+        print(f"[GSB DEBUG] response={data}")
+
         # v4 response: { "matches": [{ "threat": { "url": "..." }, "threatType": "..." }] }
         for match in data.get("matches", []):
             gsb_url = match.get("threat", {}).get("url", "")
