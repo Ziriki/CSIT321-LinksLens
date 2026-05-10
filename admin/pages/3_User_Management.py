@@ -72,7 +72,6 @@ with col2:
     status_label = "Active" if user_row["IsActive"] else "Inactive"
     st.text_input("Status", value=status_label, disabled=True, key=f"edit_status_{uid}")
 
-# Build change payload only from actual diffs
 snapshot = {}
 if email != user_row["EmailAddress"]:
     snapshot["EmailAddress"] = email

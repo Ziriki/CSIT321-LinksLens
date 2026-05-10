@@ -24,6 +24,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+############################################
+# This function is to yield a database session for use in a request
+# and ensure it is closed after the request completes.
+############################################
 def get_db():
     db = SessionLocal()
     try:

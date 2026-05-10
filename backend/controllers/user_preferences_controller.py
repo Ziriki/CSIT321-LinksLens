@@ -14,6 +14,10 @@ router = APIRouter(
     tags=["User Preferences"]
 )
 
+############################################
+# This function is to create a preferences record for a user after
+# verifying the account exists and no preferences record already exists.
+############################################
 @router.post("/", response_model=schemas.UserPreferencesResponse, status_code=status.HTTP_201_CREATED)
 def create_preferences(prefs: schemas.UserPreferencesCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role_id"] not in (1, 2) and prefs.UserID != current_user["user_id"]:
@@ -36,6 +40,10 @@ def create_preferences(prefs: schemas.UserPreferencesCreate, db: Session = Depen
     db.refresh(db_prefs)
     return db_prefs
 
+############################################
+# This function is to retrieve user preferences by user ID, enforcing
+# that non-admin users can only view their own preferences.
+############################################
 @router.get("/{user_id}", response_model=schemas.UserPreferencesResponse)
 def read_preferences(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
@@ -43,6 +51,11 @@ def read_preferences(user_id: int, db: Session = Depends(get_db), current_user: 
     prefs = get_or_404(db.query(models.UserPreferences).filter(models.UserPreferences.UserID == user_id).first(), "Preferences not found")
     return prefs
 
+############################################
+# This function is to merge new preference values into the existing
+# record so unrelated preference keys are not overwritten, enforcing
+# that non-admin users can only update their own preferences.
+############################################
 @router.put("/{user_id}", response_model=schemas.UserPreferencesResponse)
 def update_preferences(user_id: int, prefs_update: schemas.UserPreferencesUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
@@ -59,6 +72,10 @@ def update_preferences(user_id: int, prefs_update: schemas.UserPreferencesUpdate
     db.refresh(db_prefs)
     return db_prefs
 
+############################################
+# This function is to delete a user preferences record, enforcing that
+# non-admin users can only delete their own preferences.
+############################################
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_preferences(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:
@@ -69,6 +86,10 @@ def delete_preferences(user_id: int, db: Session = Depends(get_db), current_user
     db.commit()
     return None
 
+############################################
+# This function is to retrieve a paginated list of all user preferences
+# records, restricted to administrators.
+############################################
 @router.get("/", response_model=List[schemas.UserPreferencesResponse])
-def list_preferences(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def list_preferences(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     return db.query(models.UserPreferences).offset(skip).limit(limit).all()

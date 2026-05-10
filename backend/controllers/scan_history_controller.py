@@ -17,6 +17,10 @@ router = APIRouter(
     tags=["Scan History"]
 )
 
+############################################
+# This function is to create a new scan history record after verifying
+# the referenced user account exists.
+############################################
 @router.post("/", response_model=schemas.ScanHistoryResponse, status_code=status.HTTP_201_CREATED)
 def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db)):
     if scan.UserID:
@@ -30,9 +34,12 @@ def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db)):
     db.refresh(db_scan)
     return db_scan
 
+############################################
+# This function is to return per-country threat counts aggregated from
+# ScanHistory, filtered to MALICIOUS and SUSPICIOUS statuses only.
+############################################
 @router.get("/stats/threats")
-def get_threat_stats(db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    """Return per-country threat counts aggregated from ScanHistory."""
+def get_threat_stats(db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
     rows = (
         db.query(
             models.ScanHistory.ServerLocation,
@@ -58,9 +65,12 @@ def get_threat_stats(db: Session = Depends(get_db), _: dict = Depends(require_ro
     return list(aggregated.values())
 
 
+############################################
+# This function is to return the 20 most recent MALICIOUS or SUSPICIOUS
+# scans with defanged URLs (hxxps://) for safe display in the admin portal.
+############################################
 @router.get("/stats/recent-threats")
-def get_recent_threats(db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
-    """Return the last 20 MALICIOUS/SUSPICIOUS scans with defanged URLs."""
+def get_recent_threats(db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
     scans = (
         db.query(models.ScanHistory)
         .filter(models.ScanHistory.StatusIndicator.in_(_THREAT_STATUSES))
@@ -80,6 +90,10 @@ def get_recent_threats(db: Session = Depends(get_db), _: dict = Depends(require_
     ]
 
 
+############################################
+# This function is to retrieve a single scan record by ID, returning 404
+# for unauthorised access to prevent scan ID enumeration attacks.
+############################################
 @router.get("/{scan_id}", response_model=schemas.ScanHistoryResponse)
 def read_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
@@ -87,8 +101,13 @@ def read_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = 
         raise HTTPException(status_code=404, detail="Scan not found")
     return scan
 
+############################################
+# This function is to update a scan record's fields and automatically
+# add or update a URLRules entry when the status is set to MALICIOUS
+# or SAFE, restricted to administrators and moderators.
+############################################
 @router.put("/{scan_id}", response_model=schemas.ScanHistoryResponse)
-def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_role(1, 2))):
+def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Session = Depends(get_db), current_user: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
     db_scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
     apply_updates(db, db_scan, scan_update)
 
@@ -117,6 +136,10 @@ def update_scan(scan_id: int, scan_update: schemas.ScanHistoryUpdate, db: Sessio
 
     return db_scan
 
+############################################
+# This function is to delete a scan record, enforcing that non-admin
+# users can only delete their own scans.
+############################################
 @router.delete("/{scan_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     db_scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == scan_id).first(), "Scan not found")
@@ -127,6 +150,11 @@ def delete_scan(scan_id: int, db: Session = Depends(get_db), current_user: dict 
     db.commit()
     return None
 
+############################################
+# This function is to retrieve a filtered and paginated list of scan
+# records with full user details, restricting non-admin users to their
+# own scans only.
+############################################
 @router.get("/", response_model=None)
 def list_scans(
     user_id: Optional[int] = None,
@@ -187,6 +215,10 @@ def list_scans(
         for scan in results
     ]
 
+############################################
+# This function is to delete all scan history records for a specific
+# user, enforcing that non-admin users can only clear their own history.
+############################################
 @router.delete("/clear/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def clear_all_user_scans(user_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role_id"] not in (1, 2) and user_id != current_user["user_id"]:

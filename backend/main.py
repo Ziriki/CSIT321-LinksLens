@@ -64,10 +64,19 @@ app.include_router(scan_feedback_router)
 app.include_router(auth_router)
 app.include_router(url_scan_router)
 
+############################################
+# This function is to return a simple status response confirming
+# the API is online.
+############################################
 @app.get("/")
 def read_root():
     return {"status": "Online"}
 
+############################################
+# This function is to run a single health-check function and return
+# a structured result dict with the component name and its operational
+# status, catching any exception as an outage.
+############################################
 def _check_component(name: str, check_fn: Callable[[], None]) -> dict:
     try:
         check_fn()
@@ -76,15 +85,26 @@ def _check_component(name: str, check_fn: Callable[[], None]) -> dict:
         return {"name": name, "status": "outage", "detail": str(e)}
 
 
+############################################
+# This function is to return the overall system health status including
+# live component checks, pending work queue metrics, scan activity,
+# and URL rule counts, restricted to administrators.
+############################################
 @app.get("/api/health")
-def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
-    """System health dashboard — Admin only."""
-
+def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     # Run component checks in parallel to minimise health endpoint latency.
 
+    ############################################
+    # This function is to verify the database connection is alive
+    # by executing a trivial SQL query.
+    ############################################
     def check_database():
         db.execute(text("SELECT 1"))
 
+    ############################################
+    # This function is to verify the Google Safe Browsing API is
+    # reachable and the API key is configured.
+    ############################################
     def check_gsb():
         gsb_key = os.getenv("GOOGLE_SAFE_BROWSING_API_KEY")
         if not gsb_key:
@@ -106,6 +126,10 @@ def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(
         if resp.status_code != 200:
             raise ValueError(f"HTTP {resp.status_code}")
 
+    ############################################
+    # This function is to verify the urlscan.io API is reachable
+    # and the API key is configured.
+    ############################################
     def check_urlscan():
         urlscan_key = os.getenv("URLSCAN_API_KEY")
         if not urlscan_key:
@@ -118,6 +142,10 @@ def system_health(db: Session = Depends(get_db), _: dict = Depends(require_role(
         if resp.status_code != 200:
             raise ValueError(f"HTTP {resp.status_code}")
 
+    ############################################
+    # This function is to verify the Resend email API is reachable
+    # and the API key is configured.
+    ############################################
     def check_resend():
         resend_key = os.getenv("RESEND_KEY")
         if not resend_key:
