@@ -975,6 +975,10 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                 ScreenshotURL=urlscan_result["screenshot_url"],
                 ScriptAnalysis=script_analysis,
                 HomographAnalysis=homograph_analysis,
+                GsbFlagged=gsb.get("flagged", False),
+                GsbThreatTypes=gsb.get("threat_types") or [],
+                Brands=urlscan_result.get("brands") or [],
+                Tags=urlscan_result.get("tags") or [],
             )
             db.add(scan_record)
             db.commit()
