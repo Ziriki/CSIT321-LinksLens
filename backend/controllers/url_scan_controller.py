@@ -438,10 +438,14 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
         for match in data.get("matches", []):
             gsb_url = match.get("threat", {}).get("url", "")
             threat_type = match.get("threatType", "")
-            # GSB returns the URL in its normalized form — map back to the original
+            # GSB returns the URL in its normalised form — map back to the original.
+            # It may return a more specific path than submitted (e.g. /malware.exe
+            # when we sent the bare domain). Fall back to the sole submitted URL for
+            # single-URL batches since GSB only returns matches for submitted URLs.
             original_url = (
                 norm_to_original.get(gsb_url)
                 or norm_to_original.get(_normalize_for_gsb(gsb_url))
+                or (next(iter(norm_to_original.values())) if len(norm_to_original) == 1 else None)
             )
             if not original_url:
                 continue
