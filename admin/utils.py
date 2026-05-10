@@ -58,6 +58,18 @@ def search_dataframe(df: pd.DataFrame, query: str, columns: list = None) -> pd.D
     return df[mask].reset_index(drop=True)
 
 
+_STATUS_COLORS: dict[str, str] = {
+    "MALICIOUS": "#dc2626",
+    "SUSPICIOUS": "#d97706",
+    "SAFE": "#16a34a",
+    "UNAVAILABLE": "#6b7280",
+}
+
+
+def get_status_color(status: str) -> str:
+    return _STATUS_COLORS.get(status, "#6b7280")
+
+
 def render_ssl_expander(ssl: dict[str, Any]) -> None:
     """Render an SSL certificate details expander."""
     if not ssl:

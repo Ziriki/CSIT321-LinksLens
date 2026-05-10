@@ -4,6 +4,7 @@ import folium
 from streamlit_folium import st_folium
 from controllers import auth_controller
 from models import api_client
+from utils import get_status_color
 # ISO-2 country code → (latitude, longitude) centroids for major countries
 COUNTRY_COORDS = {
     "AF": (33.94, 67.71), "AL": (41.15, 20.17), "DZ": (28.03, 1.66),
@@ -45,53 +46,98 @@ auth_controller.require_role(1, 2)
 
 st.title("Threat Intelligence")
 
-st.subheader("Global Threat Heatmap")
-
+# Fetch data upfront so both sections can use it
 stats = api_client.fetch_threat_stats()
+threats = api_client.fetch_recent_threats()
 
-if not stats:
-    st.info("No threat data available yet.")
-else:
-    world_map = folium.Map(location=[20, 0], zoom_start=2, tiles="CartoDB positron")
-
-    max_total = max((s.get("total", 0) for s in stats), default=1)
-
-    for entry in stats:
-        location = entry.get("location")
-        if not location or location not in COUNTRY_COORDS:
-            continue
-        lat, lon = COUNTRY_COORDS[location]
-        total = entry.get("total", 0)
-        malicious = entry.get("malicious", 0)
-        suspicious = entry.get("suspicious", 0)
-
-        # Radius proportional to threat count (min 5, max 30)
-        radius = max(5, min(30, int(5 + 25 * (total / max_total))))
-        severity_ratio = malicious / total if total else 0
-        color = "red" if severity_ratio >= 0.5 else "orange"
-
-        folium.CircleMarker(
-            location=[lat, lon],
-            radius=radius,
-            color=color,
-            fill=True,
-            fill_color=color,
-            fill_opacity=0.6,
-            popup=folium.Popup(
-                f"<b>{location}</b><br>Malicious: {malicious}<br>Suspicious: {suspicious}<br>Total: {total}",
-                max_width=200,
-            ),
-        ).add_to(world_map)
-
-    st_folium(world_map, width=None, height=450, returned_objects=[])
+# ── Recent Threats Table ──────────────────────────────────────────────────────
+# Rendered first so the selection is a local variable available to the map below.
 
 st.subheader("Recent Threats")
 
-threats = api_client.fetch_recent_threats()
+selected_threat = None  # dict of the selected row, or None
 
 if not threats:
     st.info("No recent threats to display.")
 else:
     df = pd.DataFrame(threats)
     df.columns = ["URL", "Status", "Location", "Scanned At"]
-    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    event = st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+    )
+
+    selected_rows = event.selection.rows if event.selection else []
+    if selected_rows:
+        selected_threat = threats[selected_rows[0]]
+
+# ── Selected URL info ─────────────────────────────────────────────────────────
+
+if selected_threat:
+    status_color = get_status_color(selected_threat["status"])
+    st.markdown(
+        f"**Selected:** `{selected_threat['url']}` — "
+        f"<span style='color:{status_color};font-weight:600'>{selected_threat['status']}</span> — "
+        f"{selected_threat['location'] or 'Unknown'} — {selected_threat['scanned_at'] or 'N/A'}",
+        unsafe_allow_html=True,
+    )
+
+# ── Global Threat Heatmap ─────────────────────────────────────────────────────
+
+st.subheader("Global Threat Heatmap")
+
+if not stats and not threats:
+    st.info("No threat data available yet.")
+else:
+    # If a row is selected and its location is known, zoom the map to it
+    selected_location = selected_threat.get("location") if selected_threat else None
+    pin_coords = COUNTRY_COORDS.get(selected_location) if selected_location else None
+
+    map_center = pin_coords if pin_coords else (20, 0)
+    map_zoom = 4 if pin_coords else 2
+
+    world_map = folium.Map(location=map_center, zoom_start=map_zoom, tiles="CartoDB positron")
+
+    if stats:
+        max_total = max((s.get("total", 0) for s in stats), default=1)
+        for entry in stats:
+            location = entry.get("location")
+            if not location or location not in COUNTRY_COORDS:
+                continue
+            lat, lon = COUNTRY_COORDS[location]
+            total = entry.get("total", 0)
+            malicious = entry.get("malicious", 0)
+            suspicious = entry.get("suspicious", 0)
+
+            radius = max(5, min(30, int(5 + 25 * (total / max_total))))
+            severity_ratio = malicious / total if total else 0
+            color = "red" if severity_ratio >= 0.5 else "orange"
+
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=radius,
+                color=color,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.6,
+                popup=folium.Popup(
+                    f"<b>{location}</b><br>Malicious: {malicious}<br>Suspicious: {suspicious}<br>Total: {total}",
+                    max_width=200,
+                ),
+            ).add_to(world_map)
+
+    if pin_coords:
+        folium.Marker(
+            location=pin_coords,
+            popup=folium.Popup(
+                f"<b>{selected_threat['url']}</b><br>{selected_threat['status']}<br>{selected_location}",
+                max_width=300,
+            ),
+            icon=folium.Icon(color="purple", icon="map-marker"),
+        ).add_to(world_map)
+
+    st_folium(world_map, width=None, height=450, returned_objects=[])
