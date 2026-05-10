@@ -14,7 +14,6 @@ if df.empty:
     st.info("No action history logs found.")
     st.stop()
 
-# Already sorted descending by LogID in controller, reset index
 df = df.reset_index(drop=True)
 
 search_query = st.text_input("Search", placeholder="Search by name, action type, action...")

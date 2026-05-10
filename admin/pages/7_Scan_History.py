@@ -70,6 +70,10 @@ else:
                "DomainAgeDays", "ServerLocation", "ScannedAt"]
     available = [c for c in columns if c in df.columns]
 
+    ############################################
+    # This function is to highlight the most recently scanned row in
+    # green so the user can easily spot the new result in the table.
+    ############################################
     def _highlight_new(row):
         if scanner_id and row["ScanID"] == scanner_id:
             return ["background-color: #d1fae5"] * len(row)

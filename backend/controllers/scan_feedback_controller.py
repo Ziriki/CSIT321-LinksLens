@@ -13,6 +13,11 @@ router = APIRouter(
     tags=["Scan Feedback"]
 )
 
+############################################
+# This function is to submit feedback for a scan, enforcing that the
+# user can only submit feedback for their own scans and has not already
+# submitted feedback for the same scan.
+############################################
 @router.post("/", response_model=schemas.ScanFeedbackResponse, status_code=status.HTTP_201_CREATED)
 def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     scan = get_or_404(db.query(models.ScanHistory).filter(models.ScanHistory.ScanID == feedback.ScanID).first(), "Scan not found")
@@ -33,13 +38,21 @@ def create_feedback(feedback: schemas.ScanFeedbackCreate, db: Session = Depends(
     db.refresh(db_feedback)
     return db_feedback
 
+############################################
+# This function is to retrieve a single scan feedback entry by ID,
+# restricted to administrators and moderators.
+############################################
 @router.get("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
-def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
+def read_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
     feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
     return feedback
 
+############################################
+# This function is to update the resolved status of a scan feedback
+# entry, restricted to administrators and moderators.
+############################################
 @router.put("/{feedback_id}", response_model=schemas.ScanFeedbackResponse)
-def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):
+def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
     db_feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
 
     if feedback_update.IsResolved is not None:
@@ -49,14 +62,23 @@ def update_feedback(feedback_id: int, feedback_update: schemas.ScanFeedbackUpdat
     db.refresh(db_feedback)
     return db_feedback
 
+############################################
+# This function is to permanently delete a scan feedback entry,
+# restricted to administrators.
+############################################
 @router.delete("/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):
+def delete_feedback(feedback_id: int, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     db_feedback = get_or_404(db.query(models.ScanFeedback).filter(models.ScanFeedback.FeedbackID == feedback_id).first(), "Feedback not found")
 
     db.delete(db_feedback)
     db.commit()
     return None
 
+############################################
+# This function is to retrieve a filtered and paginated list of scan
+# feedback entries with user details, restricted to administrators
+# and moderators.
+############################################
 @router.get("/", response_model=None)
 def list_feedback(
     is_resolved: Optional[bool] = None,
@@ -95,6 +117,11 @@ def list_feedback(
         for fb in results
     ]
 
+############################################
+# This function is to retrieve a filtered and paginated list of scan
+# feedback entries enriched with full scan details for the admin
+# review panel, restricted to administrators and moderators.
+############################################
 @router.get("/enriched/", response_model=None)
 def list_feedback_enriched(
     is_resolved: Optional[bool] = None,

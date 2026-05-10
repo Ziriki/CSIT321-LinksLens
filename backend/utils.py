@@ -8,52 +8,84 @@ import resend as resend_lib
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+############################################
+# This function is to hash a plain-text password using bcrypt
+# and return the resulting hash string for secure storage.
+############################################
 def get_password_hash(password: str) -> str:
-    """Hash a password using bcrypt."""
     return pwd_context.hash(password)
 
+############################################
+# This function is to verify a plain-text password against its
+# stored bcrypt hash, returning True if they match.
+############################################
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain password against its bcrypt hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
+############################################
+# This function is to retrieve the FullName from a UserAccount's
+# related UserDetails record, returning a default value if the
+# details relationship is unavailable.
+############################################
 def get_fullname(user_account, default="N/A"):
-    """Return the FullName from a UserAccount relationship, or default if unavailable."""
     if user_account and user_account.details:
         return user_account.details.FullName
     return default
 
+############################################
+# This function is to SHA-256 hash a token string for safe storage
+# in the database — the raw token is sent to the user while only
+# the hash is persisted.
+############################################
 def hash_token(token: str) -> str:
-    """SHA-256 hash a token for safe storage — raw token goes to user, hash goes to DB."""
     return hashlib.sha256(token.encode()).hexdigest()
 
+############################################
+# This function is to ensure a datetime object is timezone-aware
+# in UTC, converting naive datetimes by attaching the UTC timezone
+# so they can be safely compared with datetime.now(timezone.utc).
+############################################
 def normalize_expiry(dt: datetime) -> datetime:
-    """Ensure a datetime is timezone-aware (UTC) for comparison with datetime.now(timezone.utc)."""
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
+############################################
+# This function is to raise an HTTP 404 exception if the provided
+# object is None, otherwise return the object unchanged.
+############################################
 def get_or_404(obj, detail: str):
-    """Raise HTTP 404 if obj is None, otherwise return it."""
     if not obj:
         raise HTTPException(status_code=404, detail=detail)
     return obj
 
+############################################
+# This function is to apply a Pydantic update schema's non-unset
+# fields to a SQLAlchemy model instance, commit the transaction,
+# and refresh the model to reflect the latest database state.
+############################################
 def apply_updates(db: Session, obj, update_schema) -> None:
-    """Apply a Pydantic update schema to a SQLAlchemy model, commit, and refresh."""
     for key, value in update_schema.model_dump(exclude_unset=True).items():
         setattr(obj, key, value)
     db.commit()
     db.refresh(obj)
 
+############################################
+# This function is to extract the real client IP address from the
+# request, reading from the X-Forwarded-For header set by the Nginx
+# proxy if present, otherwise falling back to the direct connection IP.
+############################################
 def get_client_ip(request: FastAPIRequest) -> str:
-    """Extract real client IP, handling Nginx X-Forwarded-For proxy header."""
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
+############################################
+# This function is to send an HTML email via Resend using the
+# RESEND_KEY environment variable, raising an exception on failure.
+############################################
 def send_email(to: str, subject: str, html: str, from_name: str = "LinksLens") -> None:
-    """Send an email via Resend. Raises Exception on failure."""
     resend_lib.api_key = os.getenv("RESEND_KEY")
     resend_lib.Emails.send({
         "from": f"{from_name} <noreply@linkslens.com>",

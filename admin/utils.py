@@ -15,19 +15,23 @@ _SCROLL_JS = (
 )
 
 
+############################################
+# This function is to smooth-scroll the Streamlit main panel to the
+# bottom, but only once per new selection — not on every rerun. The
+# state_key must be tied to the selected item's ID so the scroll only
+# fires on the transition from no-selection to a new selection.
+############################################
 def scroll_to_bottom(state_key: str) -> None:
-    """Smooth-scroll the Streamlit main panel to the bottom once per new selection.
-
-    Pass a unique state_key tied to the selected item's ID so the scroll only
-    fires on the transition from no-selection → new selection, not on every rerun.
-    """
     if st.session_state.get("_scroll_key") != state_key:
         st.session_state["_scroll_key"] = state_key
         components.html(_SCROLL_JS, height=0)
 
 
+############################################
+# This function is to render Prev/Next pagination controls and return
+# (start, end) index values for slicing a DataFrame.
+############################################
 def render_pagination(state_key: str, total: int, page_size: int = 20) -> tuple:
-    """Render prev/next pagination controls and return (start, end) for slicing a dataframe."""
     if state_key not in st.session_state:
         st.session_state[state_key] = 0
     page = st.session_state[state_key]
@@ -49,8 +53,11 @@ def render_pagination(state_key: str, total: int, page_size: int = 20) -> tuple:
     return start, end
 
 
+############################################
+# This function is to filter a DataFrame using a case-insensitive
+# keyword search across all columns, or a specified subset of columns.
+############################################
 def search_dataframe(df: pd.DataFrame, query: str, columns: list = None) -> pd.DataFrame:
-    """Apply case-insensitive search filter to a DataFrame."""
     if not query:
         return df
     search_cols = df[columns] if columns else df
@@ -58,20 +65,28 @@ def search_dataframe(df: pd.DataFrame, query: str, columns: list = None) -> pd.D
     return df[mask].reset_index(drop=True)
 
 
+# Hex color codes mapped to each scan status for consistent UI styling
 _STATUS_COLORS: dict[str, str] = {
-    "MALICIOUS": "#dc2626",
-    "SUSPICIOUS": "#d97706",
-    "SAFE": "#16a34a",
-    "UNAVAILABLE": "#6b7280",
+    "MALICIOUS": "#dc2626",   # red
+    "SUSPICIOUS": "#d97706",  # amber
+    "SAFE": "#16a34a",        # green
+    "UNAVAILABLE": "#6b7280", # grey
 }
 
 
+############################################
+# This function is to return the hex color code for a given scan status
+# string, defaulting to grey if the status is unrecognised.
+############################################
 def get_status_color(status: str) -> str:
-    return _STATUS_COLORS.get(status, "#6b7280")
+    return _STATUS_COLORS.get(status, "#6b7280")  # default = grey
 
 
+############################################
+# This function is to render SSL certificate details inside a
+# collapsible expander.
+############################################
 def render_ssl_expander(ssl: dict[str, Any]) -> None:
-    """Render an SSL certificate details expander."""
     if not ssl:
         return
     with st.expander("SSL Certificate"):
@@ -85,8 +100,11 @@ def render_ssl_expander(ssl: dict[str, Any]) -> None:
             st.markdown(f"**Protocol:** {ssl.get('protocol', 'N/A')}")
 
 
+############################################
+# This function is to render the full redirect chain inside a
+# collapsible expander, showing each hop as a numbered list.
+############################################
 def render_redirect_chain_expander(redirect_chain: list) -> None:
-    """Render a redirect chain expander."""
     if not redirect_chain:
         return
     hops = len(redirect_chain)
@@ -95,8 +113,12 @@ def render_redirect_chain_expander(redirect_chain: list) -> None:
             st.markdown(f"{i}. `{url}`")
 
 
+############################################
+# This function is to render script analysis metrics (totals, risk score,
+# ad scripts, tech stack, malicious scripts, crypto miners, suspicious
+# patterns) inside a collapsible expander.
+############################################
 def render_script_analysis_expander(sa: dict[str, Any]) -> None:
-    """Render a script analysis expander."""
     if not sa:
         return
     with st.expander("Script Analysis"):
@@ -126,11 +148,14 @@ def render_script_analysis_expander(sa: dict[str, Any]) -> None:
             st.warning(f"**Suspicious Patterns:** {', '.join(patterns)}")
 
 
+############################################
+# This function is to render IDN homograph risk details inside a
+# collapsible expander. Only shown when the scan flagged a homograph attack.
+############################################
 def render_homograph_expander(ha: dict[str, Any]) -> None:
-    """Render a homograph/IDN risk expander."""
     if not ha or not ha.get("is_homograph"):
         return
-    with st.expander("⚠️ IDN Homograph Risk Detected"):
+    with st.expander("IDN Homograph Risk Detected"):
         st.error(ha.get("details", "Homograph risk detected."))
         if ha.get("confusable_chars"):
             st.markdown(f"**Confusable Characters:** `{'`, `'.join(ha['confusable_chars'])}`")
