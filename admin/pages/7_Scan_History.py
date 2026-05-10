@@ -138,11 +138,29 @@ if effective_scan_id:
             st.markdown(f"**Country:** {data.get('ServerLocation') or 'N/A'}")
             st.markdown(f"**Hosting Provider:** {data.get('AsnName') or 'N/A'}")
             st.markdown(f"**Domain Age:** {data.get('DomainAgeDays') or 'N/A'} days")
+            _gsb_color = "#dc2626" if data.get("GsbFlagged") else "#16a34a"
+            _gsb_text = "Flagged" if data.get("GsbFlagged") else "Clean"
+            st.markdown(
+                f"**Google Safe Browsing:** <span style='color:{_gsb_color};font-weight:600'>{_gsb_text}</span>",
+                unsafe_allow_html=True,
+            )
+            if data.get("GsbThreatTypes"):
+                st.markdown(f"**Threat Types:** {', '.join(data['GsbThreatTypes'])}")
+            if data.get("Brands"):
+                st.markdown(f"**Brand Impersonation:** {', '.join(data['Brands'])}")
+            if data.get("Tags"):
+                st.markdown(f"**Tags:** {', '.join(data['Tags'])}")
             user_name = next(
                 (r.get("FullName") for r in display_records if r["ScanID"] == effective_scan_id),
                 None,
             )
             st.markdown(f"**User:** {user_name or data.get('UserID', 'N/A')}")
+
+        _screenshot_url = data.get("ScreenshotURL") or ""
+        _uuid_match = __import__("re").search(r"screenshots/([^.]+)\.png", _screenshot_url)
+        if _uuid_match:
+            _result_url = f"https://urlscan.io/result/{_uuid_match.group(1)}/"
+            st.markdown(f"[View full urlscan.io report →]({_result_url})")
 
         render_ssl_expander(data.get("SslInfo") or {})
 

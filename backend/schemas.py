@@ -243,6 +243,10 @@ class ScanHistoryBase(BaseModel):
     ScreenshotURL: Optional[str] = None
     ScriptAnalysis: Optional[dict] = None
     HomographAnalysis: Optional[dict] = None
+    GsbFlagged: Optional[bool] = False
+    GsbThreatTypes: Optional[List[str]] = None
+    Brands: Optional[List[str]] = None
+    Tags: Optional[List[str]] = None
 
 # Used when initiating a new scan
 class ScanHistoryCreate(ScanHistoryBase):
