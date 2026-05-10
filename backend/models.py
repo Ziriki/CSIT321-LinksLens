@@ -135,6 +135,10 @@ class ScanHistory(Base):
     ScreenshotURL = Column(String(2048), nullable=True)
     ScriptAnalysis = Column(JSON, nullable=True)
     HomographAnalysis = Column(JSON, nullable=True)
+    GsbFlagged = Column(Boolean, default=False, nullable=True)
+    GsbThreatTypes = Column(JSON, nullable=True)
+    Brands = Column(JSON, nullable=True)
+    Tags = Column(JSON, nullable=True)
     ScannedAt = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("UserAccount")
