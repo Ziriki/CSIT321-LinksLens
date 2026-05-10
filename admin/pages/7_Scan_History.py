@@ -3,9 +3,9 @@ import streamlit as st
 
 from controllers import auth_controller
 from models import api_client
-from utils import (render_homograph_expander, render_redirect_chain_expander,
-                   render_script_analysis_expander, render_ssl_expander,
-                   scroll_to_bottom)
+from utils import (get_status_color, render_homograph_expander,
+                   render_redirect_chain_expander, render_script_analysis_expander,
+                   render_ssl_expander, scroll_to_bottom)
 
 auth_controller.require_role(1, 2)
 
@@ -122,12 +122,7 @@ if effective_scan_id:
                 st.markdown(f"**Page Title:** {data['PageTitle']}")
             if data.get("ApexDomain"):
                 st.markdown(f"**Registered Domain:** `{data['ApexDomain']}`")
-            _verdict_color = {
-                "MALICIOUS": "#dc2626",
-                "SUSPICIOUS": "#d97706",
-                "SAFE": "#16a34a",
-                "UNAVAILABLE": "#6b7280",
-            }.get(data["StatusIndicator"], "#6b7280")
+            _verdict_color = get_status_color(data["StatusIndicator"])
             st.markdown(
                 f"**Final Verdict:** <span style='color:{_verdict_color};font-weight:600'>{data['StatusIndicator']}</span>",
                 unsafe_allow_html=True,
