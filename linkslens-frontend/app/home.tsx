@@ -145,7 +145,7 @@ export default function HomePage() {
             <ListItem
               key={scan.ScanID}
               title={scan.InitialURL}
-              subtitle={new Date(scan.ScannedAt).toLocaleDateString()}
+              subtitle={new Date(scan.ScannedAt).toLocaleDateString("en-GB")}
               leftIcon={<ScanLine size={20} color={iconCol} />}
               rightElement={
                 <RiskBadge riskLevel={statusToRisk(scan.StatusIndicator)} size="sm" />
