@@ -379,9 +379,19 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
 
     # Normalize each URL to GSB's canonical form and keep a reverse map so that
     # when GSB returns a match we can key back to the original URL in results.
-    # Without this, a match for "http://evil.com/path" silently drops if we sent
-    # "http://Evil.com/path#fragment" — the URLs don't match as dict keys.
-    norm_to_original: dict[str, str] = {_normalize_for_gsb(url): url for url in urls}
+    # Also include the alternate-scheme variant (http↔https) for each URL: a threat
+    # listed under one scheme would otherwise be missed when the other is submitted.
+    norm_to_original: dict[str, str] = {}
+    for url in urls:
+        norm_to_original[_normalize_for_gsb(url)] = url
+        if url.startswith("http://"):
+            alt = _normalize_for_gsb("https://" + url[7:])
+        elif url.startswith("https://"):
+            alt = _normalize_for_gsb("http://" + url[8:])
+        else:
+            alt = None
+        if alt and alt not in norm_to_original:
+            norm_to_original[alt] = url
 
     # v4 uses POST with a structured JSON body; API key passed as query param
     payload = {
@@ -445,7 +455,7 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
             original_url = (
                 norm_to_original.get(gsb_url)
                 or norm_to_original.get(_normalize_for_gsb(gsb_url))
-                or (next(iter(norm_to_original.values())) if len(norm_to_original) == 1 else None)
+                or (next(iter(norm_to_original.values())) if len(urls) == 1 else None)
             )
             if not original_url:
                 continue
@@ -861,6 +871,23 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             redirect_url = final_url if final_url != url else None
 
             redirect_chain     = extract_redirect_chain(initial_url, raw_result)
+
+            # Supplementary GSB check on redirect destinations: the concurrent GSB
+            # check only covered the initial URL; threats may be listed under the
+            # final URL (e.g. after an http→https redirect or a path redirect).
+            redirect_urls = list({
+                u for u in (redirect_chain or []) + ([redirect_url] if redirect_url else [])
+                if u and u != initial_url
+            })
+            if redirect_urls:
+                extra_gsb = check_google_safe_browsing(redirect_urls)
+                for _, extra_result in extra_gsb.items():
+                    if extra_result["flagged"]:
+                        gsb["flagged"] = True
+                        for t in extra_result["threat_types"]:
+                            if t not in gsb["threat_types"]:
+                                gsb["threat_types"].append(t)
+
             script_analysis    = analyze_scripts(raw_result, initial_url)
             homograph_analysis = detect_homograph_risk(initial_url)
             ssl_info           = extract_ssl_info(raw_result)
