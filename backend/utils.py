@@ -34,7 +34,7 @@ def get_fullname(user_account, default="N/A"):
 
 ############################################
 # This function is to SHA-256 hash a token string for safe storage
-# in the database — the raw token is sent to the user while only
+# in the database. The raw token is sent to the user while only
 # the hash is persisted.
 ############################################
 def hash_token(token: str) -> str:

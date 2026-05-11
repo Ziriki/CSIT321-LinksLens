@@ -13,7 +13,7 @@ def get_rules_dataframe():
         return pd.DataFrame()
     df = pd.DataFrame(raw_data)
 
-    # Rename AddedByFullName → AddedBy for display; drop the raw int AddedBy column
+    # Rename AddedByFullName to AddedBy for display and drop the raw int AddedBy column
     df.drop(columns=["AddedBy"], inplace=True, errors="ignore")
     df.rename(columns={"AddedByFullName": "AddedBy"}, inplace=True)
 
