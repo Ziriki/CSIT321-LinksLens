@@ -40,30 +40,30 @@
 ### Mobile App (Users)
 
 - Scan URLs via **camera OCR**, **QR code scanner**, **gallery image selection**, or **manual input**
-- **QR phishing detection ("quishing")** — decodes QR codes live and runs them through the full security pipeline
+- **QR phishing detection ("quishing")**: decodes QR codes live and runs them through the full security pipeline
 - **SAFE / SUSPICIOUS / MALICIOUS** verdict with a risk score, screenshot preview, and detailed analysis (script risk, tech stack, ad detection)
-- **IDN homograph detection** — flags Unicode-spoofed domains (e.g. Cyrillic 'а' replacing Latin 'a')
+- **IDN homograph detection**: flags Unicode-spoofed domains (e.g. Cyrillic 'а' replacing Latin 'a')
 - View **redirect chains** and **server location** for every scan
 - **Open scanned URL** in a preferred browser (Chrome, Firefox, Edge, or system default) directly from results
 - **Export scan report** as an image to the device gallery
-- **Android share intent** — pipe any link from another app straight into LinksLens
-- Browse **scan history** with keyword search and status filter; clear entire history
-- Submit **scan feedback** to flag incorrect verdicts; submit **app feedback** to report issues
+- **Android share intent**: pipe any link from another app straight into LinksLens
+- Browse **scan history** with keyword search and status filter/ clear entire history
+- Submit **scan feedback** to flag incorrect verdicts/ submit **app feedback** to report issues
 - **Haptic feedback** on scan completion
-- Dark / Light theme toggle; **onboarding tutorial** on first launch
+- Dark / Light theme toggle/ **onboarding tutorial** on first launch
 - Account registration, email verification, profile editing, and **password reset via email** with per-email and per-IP rate limiting
 
 ### Admin Portal (Moderators & Administrators)
 
-- **Dashboard** — system health overview (user counts, scan stats, external service status)
-- **Moderation** — review and approve/reject user-submitted blacklist requests
-- **Scan Feedback** — view and resolve disputed scan verdicts
-- **URL Registry** — manually add or remove domains from the blacklist or whitelist
-- **User Management** — view, update, and deactivate user accounts
-- **App Feedback** — review feedback submitted by mobile users
-- **Action History Log** — full audit trail of user activity
-- **Scan History** — browse all historical scans across all users; scan new URLs directly from the portal
-- **Threat Intelligence** — global threat heatmap (Folium) with clickable country zoom and a live feed of recent malicious/suspicious scans
+- **Dashboard**: system health overview (user counts, scan stats, external service status)
+- **Moderation**: review and approve/reject user-submitted blacklist requests
+- **Scan Feedback**: view and resolve disputed scan verdicts
+- **URL Registry**: manually add or remove domains from the blacklist or whitelist
+- **User Management**: view, update, and deactivate user accounts
+- **App Feedback**: review feedback submitted by mobile users
+- **Action History Log**: full audit trail of user activity
+- **Scan History**: browse all historical scans across all users/ scan new URLs directly from the portal
+- **Threat Intelligence**: global threat heatmap (Folium) with clickable country zoom and a live feed of recent malicious/suspicious scans
 
 ---
 
@@ -102,7 +102,7 @@
                        └──────────────────────┘
 ```
 
-All backend services (FastAPI, MySQL, Streamlit) run in Docker containers on a shared `fyp_net` bridge network. Ports are bound to `127.0.0.1` only — Nginx is the sole public entry point.
+All backend services (FastAPI, MySQL, Streamlit) run in Docker containers on a shared `fyp_net` bridge network. Ports are bound to `127.0.0.1` only. Nginx is the sole public entry point.
 
 ---
 
@@ -199,7 +199,7 @@ MYSQL_PASSWORD=your_db_password
 MYSQL_HOST=db                        # Use "localhost" for local dev (no Docker)
 
 # JWT
-SECRET_KEY=your_secret_key_here      # Required — no default
+SECRET_KEY=your_secret_key_here      # Required (no default)
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=120
 
@@ -244,7 +244,7 @@ Portal available at `http://localhost:8501`.
 
 ### Mobile App (React Native + Expo)
 
-> The app uses ML Kit OCR and `expo-secure-store`, both native modules. **Expo Go is not supported** — a custom dev client or release build is required.
+> The app uses ML Kit OCR and `expo-secure-store`, both native modules. **Expo Go is not supported**, a custom dev client or release build is required.
 
 ```bash
 cd linkslens-frontend
@@ -303,19 +303,19 @@ docker compose logs -f backend
 
 `POST /scan` accepts a single URL or a list of up to 10 URLs. Four checks run concurrently per URL via `ThreadPoolExecutor`, then post-processing operates on the data already in memory:
 
-1. **Google Safe Browsing v4** — batch lookup against Google's threat database; exponential backoff on rate limits
-2. **urlscan.io** — submits each URL for full sandboxed page analysis (public visibility); raw result retained for downstream steps
-3. **RDAP domain age** — queries `rdap.org` for registration date and age breakdown; non-blocking
-4. **DB blacklist check** — checks `URLRules` and approved `BlacklistRequest` entries
+1. **Google Safe Browsing v4**: batch lookup against Google's threat database, exponential backoff on rate limits
+2. **urlscan.io**: submits each URL for full sandboxed page analysis (public visibility), raw result retained for downstream steps
+3. **RDAP domain age**: queries `rdap.org` for registration date and age breakdown, non-blocking
+4. **DB blacklist check**: checks `URLRules` and approved `BlacklistRequest` entries
 
 Post-processing (sequential, ~0ms each):
 
-5. **Result polling** — waits 3s, then polls at progressive intervals for up to ~89s total
-6. **Redirect chain** — built from `data.requests` in the urlscan.io result; no extra network call
-7. **SSL/TLS info** — extracted from the first HTTPS request in the urlscan.io result that contains security details
-8. **Script analysis** — classifies scripts from urlscan.io's `data.lists.scripts` (ad networks, crypto miners, malicious CDNs, obfuscated filenames, mixed content, Wappalyzer tech stack)
-9. **Homograph detection** — uses `unicodedata` (stdlib) to detect Unicode script mixing in domain labels (e.g. Cyrillic + Latin)
-10. **Verdict merge** — most severe result wins:
+5. **Result polling**: waits 3s, then polls at progressive intervals for up to ~89s total
+6. **Redirect chain**: built from `data.requests` in the urlscan.io result, no extra network call
+7. **SSL/TLS info**: extracted from the first HTTPS request in the urlscan.io result that contains security details
+8. **Script analysis**: classifies scripts from urlscan.io's `data.lists.scripts` (ad networks, crypto miners, malicious CDNs, obfuscated filenames, mixed content, Wappalyzer tech stack)
+9. **Homograph detection**: uses `unicodedata` (stdlib) to detect Unicode script mixing in domain labels (e.g. Cyrillic + Latin)
+10. **Verdict merge**: most severe result wins:
     - GSB `MALWARE` / `SOCIAL_ENGINEERING` → **MALICIOUS**
     - GSB `UNWANTED_SOFTWARE` / `POTENTIALLY_HARMFUL_APPLICATION` → **SUSPICIOUS**
     - urlscan.io `malicious: true` → **MALICIOUS**
@@ -323,8 +323,8 @@ Post-processing (sequential, ~0ms each):
     - Known malicious script CDN loaded → **MALICIOUS**
     - Crypto miners or IDN homograph detected → at least **SUSPICIOUS**
     - Otherwise → **SAFE**
-11. **URLRules override** — a matching entry in the `URLRules` table takes final precedence: BLACKLIST → MALICIOUS, WHITELIST → SAFE
-12. **Persist** — saves result to `ScanHistory` with `InitialURL`, `RedirectURL`, `RedirectChain`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `IpAddress`, `AsnName`, `PageTitle`, `ApexDomain`, `SslInfo`, `ScreenshotURL`, `ScriptAnalysis`, `HomographAnalysis`, `GsbFlagged`, `GsbThreatTypes`, `Brands`, `Tags`
+11. **URLRules override**: a matching entry in the `URLRules` table takes final precedence: BLACKLIST → MALICIOUS, WHITELIST → SAFE
+12. **Persist**: saves result to `ScanHistory` with `InitialURL`, `RedirectURL`, `RedirectChain`, `StatusIndicator`, `DomainAgeDays`, `ServerLocation`, `IpAddress`, `AsnName`, `PageTitle`, `ApexDomain`, `SslInfo`, `ScreenshotURL`, `ScriptAnalysis`, `HomographAnalysis`, `GsbFlagged`, `GsbThreatTypes`, `Brands`, `Tags`
 
 ---
 
@@ -349,7 +349,7 @@ All routes are prefixed `/api/` except the scan endpoint.
 
 **Auth:** Mobile clients send `Authorization: Bearer <token>`. Web clients use an HttpOnly cookie. JWT payload: `{ sub: UserID, role: RoleID, exp }`.
 
-Interactive API docs are available at `http://localhost:8000/docs` (local development only — disabled in production).
+Interactive API docs are available at `http://localhost:8000/docs` (local development only/ disabled in production).
 
 ---
 
@@ -372,15 +372,15 @@ Pushing to `main` triggers a GitHub Actions workflow that:
 
 ### Infrastructure (Nginx)
 
-**HTTPS enforcement** — All HTTP traffic (port 80) is redirected to HTTPS via `301` across all domains. TLS certificates are issued by Let's Encrypt (Certbot) with strong DH parameters (`ssl-dhparams.pem`).
+**HTTPS enforcement:** All HTTP traffic (port 80) is redirected to HTTPS via `301` across all domains. TLS certificates are issued by Let's Encrypt (Certbot) with strong DH parameters (`ssl-dhparams.pem`).
 
-**Server version suppression** — `server_tokens off` prevents Nginx from disclosing its version in response headers and error pages.
+**Server version suppression:** `server_tokens off` prevents Nginx from disclosing its version in response headers and error pages.
 
-**Security headers** — Applied at the reverse-proxy level so they are present on every response regardless of the backend:
+**Security headers:** Applied at the reverse-proxy level so they are present on every response regardless of the backend:
 
 | Header | `api.linkslens.com` | `admin.linkslens.com` | `linkslens.com` |
 |---|---|---|---|
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | `max-age=31536000; includeSubDomains` | `max-age=31536000; includeSubDomains` |
+| `Strict-Transport-Security` | `max-age=31536000, includeSubDomains` | `max-age=31536000, includeSubDomains` | `max-age=31536000, includeSubDomains` |
 | `X-Frame-Options` | `DENY` | `SAMEORIGIN` | `DENY` |
 | `X-Content-Type-Options` | `nosniff` | `nosniff` | `nosniff` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | `strict-origin-when-cross-origin` | `no-referrer` |
@@ -390,26 +390,26 @@ Pushing to `main` triggers a GitHub Actions workflow that:
 
 **Content Security Policy (main site):**
 ```
-default-src 'self';
-script-src 'self' https://cdn.tailwindcss.com 'unsafe-inline';
-style-src 'self' 'unsafe-inline';
-connect-src 'self' https://api.linkslens.com;
-img-src 'self' data:;
-font-src 'self';
-object-src 'none';
-frame-ancestors 'none';
-base-uri 'self';
+default-src 'self'
+script-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'
+style-src 'self' 'unsafe-inline'
+connect-src 'self' https://api.linkslens.com
+img-src 'self' data:
+font-src 'self'
+object-src 'none'
+frame-ancestors 'none'
+base-uri 'self'
 form-action 'self' https://api.linkslens.com
 ```
 
-**Rate limiting** — API requests are limited to 30 requests/minute per IP (`limit_req_zone`), with a burst allowance of 10 requests using `nodelay` to reject excess traffic immediately rather than queuing it.
+**Rate limiting:** API requests are limited to 30 requests/minute per IP (`limit_req_zone`), with a burst allowance of 10 requests using `nodelay` to reject excess traffic immediately rather than queuing it.
 
-**Active threat blocking** — The API server block drops connections (`return 444` — no response) for:
+**Active threat blocking:** The API server block drops connections (`return 444`, no response) for:
 - Common scanner and vulnerability probe paths (`.env`, `.git`, `actuator`, `wp-login`, `swagger`, `phpinfo`, etc.)
 - Non-standard HTTP methods (only `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS` are permitted)
 - Known vulnerability scanner user agents (`masscan`, `zgrab`, `nuclei`, `sqlmap`, `nikto`, `nmap`, `dirbuster`, and others)
 
-**WebSocket proxying** — The admin portal block passes `Upgrade` and `Connection` headers to support Streamlit's WebSocket-based live updates.
+**WebSocket proxying:** The admin portal block passes `Upgrade` and `Connection` headers to support Streamlit's WebSocket-based live updates.
 
 ---
 
@@ -417,17 +417,17 @@ form-action 'self' https://api.linkslens.com
 
 | Threat | Mitigation |
 |---|---|
-| JWT secret missing at startup | `ValueError` raised — server refuses to start |
-| Login brute-force | DB-based rate limit: 10 failures per IP per 15 min → 429; counter resets on success |
-| SSRF via scan endpoint | Hostname resolved to IP; private, loopback, link-local, and multicast ranges rejected before scanning |
-| Unbounded scan input | Max 10 URLs per request; 422 returned if exceeded |
+| JWT secret missing at startup | `ValueError` raised, server refuses to start |
+| Login brute-force | DB-based rate limit: 10 failures per IP per 15 min → 429, counter resets on success |
+| SSRF via scan endpoint | Hostname resolved to IP, private, loopback, link-local, and multicast ranges rejected before scanning |
+| Unbounded scan input | Max 10 URLs per request, 422 returned if exceeded |
 | Scan ID enumeration (403 vs 404) | Unauthorised scan access returns 404 to prevent probing other users' scans |
-| Feedback UserID spoofing | `UserID` overridden from JWT; scan ownership verified server-side |
+| Feedback UserID spoofing | `UserID` overridden from JWT, scan ownership verified server-side |
 | Email enumeration on registration | Duplicate email returns a generic 400 message |
 | Blacklist request spam | Max 5 submissions per user per day → 429 |
-| Password reset rate limiting | Per-email (3/hr) + per-IP (10/hr); sweep-invalidates all unused tokens on successful reset |
+| Password reset rate limiting | Per-email (3/hr) + per-IP (10/hr), sweep-invalidates all unused tokens on successful reset |
 | Password reset token in Referer header | `<meta name="referrer" content="no-referrer">` on static reset pages |
-| Token storage | Only SHA-256 hashes stored in DB; raw tokens sent to users only |
+| Token storage | Only SHA-256 hashes stored in DB, raw tokens sent to users only |
 
 ---
 
@@ -435,14 +435,14 @@ form-action 'self' https://api.linkslens.com
 
 | Limitation | Detail |
 |---|---|
-| Single EC2 t3.medium instance | No horizontal scaling — memory and storage are constrained. High scan volume or large urlscan.io payloads may cause slowdowns under load. |
-| Google Safe Browsing Lookup API v4 (free tier) | The free Lookup API queries Google's servers in real-time but does not have the same coverage or propagation speed as the browser-level Update API used by Chrome. A URL recently added to Google's threat list may not be flagged immediately — propagation to the Lookup API can lag by minutes to hours. Sites confirmed malicious through other means should be manually added to the URL Registry to ensure reliable detection. |
+| Single EC2 t3.medium instance | No horizontal scaling. Memory and storage are constrained, high scan volume or large urlscan.io payloads may cause slowdowns under load. |
+| Google Safe Browsing Lookup API v4 (free tier) | The free Lookup API queries Google's servers in real-time but does not have the same coverage or propagation speed as the browser-level Update API used by Chrome. A URL recently added to Google's threat list may not be flagged immediately, propagation to the Lookup API can lag by minutes to hours. Sites confirmed malicious through other means should be manually added to the URL Registry to ensure reliable detection. |
 
 ---
 
 ## Team
 
-**FYP-26-S1-03P** — Final Year Project, CSIT-26-S1-05
+**FYP-26-S1-03P**, Final Year Project, CSIT-26-S1-05
 
 | Name | Role |
 |---|---|
