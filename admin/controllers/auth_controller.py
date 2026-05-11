@@ -55,7 +55,7 @@ def require_auth():
         _expire_session()
 
 
-# Streamlit uses the page filename as the sidebar link href — match on filename substrings.
+# Streamlit uses the page filename as the sidebar link href. Match on filename substrings.
 _MODERATOR_HIDDEN_PAGES = ["1_Dashboard", "2_User_Management", "3_App_Feedback", "4_Action_History_Log"]
 
 
@@ -139,8 +139,8 @@ def render_sidebar():
 
 
 ############################################
-# This function is to handle the login form submission — authenticates
-# the user, validates their role, stores the JWT, and logs the login action.
+# This function is to handle the login form submission, authenticate
+# the user, validate their role, store the JWT, and log the login action.
 ############################################
 def handle_login(email, password):
     if not email or not password:
@@ -156,7 +156,7 @@ def handle_login(email, password):
             try:
                 payload = jwt.decode(token, options={"verify_signature": False})
                 role_id = int(payload.get("role", 0))
-                if role_id not in (1, 2):  # 1 = Administrator, 2 = Moderator; block all others
+                if role_id not in (1, 2):  # 1 = Administrator, 2 = Moderator (all other roles are blocked)
                     st.error("Login failed. Check credentials.")
                     return
             except Exception:

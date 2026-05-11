@@ -28,7 +28,7 @@ def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: 
     if existing_rule:
         if existing_rule.ListType == rule.ListType:
             raise HTTPException(status_code=400, detail=f"Domain is already in the {existing_rule.ListType.value}.")
-        # Switching list type — update in place rather than requiring a delete-then-add
+        # Switching list type. Update in place rather than requiring a delete-then-add
         existing_rule.ListType = rule.ListType
         existing_rule.AddedBy = rule.AddedBy
         db.commit()
