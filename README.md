@@ -30,6 +30,7 @@
 - [API Overview](#api-overview)
 - [CI/CD](#cicd)
 - [Security](#security)
+- [Known Limitations](#known-limitations)
 - [Team](#team)
 
 ---
@@ -427,6 +428,15 @@ form-action 'self' https://api.linkslens.com
 | Password reset rate limiting | Per-email (3/hr) + per-IP (10/hr); sweep-invalidates all unused tokens on successful reset |
 | Password reset token in Referer header | `<meta name="referrer" content="no-referrer">` on static reset pages |
 | Token storage | Only SHA-256 hashes stored in DB; raw tokens sent to users only |
+
+---
+
+## Known Limitations
+
+| Limitation | Detail |
+|---|---|
+| Single EC2 t3.medium instance | No horizontal scaling — memory and storage are constrained. High scan volume or large urlscan.io payloads may cause slowdowns under load. |
+| Google Safe Browsing Lookup API v4 (free tier) | The free Lookup API queries Google's servers in real-time but does not have the same coverage or propagation speed as the browser-level Update API used by Chrome. A URL recently added to Google's threat list may not be flagged immediately — propagation to the Lookup API can lag by minutes to hours. Sites confirmed malicious through other means should be manually added to the URL Registry to ensure reliable detection. |
 
 ---
 
