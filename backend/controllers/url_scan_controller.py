@@ -807,14 +807,19 @@ def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict
         gsb_score = 0
 
     urlscan_score = urlscan_result.get("score") or 0
+    # urlscan_status carries the boolean malicious flag from verdicts.overall.malicious —
+    # it can be MALICIOUS even when the numeric score is low (score reflects community
+    # consensus which lags the boolean verdict), so it is checked explicitly in step 3.
+    urlscan_status = urlscan_result.get("urlscan_status", "SAFE")
 
     # Step 2: weighted combination
     weighted_score = (gsb_score * _GSB_WEIGHT) + (urlscan_score * _URLSCAN_WEIGHT)
 
-    # Step 3: map to api_status
-    if weighted_score >= _MALICIOUS_THRESHOLD:
+    # Step 3: map to api_status — explicit urlscan boolean verdict takes priority over
+    # the numeric score alone, since score can be low even when malicious is true.
+    if weighted_score >= _MALICIOUS_THRESHOLD or urlscan_status == "MALICIOUS":
         api_status = "MALICIOUS"
-    elif weighted_score >= _SUSPICIOUS_THRESHOLD:
+    elif weighted_score >= _SUSPICIOUS_THRESHOLD or urlscan_status == "SUSPICIOUS":
         api_status = "SUSPICIOUS"
     else:
         api_status = "SAFE"
