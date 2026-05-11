@@ -77,7 +77,7 @@ def update_request(request_id: int, review_data: schemas.BlacklistRequestUpdate,
     db_request.ReviewedAt = datetime.now(timezone.utc)
 
     if review_data.Status == models.RequestStatus.APPROVED:
-        # Guard against duplicate in URLRules — the domain may already be listed
+        # Guard against duplicate in URLRules. The domain may already be listed
         existing_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == db_request.URLDomain).first()
 
         if not existing_rule:

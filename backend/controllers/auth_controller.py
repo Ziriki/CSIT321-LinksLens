@@ -25,7 +25,7 @@ if not SECRET_KEY:
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 try:
-    # Cast to int — timedelta requires an integer, not a string
+    # Cast to int because timedelta requires an integer, not a string
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
 except ValueError:
     print("Warning: ACCESS_TOKEN_EXPIRE_MINUTES is not a valid integer. Defaulting to 120.")
@@ -109,8 +109,8 @@ def login(credentials: schemas.UserLogin, http_request: Request, response: Respo
             samesite="lax",
             max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
         )
-        # Also return token in body — server-side clients (e.g. Streamlit) read it directly;
-        # browsers use the HttpOnly cookie instead.
+        # Also return token in body. Server-side clients (e.g. Streamlit) read it directly
+        # while browsers use the HttpOnly cookie instead.
         return {"access_token": token, "token_type": "bearer", "message": "Web login successful"}
 
     elif credentials.ClientType == schemas.ClientTypeEnum.MOBILE:
@@ -122,7 +122,7 @@ def login(credentials: schemas.UserLogin, http_request: Request, response: Respo
 
 ############################################
 # This function is to clear the access token cookie for web clients
-# or confirm mobile logout — mobile tokens are cleared client-side
+# or confirm mobile logout. Mobile tokens are cleared client-side
 # as the backend holds no session.
 ############################################
 @router.post("/logout")
@@ -130,5 +130,5 @@ def logout(client_type: schemas.ClientTypeEnum, response: Response):
     if client_type == schemas.ClientTypeEnum.WEB:
         response.delete_cookie("access_token")
         return {"message": "Web logout successful. Cookie cleared."}
-    # Mobile token lives in the app — the backend has no session to clear.
+    # Mobile token lives in the app. The backend has no session to clear.
     return {"message": "Mobile logout successful. Please clear local token."}
