@@ -65,15 +65,15 @@ URLSCAN_SCREENSHOT_URL = "https://urlscan.io/screenshots/{uuid}.png"
 GSB_LOOKUP_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 _GSB_DEFAULT_PORTS: dict[str, int] = {"http": 80, "https": 443}
 
-# Initial sleep before first poll. urlscan.io recommends 10s, but 3s is safe —
-# early polls that return 404 are harmless and let us catch fast scans sooner.
+# Initial sleep before first poll. urlscan.io recommends 10s, but 3s is safe.
+# Early polls that return 404 are harmless and allow fast scans to be caught sooner.
 INITIAL_WAIT_SECONDS = 3
 
 # Progressive back-off between poll attempts.
-# Front-loaded with short intervals to catch fast scans; longer waits later
+# Front-loaded with short intervals to catch fast scans. Longer waits later
 # to avoid hammering the API on slow pages.
 # Total max wait: INITIAL_WAIT_SECONDS + sum(POLL_INTERVALS) ≈ 89s.
-# Nginx proxy_read_timeout is set to 120s — do not exceed that budget.
+# Nginx proxy_read_timeout is set to 120s. Do not exceed that budget.
 POLL_INTERVALS: list[int] = [1, 1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
 MAX_POLL_ATTEMPTS = len(POLL_INTERVALS)
 
@@ -270,7 +270,7 @@ def analyze_scripts(raw_result: dict | None, initial_url: str = "") -> dict | No
 # This function is to detect IDN homograph attacks by analysing each
 # character in the domain using Python's unicodedata module, flagging
 # domains that mix Latin with visually confusable scripts (Cyrillic,
-# Greek, Armenian, Cherokee, Georgian). Never raises — failures return
+# Greek, Armenian, Cherokee, Georgian). Never raises. Failures return
 # safe defaults so the scan pipeline is never aborted.
 ############################################
 def detect_homograph_risk(url: str) -> dict:
@@ -350,8 +350,8 @@ def detect_homograph_risk(url: str) -> dict:
 
 ############################################
 # This function is to normalise a URL to the canonical form that Google
-# Safe Browsing uses internally — stripping the fragment and default
-# ports — so that lookup results map back correctly to the original URLs.
+# Safe Browsing uses internally by stripping the fragment and default
+# ports so that lookup results map back correctly to the original URLs.
 ############################################
 def _normalize_for_gsb(url: str) -> str:
     try:
@@ -359,7 +359,7 @@ def _normalize_for_gsb(url: str) -> str:
         host = (parsed.hostname or "").lower()
         port = parsed.port
         netloc = f"{host}:{port}" if port and port != _GSB_DEFAULT_PORTS.get(parsed.scheme) else host
-        # Strip fragment — GSB ignores it; keep everything else intact
+        # Strip fragment as GSB ignores it. Keep everything else intact.
         return urlunparse((parsed.scheme, netloc, parsed.path or "/", parsed.params, parsed.query, ""))
     except Exception:
         return url
@@ -368,7 +368,7 @@ def _normalize_for_gsb(url: str) -> str:
 ############################################
 # This function is to batch-check a list of URLs against the GSB v4
 # threatMatches:find endpoint with exponential backoff on rate limits.
-# Returns a per-URL dict without raising on API failure — falls back
+# Returns a per-URL dict without raising on API failure. Falls back
 # to SUSPICIOUS so the urlscan.io pipeline still runs.
 ############################################
 def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
@@ -378,7 +378,7 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
     }
 
     # Normalize each URL to GSB's canonical form and keep a reverse map so that
-    # when GSB returns a match we can key back to the original URL in results.
+    # when GSB returns a match the original URL can be keyed back from results.
     # Also include the alternate-scheme variant (http↔https) for each URL: a threat
     # listed under one scheme would otherwise be missed when the other is submitted.
     norm_to_original: dict[str, str] = {}
@@ -393,7 +393,7 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
         if alt and alt not in norm_to_original:
             norm_to_original[alt] = url
 
-    # v4 uses POST with a structured JSON body; API key passed as query param
+    # v4 uses POST with a structured JSON body. API key is passed as a query param.
     payload = {
         "client": {
             "clientId": "linkslens",
@@ -424,7 +424,7 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
                 timeout=10
             )
         except requests.RequestException:
-            # Network failure — fall through to urlscan.io only
+            # Network failure. Fall through to urlscan.io only.
             return results
 
         if response.status_code == 429 or response.status_code >= 500:
@@ -437,24 +437,20 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
             # Non-blocking: other errors should not abort the overall scan
             return results
 
-        # 200 OK — empty body or absent 'matches' key means all URLs are clean
+        # 200 OK. Empty body or absent 'matches' key means all URLs are clean.
         try:
             data = response.json()
         except Exception:
-            # Non-JSON body (e.g. HTML error page from invalid/unenabled API key) — non-blocking
+            # Non-JSON body (e.g. HTML error page from invalid/unenabled API key). Non-blocking.
             return results
 
-        # TEMPORARY DEBUG — remove after confirming GSB response format
-        print(f"[GSB DEBUG] sent={list(norm_to_original.keys())}")
-        print(f"[GSB DEBUG] response={data}")
-
-        # v4 response: { "matches": [{ "threat": { "url": "..." }, "threatType": "..." }] }
+        # v4 response:{ "matches": [{ "threat": { "url": "..." }, "threatType": "..." }] }
         for match in data.get("matches", []):
             gsb_url = match.get("threat", {}).get("url", "")
             threat_type = match.get("threatType", "")
-            # GSB returns the URL in its normalised form — map back to the original.
+            # GSB returns the URL in its normalised form. Map back to the original.
             # It may return a more specific path than submitted (e.g. /malware.exe
-            # when we sent the bare domain). Fall back to the sole submitted URL for
+            # when the bare domain was submitted). Fall back to the sole submitted URL for
             # single-URL batches since GSB only returns matches for submitted URLs.
             original_url = (
                 norm_to_original.get(gsb_url)
@@ -475,14 +471,14 @@ def check_google_safe_browsing(urls: list[str]) -> dict[str, dict]:
                 if results[original_url]["gsb_status"] != "MALICIOUS":
                     results[original_url]["gsb_status"] = "SUSPICIOUS"
 
-        # GSB returned 200 OK — URLs not flagged are confirmed SAFE
+        # GSB returned 200 OK. URLs not flagged are confirmed SAFE.
         for url_key in results:
             if not results[url_key]["flagged"]:
                 results[url_key]["gsb_status"] = "SAFE"
 
         return results
 
-    # All retries exhausted — non-blocking, return safe defaults
+    # All retries exhausted. Non-blocking, return safe defaults.
     return results
 
 
@@ -537,7 +533,7 @@ def poll_result(uuid: str) -> dict | None:
                 time.sleep(interval)
             continue
 
-        # Any other unexpected status — give up non-fatally
+        # Any other unexpected status. Give up non-fatally.
         return None
 
     return None
@@ -547,7 +543,7 @@ def poll_result(uuid: str) -> dict | None:
 # This function is to build an ordered list of redirect URLs from the
 # urlscan.io result data by parsing 3xx responses in the request log.
 # Returns an empty list if there were no redirects or data is missing.
-# Non-blocking — failures must never abort the scan pipeline.
+# Non-blocking. Failures must never abort the scan pipeline.
 ############################################
 def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
     if not raw_result:
@@ -580,7 +576,7 @@ def extract_redirect_chain(initial_url: str, raw_result: dict) -> list[str]:
 # This function is to extract SSL/TLS certificate details from the first
 # HTTPS request in the urlscan.io result that contains securityDetails.
 # Returns None when SSL info is unavailable (HTTP site or scan timeout).
-# Non-blocking — failures must never abort the scan pipeline.
+# Non-blocking. Failures must never abort the scan pipeline.
 ############################################
 def extract_ssl_info(raw_result: dict | None) -> dict | None:
     if not raw_result:
@@ -685,7 +681,7 @@ def run_urlscan(url: str) -> dict:
 ############################################
 # This function is to check the URL's registered domain against the
 # URLRules and BlacklistRequest tables using a dedicated DB session
-# for thread safety — does not share the request's session.
+# for thread safety. It does not share the request's session.
 ############################################
 def check_blacklist_db(url: str) -> dict:
     extracted = tldextract.extract(url)
@@ -718,7 +714,7 @@ def check_blacklist_db(url: str) -> dict:
 ############################################
 def check_domain_rdap(url: str) -> dict:
     domain = urlparse(url).netloc.split(":")[0]
-    # RDAP operates on registrable domains — strip the leading www. if present
+    # RDAP operates on registrable domains. Strip the leading www. if present.
     if domain.startswith("www."):
         domain = domain[4:]
 
@@ -807,15 +803,15 @@ def compare_async_results(gsb: dict, urlscan_result: dict, blacklist_check: dict
         gsb_score = 0
 
     urlscan_score = urlscan_result.get("score") or 0
-    # urlscan_status carries the boolean malicious flag from verdicts.overall.malicious —
-    # it can be MALICIOUS even when the numeric score is low (score reflects community
+    # urlscan_status carries the boolean malicious flag from verdicts.overall.malicious.
+    # It can be MALICIOUS even when the numeric score is low (score reflects community
     # consensus which lags the boolean verdict), so it is checked explicitly in step 3.
     urlscan_status = urlscan_result.get("urlscan_status", "SAFE")
 
     # Step 2: weighted combination
     weighted_score = (gsb_score * _GSB_WEIGHT) + (urlscan_score * _URLSCAN_WEIGHT)
 
-    # Step 3: map to api_status — explicit urlscan boolean verdict takes priority over
+    # Step 3: map to api_status. Explicit urlscan boolean verdict takes priority over
     # the numeric score alone, since score can be low even when malicious is true.
     if weighted_score >= _MALICIOUS_THRESHOLD or urlscan_status == "MALICIOUS":
         api_status = "MALICIOUS"
@@ -882,8 +878,8 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             redirect_chain     = extract_redirect_chain(initial_url, raw_result)
 
             # Supplementary GSB check on redirect destinations: the concurrent GSB
-            # check only covered the initial URL; threats may be listed under the
-            # final URL (e.g. after an http→https redirect or a path redirect).
+            # check only covered the initial URL. Threats may be listed under the
+            # final URL (e.g. after an http to https redirect or a path redirect).
             redirect_urls = list({
                 u for u in (redirect_chain or []) + ([redirect_url] if redirect_url else [])
                 if u and u != initial_url
@@ -904,7 +900,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
             final_status = compare_async_results(gsb, urlscan_result, blacklist_check)
 
             # Also check every URL in the redirect chain against URLRules.
-            # The concurrent blacklist_check only covered the initial URL; a blacklisted
+            # The concurrent blacklist_check only covered the initial URL. A blacklisted
             # redirect target (e.g. the final destination after a short-link hop) would
             # otherwise be missed. Batch both queries to avoid N+1 per hop.
             if final_status != "MALICIOUS" and redirect_chain:
@@ -926,7 +922,7 @@ def scan_url(request: ScanRequest, db: Session = Depends(get_db), current_user: 
                     if hop_blacklisted or hop_approved:
                         final_status = "MALICIOUS"
 
-            # Escalation — only applied when DB rules haven't already set MALICIOUS
+            # Escalation: only applied when DB rules haven't already set MALICIOUS.
             if final_status != "MALICIOUS":
                 if script_analysis:
                     if script_analysis["malicious_scripts"]:

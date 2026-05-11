@@ -17,7 +17,7 @@ _SCROLL_JS = (
 
 ############################################
 # This function is to smooth-scroll the Streamlit main panel to the
-# bottom, but only once per new selection — not on every rerun. The
+# bottom, but only once per new selection, not on every rerun. The
 # state_key must be tied to the selected item's ID so the scroll only
 # fires on the transition from no-selection to a new selection.
 ############################################

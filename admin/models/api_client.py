@@ -151,7 +151,7 @@ def fetch_action_history():
 
 ############################################
 # This function is to log an action to the audit trail. Silently ignores
-# failures — logging is non-critical and should not interrupt the user.
+# failures. Logging is non-critical and should not interrupt the user.
 ############################################
 def log_action(user_id: int, action_type: str, action: str):
     try:
@@ -202,7 +202,7 @@ def delete_url_rule(rule_id: int):
 
 ############################################
 # This function is to submit a URL to the scan pipeline and return the
-# result dict, or None on failure. Timeout is 120 s — the scan pipeline
+# result dict, or None on failure. Timeout is 120 s as the scan pipeline
 # can take up to ~90 s.
 ############################################
 def scan_url(url: str) -> dict | None:
