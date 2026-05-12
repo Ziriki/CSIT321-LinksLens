@@ -1,6 +1,5 @@
 import streamlit as st
 from controllers import auth_controller, rules_controller
-from models import api_client
 from utils import search_dataframe, render_pagination
 
 current_user = auth_controller.require_role(1, 2)
@@ -18,8 +17,7 @@ with st.expander("Submit a URL / Domain to Blacklist / Whitelist", expanded=Fals
         if not domain:
             st.warning("Please enter a URL / domain.")
         else:
-            if api_client.create_url_rule(domain, list_type, current_user["user_id"]):
-                api_client.log_action(current_user["user_id"], "URL Rule", f"Set {domain} to {list_type}")
+            if rules_controller.add_rule(domain, list_type, current_user["user_id"]):
                 st.session_state["url_registry_toast"] = f"{domain} is now in the {list_type}."
                 st.rerun()
             else:
@@ -64,8 +62,7 @@ for _, row in page_df.iterrows():
     c3.write(row.get("AddedBy", "—"))
     c4.write(str(row["CreatedAt"])[:10] if row.get("CreatedAt") else "—")
     if c5.button("Delete", key=f"del_{row['RuleID']}"):
-        if api_client.delete_url_rule(int(row["RuleID"])):
-            api_client.log_action(current_user["user_id"], "URL Rule", f"Removed {row['URLDomain']} from {row['ListType']}")
+        if rules_controller.remove_rule(int(row["RuleID"]), row["URLDomain"], row["ListType"], current_user["user_id"]):
             st.success(f"Removed {row['URLDomain']}.")
             st.rerun()
         else:

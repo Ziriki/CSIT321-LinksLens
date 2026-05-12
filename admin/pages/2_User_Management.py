@@ -1,7 +1,6 @@
 import streamlit as st
 from controllers import auth_controller, user_controller
 from controllers.auth_controller import ROLE_LABELS
-from models import api_client
 from utils import search_dataframe, render_pagination, scroll_to_bottom
 
 current_user = auth_controller.require_role(1)
@@ -43,7 +42,7 @@ uid = int(page_df.iloc[row_idx]["UserID"])
 scroll_to_bottom(f"user_{uid}")
 user_row = all_df[all_df["UserID"] == uid].iloc[0]
 
-details = api_client.fetch_user_detail(uid) or {}
+details = user_controller.get_user_detail(uid)
 
 st.markdown("---")
 st.subheader(f"Editing User #{uid}")
@@ -94,26 +93,7 @@ with btn_col1:
         if not snapshot:
             st.info("No changes to save.")
         else:
-            account_payload = {}
-            if "EmailAddress" in snapshot:
-                account_payload["EmailAddress"] = snapshot["EmailAddress"]
-            if "RoleID" in snapshot:
-                account_payload["RoleID"] = snapshot["RoleID"]
-            if account_payload:
-                api_client.update_user_details(uid, account_payload)
-
-            detail_payload = {k: v for k, v in snapshot.items() if k not in ("EmailAddress", "RoleID")}
-            if detail_payload:
-                api_client.update_user_profile(uid, detail_payload)
-
-            changes = ", ".join(f"{k}={v}" for k, v in snapshot.items())
-            api_client.log_action(
-                current_user["user_id"], "UPDATED_USER",
-                f"Updated User #{uid}: {changes}.",
-            )
-            st.session_state.pop("confirm_deactivate", None)
-            st.cache_data.clear()
-            st.rerun()
+            user_controller.handle_update(uid, snapshot, current_user["user_id"])
 
 with btn_col2:
     if user_row["IsActive"]:
@@ -130,15 +110,8 @@ if pending and pending[0] == uid:
     confirm_col1, confirm_col2 = st.columns(2)
     with confirm_col1:
         if st.button(f"Yes, {action}", key="confirm_yes"):
-            if action == "deactivate":
-                api_client.deactivate_user(uid)
-                api_client.log_action(current_user["user_id"], "DEACTIVATED_USER", f"Deactivated User #{uid}.")
-            else:
-                api_client.activate_user(uid)
-                api_client.log_action(current_user["user_id"], "ACTIVATED_USER", f"Activated User #{uid}.")
             st.session_state.pop("confirm_status_change", None)
-            st.cache_data.clear()
-            st.rerun()
+            user_controller.handle_status_toggle(uid, action, current_user["user_id"])
     with confirm_col2:
         if st.button("Cancel", key="confirm_no"):
             st.session_state.pop("confirm_status_change", None)

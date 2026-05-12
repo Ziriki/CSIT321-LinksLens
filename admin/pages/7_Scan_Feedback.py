@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-from controllers import auth_controller
-from models import api_client
+from controllers import auth_controller, scan_feedback_controller
 from utils import search_dataframe, render_ssl_expander, render_redirect_chain_expander, render_script_analysis_expander, render_homograph_expander, scroll_to_bottom
 
 current_user = auth_controller.require_role(1, 2)
@@ -14,7 +13,7 @@ is_resolved = {"Unresolved": False, "Resolved": True, "All": None}[filter_option
 
 search_query = st.text_input("Search", placeholder="Search by name, URL, status, comments...")
 
-raw_data = api_client.fetch_scan_feedback_enriched(is_resolved)
+raw_data = scan_feedback_controller.get_enriched_feedback(is_resolved)
 
 if not raw_data:
     st.info("No scan feedback found.")
@@ -106,23 +105,8 @@ if selected_rows:
 
     if apply:
         if verdict_choice.startswith("Remain"):
-            api_client.resolve_scan_feedback(feedback_id)
-            api_client.log_action(
-                current_user["user_id"], "CONFIRMED_SCAN_VERDICT",
-                f"Confirmed Scan #{scan_id} verdict as {current} (Feedback #{feedback_id}).",
-            )
-            st.success(f"Verdict kept as **{current}**. Feedback resolved.")
-            st.rerun()
+            scan_feedback_controller.handle_confirm_verdict(feedback_id, scan_id, current, current_user["user_id"])
         else:
             new_status = verdict_choice.replace("Mark as ", "").upper()
-            success = api_client.update_scan_status(scan_id, new_status)
-            if success:
-                api_client.resolve_scan_feedback(feedback_id)
-                api_client.log_action(
-                    current_user["user_id"], "UPDATED_SCAN_VERDICT",
-                    f"Changed Scan #{scan_id} verdict from {current} to {new_status} (Feedback #{feedback_id}).",
-                )
-                st.success(f"Scan #{scan_id} updated to **{new_status}** and feedback resolved.")
-                st.rerun()
-            else:
+            if not scan_feedback_controller.handle_update_verdict(feedback_id, scan_id, current, new_status, current_user["user_id"]):
                 st.error("Failed to update scan status.")

@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
-from controllers import auth_controller
-from models import api_client
+from controllers import auth_controller, threat_intelligence_controller
 from utils import get_status_color
 # ISO-2 country code → (latitude, longitude) centroids for major countries
 COUNTRY_COORDS = {
@@ -47,8 +46,8 @@ auth_controller.require_role(1, 2)
 st.title("Threat Intelligence")
 
 # Fetch data upfront so both sections can use it
-stats = api_client.fetch_threat_stats()
-threats = api_client.fetch_recent_threats()
+stats = threat_intelligence_controller.get_threat_stats()
+threats = threat_intelligence_controller.get_recent_threats()
 
 # ── Recent Threats Table ──────────────────────────────────────────────────────
 # Rendered first so the selection is a local variable available to the map below.

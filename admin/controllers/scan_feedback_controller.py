@@ -1,24 +1,44 @@
-import pandas as pd
 import streamlit as st
 from models import api_client
 
 
 ############################################
-# This function is to retrieve scan feedback submissions from the
-# backend and return them as a display-ready DataFrame. Optionally
-# filtered by whether each entry has been resolved.
+# This function is to retrieve enriched scan feedback from the backend,
+# optionally filtered by resolution status.
 ############################################
-def get_scan_feedback_dataframe(is_resolved: bool = None):
-    raw_data = api_client.fetch_scan_feedback(is_resolved)
-    if not raw_data:
-        return pd.DataFrame()
-    df = pd.DataFrame(raw_data)
+def get_enriched_feedback(is_resolved=None) -> list:
+    return api_client.fetch_scan_feedback_enriched(is_resolved)
 
-    df.rename(columns={"FullName": "User"}, inplace=True)
 
-    cols = ["FeedbackID", "ScanID", "User", "SuggestedStatus", "Comments", "IsResolved"]
-    available = [c for c in cols if c in df.columns]
-    return df[available]
+############################################
+# This function is to confirm the current scan verdict, mark the
+# feedback as resolved, and log the action.
+############################################
+def handle_confirm_verdict(feedback_id: int, scan_id: int, current_status: str, current_user_id: int):
+    api_client.resolve_scan_feedback(feedback_id)
+    api_client.log_action(
+        current_user_id, "CONFIRMED_SCAN_VERDICT",
+        f"Confirmed Scan #{scan_id} verdict as {current_status} (Feedback #{feedback_id}).",
+    )
+    st.success(f"Verdict kept as **{current_status}**. Feedback resolved.")
+    st.rerun()
+
+
+############################################
+# This function is to update the scan verdict to a new status, resolve
+# the feedback, log the action, and rerun. Returns False if the update fails.
+############################################
+def handle_update_verdict(feedback_id: int, scan_id: int, current_status: str, new_status: str, current_user_id: int) -> bool:
+    success = api_client.update_scan_status(scan_id, new_status)
+    if success:
+        api_client.resolve_scan_feedback(feedback_id)
+        api_client.log_action(
+            current_user_id, "UPDATED_SCAN_VERDICT",
+            f"Changed Scan #{scan_id} verdict from {current_status} to {new_status} (Feedback #{feedback_id}).",
+        )
+        st.success(f"Scan #{scan_id} updated to **{new_status}** and feedback resolved.")
+        st.rerun()
+    return success
 
 
 ############################################

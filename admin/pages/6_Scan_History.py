@@ -1,8 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from controllers import auth_controller
-from models import api_client
+from controllers import auth_controller, scan_history_controller
 from utils import (get_status_color, render_homograph_expander,
                    render_redirect_chain_expander, render_script_analysis_expander,
                    render_ssl_expander, scroll_to_bottom)
@@ -28,7 +27,7 @@ with st.expander("Scan a URL", expanded=False):
     if st.button("Scan", key="scanner_submit") and scan_input.strip():
         url_to_scan = scan_input.strip()
         with st.spinner(f"Scanning `{url_to_scan}` — this may take up to 90 seconds…"):
-            result = api_client.scan_url(url_to_scan)
+            result = scan_history_controller.run_scan(url_to_scan)
         if result and result.get("scan_id"):
             st.session_state["scanner_result_id"] = result["scan_id"]
             st.session_state["scan_page"] = 0
@@ -46,7 +45,7 @@ search = st.text_input("Search", placeholder="Search by URL or user name...")
 page = st.session_state["scan_page"]
 skip = page * PAGE_SIZE
 
-records = api_client.fetch_scan_list(
+records = scan_history_controller.get_scan_list(
     skip=skip,
     limit=PAGE_SIZE + 1,
     search=search if search else None,
@@ -109,7 +108,7 @@ with col_next:
 
 if effective_scan_id:
     scroll_to_bottom(f"scan_{effective_scan_id}")
-    data = api_client.fetch_scan_details(effective_scan_id)
+    data = scan_history_controller.get_forensic_data(effective_scan_id)
     if data:
         if scanner_id == effective_scan_id:
             st.success(f"Scan complete — result for `{data['InitialURL']}` is **{data['StatusIndicator']}**")
