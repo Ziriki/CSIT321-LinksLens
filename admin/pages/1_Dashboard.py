@@ -1,11 +1,10 @@
 import streamlit as st
-from controllers import auth_controller
-from models import api_client
+from controllers import auth_controller, dashboard_controller
 auth_controller.require_role(1)
 
 st.title("System Dashboard")
 
-health = api_client.fetch_system_health()
+health = dashboard_controller.get_system_health()
 if not health:
     st.warning("Could not fetch system health data.")
     st.stop()
