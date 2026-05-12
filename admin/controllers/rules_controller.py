@@ -18,3 +18,26 @@ def get_rules_dataframe():
     df.rename(columns={"AddedByFullName": "AddedBy"}, inplace=True)
 
     return df[["RuleID", "ListType", "URLDomain", "AddedBy", "CreatedAt"]]
+
+
+############################################
+# This function is to add a domain to the blacklist or whitelist and
+# log the action. Returns True on success.
+############################################
+def add_rule(domain: str, list_type: str, current_user_id: int) -> bool:
+    success = api_client.create_url_rule(domain, list_type, current_user_id)
+    if success:
+        api_client.log_action(current_user_id, "URL Rule", f"Set {domain} to {list_type}")
+    return success
+
+
+############################################
+# This function is to remove a URL rule by ID and log the action.
+# Returns True on success.
+############################################
+def remove_rule(rule_id: int, domain: str, list_type: str, current_user_id: int) -> bool:
+    success = api_client.delete_url_rule(rule_id)
+    if success:
+        api_client.log_action(current_user_id, "URL Rule", f"Removed {domain} from {list_type}")
+    return success
+
