@@ -19,10 +19,9 @@ router = APIRouter(
 # restricted to administrators and moderators.
 ############################################
 @router.post("/", response_model=schemas.URLRulesResponse, status_code=status.HTTP_201_CREATED)
-def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), _: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
-    account = db.query(models.UserAccount).filter(models.UserAccount.UserID == rule.AddedBy).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="Admin/Moderator account not found")
+def create_rule(rule: schemas.URLRulesCreate, db: Session = Depends(get_db), current_user: dict = Depends(require_role(1, 2))):  # 1 = Administrator, 2 = Moderator
+    if rule.AddedBy != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="AddedBy must match the authenticated account.")
 
     existing_rule = db.query(models.URLRules).filter(models.URLRules.URLDomain == rule.URLDomain).first()
     if existing_rule:

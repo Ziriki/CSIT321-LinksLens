@@ -23,10 +23,9 @@ _BLACKLIST_DAILY_LIMIT = 5
 # enforcing a daily submission limit of 5 per user.
 ############################################
 @router.post("/", response_model=schemas.BlacklistRequestResponse, status_code=status.HTTP_201_CREATED)
-def create_request(request: schemas.BlacklistRequestCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
-    account = db.query(models.UserAccount).filter(models.UserAccount.UserID == request.UserID).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="User Account not found")
+def create_request(request: schemas.BlacklistRequestCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if request.UserID != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="You can only submit blacklist requests for your own account.")
 
     existing_req = db.query(models.BlacklistRequest).filter(
         models.BlacklistRequest.URLDomain == request.URLDomain,
