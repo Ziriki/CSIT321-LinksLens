@@ -15,8 +15,12 @@ if st.session_state.get("access_token") is None:
         """,
         unsafe_allow_html=True,
     )
-    st.image(LOGO_PATH, width=180)
-    st.title("LinksLens Admin Portal")
+    col_logo, col_title = st.columns([1, 2])
+    with col_logo:
+        st.image(LOGO_PATH, width=330)
+    with col_title:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        st.title("LinksLens Admin Portal")
 
     if st.session_state.pop("session_expired", False):
         st.warning("Your session has expired. Please log in again.")
