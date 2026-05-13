@@ -521,7 +521,7 @@ def poll_result(uuid: str) -> dict | None:
 
     for attempt, interval in enumerate(POLL_INTERVALS):
         try:
-            response = requests.get(result_url, timeout=15)
+            response = requests.get(result_url, headers={"API-Key": URLSCAN_API_KEY}, timeout=15)
         except requests.RequestException:
             return None
 
