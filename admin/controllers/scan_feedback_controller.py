@@ -20,7 +20,7 @@ def handle_confirm_verdict(feedback_id: int, scan_id: int, current_status: str, 
         current_user_id, "CONFIRMED_SCAN_VERDICT",
         f"Confirmed Scan #{scan_id} verdict as {current_status} (Feedback #{feedback_id}).",
     )
-    st.success(f"Verdict kept as **{current_status}**. Feedback resolved.")
+    st.session_state["scan_feedback_toast"] = f"Verdict kept as **{current_status}**. Feedback #{feedback_id} resolved."
     st.rerun()
 
 
@@ -36,7 +36,7 @@ def handle_update_verdict(feedback_id: int, scan_id: int, current_status: str, n
             current_user_id, "UPDATED_SCAN_VERDICT",
             f"Changed Scan #{scan_id} verdict from {current_status} to {new_status} (Feedback #{feedback_id}).",
         )
-        st.success(f"Scan #{scan_id} updated to **{new_status}** and feedback resolved.")
+        st.session_state["scan_feedback_toast"] = f"Scan #{scan_id} updated to **{new_status}** and feedback resolved."
         st.rerun()
     return success
 
