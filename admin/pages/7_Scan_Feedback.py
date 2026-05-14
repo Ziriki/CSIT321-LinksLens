@@ -8,6 +8,9 @@ current_user = auth_controller.require_role(1, 2)
 st.title("Scan Feedback Review")
 st.markdown("Verify scan results reported by users to ensure no false positives or false negatives.")
 
+if toast := st.session_state.pop("scan_feedback_toast", None):
+    st.success(toast)
+
 filter_option = st.radio("Filter", ["All", "Resolved", "Unresolved"], horizontal=True)
 is_resolved = {"Unresolved": False, "Resolved": True, "All": None}[filter_option]
 
