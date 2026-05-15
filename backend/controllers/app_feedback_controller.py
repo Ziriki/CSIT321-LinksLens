@@ -18,13 +18,9 @@ router = APIRouter(
 # the referenced user account exists.
 ############################################
 @router.post("/", response_model=schemas.AppFeedbackResponse, status_code=status.HTTP_201_CREATED)
-def create_feedback(feedback: schemas.AppFeedbackCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
-    account = db.query(models.UserAccount).filter(models.UserAccount.UserID == feedback.UserID).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="User Account not found")
-
+def create_feedback(feedback: schemas.AppFeedbackCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     db_feedback = models.AppFeedback(
-        UserID=feedback.UserID,
+        UserID=current_user["user_id"],
         Feedback=feedback.Feedback
     )
     db.add(db_feedback)
