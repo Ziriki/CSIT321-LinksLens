@@ -26,7 +26,7 @@ router = APIRouter(
 # role ID exists.
 ############################################
 @router.post("/", response_model=schemas.UserAccountResponse, status_code=status.HTTP_201_CREATED)
-def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get_db)):
+def create_account(account: schemas.UserAccountCreate, db: Session = Depends(get_db), _: dict = Depends(require_role(1))):  # 1 = Administrator
     if db.query(models.UserAccount).filter(models.UserAccount.EmailAddress == account.EmailAddress).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
