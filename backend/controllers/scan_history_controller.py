@@ -22,7 +22,7 @@ router = APIRouter(
 # the referenced user account exists.
 ############################################
 @router.post("/", response_model=schemas.ScanHistoryResponse, status_code=status.HTTP_201_CREATED)
-def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db)):
+def create_scan(scan: schemas.ScanHistoryCreate, db: Session = Depends(get_db), _: dict = Depends(get_current_user)):
     if scan.UserID:
         account = db.query(models.UserAccount).filter(models.UserAccount.UserID == scan.UserID).first()
         if not account:

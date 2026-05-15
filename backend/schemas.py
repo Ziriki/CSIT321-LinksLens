@@ -148,7 +148,7 @@ class AppFeedbackBase(TrimmedModel):
 
 # Used for Creating
 class AppFeedbackCreate(AppFeedbackBase):
-    UserID: int
+    pass
 
 # Used for Updating
 class AppFeedbackUpdate(AppFeedbackBase):
