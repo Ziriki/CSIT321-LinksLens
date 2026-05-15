@@ -1,8 +1,13 @@
-import time
+import os
 
 import jwt
 import streamlit as st
 from models import api_client
+
+_SECRET_KEY = os.getenv("SECRET_KEY")
+if not _SECRET_KEY:
+    raise ValueError("FATAL: SECRET_KEY environment variable is not set!")
+_ALGORITHM  = os.getenv("ALGORITHM", "HS256")
 
 ROLE_LABELS = {1: "Administrator", 2: "Moderator", 3: "User"}
 
@@ -19,7 +24,7 @@ def _decode_token():
     if not token:
         return None
     try:
-        payload = jwt.decode(token, options={"verify_signature": False})
+        payload = jwt.decode(token, _SECRET_KEY, algorithms=[_ALGORITHM])
         user = {"user_id": int(payload["sub"]), "role_id": int(payload["role"])}
         st.session_state["_decoded_user"] = user
         return user
@@ -47,11 +52,7 @@ def require_auth():
     if not token:
         st.error("Please log in first.")
         st.stop()
-    try:
-        payload = jwt.decode(token, options={"verify_signature": False})
-        if payload.get("exp", 0) < time.time():  # exp = JWT expiry timestamp (Unix)
-            _expire_session()
-    except Exception:
+    if not _decode_token():
         _expire_session()
 
 
@@ -154,7 +155,7 @@ def handle_login(email, password):
             data = response.json()
             token = data["access_token"]
             try:
-                payload = jwt.decode(token, options={"verify_signature": False})
+                payload = jwt.decode(token, _SECRET_KEY, algorithms=[_ALGORITHM])
                 role_id = int(payload.get("role", 0))
                 if role_id not in (1, 2):  # 1 = Administrator, 2 = Moderator (all other roles are blocked)
                     st.error("Login failed. Check credentials.")
@@ -163,9 +164,9 @@ def handle_login(email, password):
                 st.error("Login failed. Check credentials.")
                 return
             st.session_state["access_token"] = token
-            user_info = _decode_token()
-            if user_info:
-                api_client.log_action(user_info["user_id"], "LOGIN", "Logged in to admin portal.")
+            user_id = int(payload["sub"])
+            st.session_state["_decoded_user"] = {"user_id": user_id, "role_id": role_id}
+            api_client.log_action(user_id, "LOGIN", "Logged in to admin portal.")
             st.rerun()
         else:
             st.error("Login failed. Check credentials.")
