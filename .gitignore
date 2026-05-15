@@ -22,13 +22,6 @@ mobile-app/ios/Pods/
 .DS_Store
 Thumbs.db
 
-
-# 6. Misc
-test*
-backend/local_test.db
-backend/reset_admin_password.py
-backend/run_local.py
-
 # Frontend (Expo / React Native)
 node_modules/
 linkslens-frontend/.expo/
