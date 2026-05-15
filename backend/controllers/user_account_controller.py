@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
+import html
 import secrets
 import os
 from dotenv import load_dotenv
@@ -190,7 +191,7 @@ def register(request: schemas.UserRegistrationRequest, db: Session = Depends(get
 
           <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1e293b;">Verify your email address</h1>
           <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.6;">
-            Hi {request.FullName}, welcome to LinksLens! Please confirm your email address to activate your account and start scanning links safely.
+            Hi {html.escape(request.FullName)}, welcome to LinksLens! Please confirm your email address to activate your account and start scanning links safely.
           </p>
 
           <!-- CTA Button -->

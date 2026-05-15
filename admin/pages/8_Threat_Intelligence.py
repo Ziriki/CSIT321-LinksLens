@@ -1,3 +1,4 @@
+import html
 import streamlit as st
 import pandas as pd
 import folium
@@ -78,10 +79,14 @@ else:
 
 if selected_threat:
     status_color = get_status_color(selected_threat["status"])
+    safe_url      = html.escape(selected_threat["url"] or "")
+    safe_location = html.escape(selected_threat["location"] or "Unknown")
+    safe_time     = html.escape(str(selected_threat["scanned_at"] or "N/A"))
+    safe_status   = html.escape(selected_threat["status"] or "")
     st.markdown(
-        f"**Selected:** `{selected_threat['url']}` — "
-        f"<span style='color:{status_color};font-weight:600'>{selected_threat['status']}</span> — "
-        f"{selected_threat['location'] or 'Unknown'} — {selected_threat['scanned_at'] or 'N/A'}",
+        f"**Selected:** `{safe_url}` · "
+        f"<span style='color:{status_color};font-weight:600'>{safe_status}</span> · "
+        f"{safe_location} · {safe_time}",
         unsafe_allow_html=True,
     )
 
@@ -123,7 +128,7 @@ else:
                 fill_color=color,
                 fill_opacity=0.6,
                 popup=folium.Popup(
-                    f"<b>{location}</b><br>Malicious: {malicious}<br>Suspicious: {suspicious}<br>Total: {total}",
+                    f"<b>{html.escape(location)}</b><br>Malicious: {malicious}<br>Suspicious: {suspicious}<br>Total: {total}",
                     max_width=200,
                 ),
             ).add_to(world_map)
@@ -132,7 +137,7 @@ else:
         folium.Marker(
             location=pin_coords,
             popup=folium.Popup(
-                f"<b>{selected_threat['url']}</b><br>{selected_threat['status']}<br>{selected_location}",
+                f"<b>{safe_url}</b><br>{safe_status}<br>{safe_location}",
                 max_width=300,
             ),
             icon=folium.Icon(color="purple", icon="map-marker"),
