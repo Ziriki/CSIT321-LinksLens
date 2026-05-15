@@ -77,6 +77,7 @@ def login(credentials: schemas.UserLogin, http_request: Request, response: Respo
     if recent_failures > 0:
         db.query(models.FailedLoginAttempt).filter(
             models.FailedLoginAttempt.IPAddress == client_ip,
+            models.FailedLoginAttempt.AttemptedAt >= window_start,
         ).delete()
 
     # IsActive covers both unverified and admin-deactivated accounts

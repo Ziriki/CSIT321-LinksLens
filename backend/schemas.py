@@ -3,10 +3,26 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 import tldextract
 import enum
+import re
 from models import RequestStatus, ListTypeEnum, ScanStatusEnum, SuggestedStatusEnum
 
 
 _PASSWORD_FIELDS = {"Password", "NewPassword"}
+
+
+def _validate_password_complexity(v: str) -> str:
+    errors = []
+    if not re.search(r'[A-Z]', v):
+        errors.append("one uppercase letter")
+    if not re.search(r'[a-z]', v):
+        errors.append("one lowercase letter")
+    if not re.search(r'\d', v):
+        errors.append("one digit")
+    if not re.search(r'[^A-Za-z0-9]', v):
+        errors.append("one special character")
+    if errors:
+        raise ValueError(f"Password must contain at least: {', '.join(errors)}.")
+    return v
 
 class TrimmedModel(BaseModel):
     @model_validator(mode="before")
@@ -53,14 +69,26 @@ class UserAccountBase(TrimmedModel):
 
 # Used for Creating (Requires a raw password)
 class UserAccountCreate(UserAccountBase):
-    Password: str 
+    Password: str = Field(..., min_length=12)
+
+    @field_validator("Password")
+    @classmethod
+    def validate_password(cls, v):
+        return _validate_password_complexity(v)
 
 # Used for Updating (Everything is optional, including password)
 class UserAccountUpdate(TrimmedModel):
     EmailAddress: Optional[EmailStr] = None
     RoleID: Optional[int] = None
-    Password: Optional[str] = None
+    Password: Optional[str] = Field(default=None, min_length=12)
     IsActive: Optional[bool] = None
+
+    @field_validator("Password", mode="after")
+    @classmethod
+    def validate_password(cls, v):
+        if v is not None:
+            _validate_password_complexity(v)
+        return v
 
 # Used for Responses (Excludes password)
 class UserAccountResponse(UserAccountBase):
@@ -75,10 +103,10 @@ class UserAccountResponse(UserAccountBase):
 # Base properties of UserDetails (used for both Create and Update)
 #########################################################
 class UserDetailsBase(TrimmedModel):
-    FullName: Optional[str] = None
-    PhoneNumber: Optional[str] = None
-    Address: Optional[str] = None
-    Gender: Optional[str] = None
+    FullName: Optional[str] = Field(default=None, max_length=255)
+    PhoneNumber: Optional[str] = Field(default=None, max_length=20)
+    Address: Optional[str] = Field(default=None, max_length=255)
+    Gender: Optional[str] = Field(default=None, max_length=6)
     DateOfBirth: Optional[date] = None
 
 # Used for Creating
@@ -144,7 +172,7 @@ class ActionHistoryResponse(ActionHistoryBase):
 # Base properties of AppFeedback (used for both Create and Update)
 #########################################################
 class AppFeedbackBase(TrimmedModel):
-    Feedback: str
+    Feedback: str = Field(..., max_length=2000)
 
 # Used for Creating
 class AppFeedbackCreate(AppFeedbackBase):
@@ -275,7 +303,7 @@ class ScanHistoryResponse(ScanHistoryBase):
 #########################################################
 class ScanFeedbackBase(TrimmedModel):
     SuggestedStatus: SuggestedStatusEnum
-    Comments: Optional[str] = None
+    Comments: Optional[str] = Field(default=None, max_length=2000)
 
 # Used when a user submits new feedback
 class ScanFeedbackCreate(ScanFeedbackBase):
@@ -322,12 +350,22 @@ class ForgotPasswordRequest(TrimmedModel):
 
 class ResetPasswordRequest(TrimmedModel):
     Token: str
-    NewPassword: str = Field(..., min_length=8)
+    NewPassword: str = Field(..., min_length=12)
+
+    @field_validator("NewPassword")
+    @classmethod
+    def validate_new_password(cls, v):
+        return _validate_password_complexity(v)
 
 class UserRegistrationRequest(TrimmedModel):
     EmailAddress: EmailStr
-    Password: str = Field(..., min_length=8)
-    FullName: str
+    Password: str = Field(..., min_length=12)
+    FullName: str = Field(..., max_length=255)
+
+    @field_validator("Password")
+    @classmethod
+    def validate_password(cls, v):
+        return _validate_password_complexity(v)
 
 class VerifyEmailRequest(TrimmedModel):
     Token: str
