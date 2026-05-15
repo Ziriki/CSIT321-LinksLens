@@ -5,6 +5,9 @@ WORKDIR /app
 # Copy the requirements file
 COPY requirements.txt .
 
+# Upgrade build tools first to patch known CVEs in pip and wheel
+RUN pip install --upgrade pip wheel
+
 # Pip install everything listed in the file
 RUN pip install --no-cache-dir -r requirements.txt
 

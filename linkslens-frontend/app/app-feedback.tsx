@@ -49,6 +49,7 @@ export default function AppFeedback() {
               placeholderTextColor="#6b7280"
               value={feedback}
               onChangeText={setFeedback}
+              maxLength={2000}
               className="h-40 w-full rounded-xl border border-input bg-card px-4 py-3 text-foreground"
             />
           </View>

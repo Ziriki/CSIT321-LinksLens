@@ -25,8 +25,17 @@ export default function Signup() {
       Alert.alert("Error", "Passwords do not match.")
       return
     }
-    if (password.length < 8) {
-      Alert.alert("Error", "Password must be at least 8 characters.")
+    if (password.length < 12) {
+      Alert.alert("Error", "Password must be at least 12 characters.")
+      return
+    }
+    const missing: string[] = []
+    if (!/[A-Z]/.test(password)) missing.push("one uppercase letter")
+    if (!/[a-z]/.test(password)) missing.push("one lowercase letter")
+    if (!/[0-9]/.test(password)) missing.push("one digit")
+    if (!/[^A-Za-z0-9]/.test(password)) missing.push("one special character")
+    if (missing.length > 0) {
+      Alert.alert("Error", `Password must contain at least: ${missing.join(", ")}.`)
       return
     }
     setLoading(true)
